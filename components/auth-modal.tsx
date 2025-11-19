@@ -54,12 +54,12 @@ export function AuthModal({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {view === "login" ? "Sign in to your account" : "Create an account"}
+            {view === "login" ? "Connectez-vous à votre compte" : "Créer un compte"}
           </DialogTitle>
           <DialogDescription>
             {view === "login"
-              ? "Enter your credentials to access your account"
-              : "Sign up to get started"}
+              ? "Entrez vos identifiants pour accéder à votre compte"
+              : "Inscrivez-vous pour commencer"}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
