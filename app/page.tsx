@@ -1,5 +1,6 @@
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
+import { CreditsDisplay } from "@/components/credits-display";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
@@ -52,13 +53,20 @@ export default function Home() {
             >
               Manufacto
             </Link>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
+            <div className="flex items-center gap-4">
+              {!hasEnvVars ? (
+                <EnvVarWarning />
+              ) : (
+                <>
+                  <Suspense>
+                    <CreditsDisplay />
+                  </Suspense>
+                  <Suspense>
+                    <AuthButton />
+                  </Suspense>
+                </>
+              )}
+            </div>
           </div>
         </nav>
 

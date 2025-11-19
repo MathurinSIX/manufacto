@@ -16,10 +16,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
+  onSwitchToSignUp?: () => void;
+  onSuccess?: () => void;
+}
+
 export function LoginForm({
   className,
+  onSwitchToSignUp,
+  onSuccess,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +45,12 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+      // Call onSuccess callback if provided, otherwise redirect
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push("/protected");
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -49,14 +60,14 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
+      <Card className="border-0 shadow-none">
+        <CardHeader className="px-0 pt-0">
           <CardTitle className="text-2xl">Login</CardTitle>
           <CardDescription>
             Enter your email below to login to your account
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
@@ -95,12 +106,22 @@ export function LoginForm({
             </div>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
-                Sign up
-              </Link>
+              {onSwitchToSignUp ? (
+                <button
+                  type="button"
+                  onClick={onSwitchToSignUp}
+                  className="underline underline-offset-4 hover:text-primary"
+                >
+                  Sign up
+                </button>
+              ) : (
+                <Link
+                  href="/auth/sign-up"
+                  className="underline underline-offset-4"
+                >
+                  Sign up
+                </Link>
+              )}
             </div>
           </form>
         </CardContent>
