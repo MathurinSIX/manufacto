@@ -30,7 +30,7 @@ export function CreditsDisplayClient({
   if (isLoggedIn) {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-background">
-        <span className="text-sm font-medium">Credits:</span>
+        <span className="text-sm font-medium">Crédits :</span>
         <span className="text-sm font-bold">{displayCredits}</span>
       </div>
     );
@@ -44,7 +44,7 @@ export function CreditsDisplayClient({
         className="gap-2"
         onClick={() => setIsModalOpen(true)}
       >
-        <span className="text-sm font-medium">Credits:</span>
+        <span className="text-sm font-medium">Crédits :</span>
         <span className="text-sm font-bold">0</span>
       </Button>
       <AuthModal

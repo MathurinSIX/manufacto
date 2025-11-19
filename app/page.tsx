@@ -16,27 +16,27 @@ import {
 export default function Home() {
   const features = [
     {
-      title: "Streamlined Manufacturing",
+      title: "Fabrication Rationalisée",
       description:
-        "Manage your entire manufacturing process from start to finish with our intuitive platform. Track production, inventory, and quality control all in one place.",
+        "Gérez l'ensemble de votre processus de fabrication du début à la fin avec notre plateforme intuitive. Suivez la production, les stocks et le contrôle qualité en un seul endroit.",
       image: "https://placehold.co/600x400/1a1a1a/ffffff?text=Manufacturing",
     },
     {
-      title: "Real-Time Analytics",
+      title: "Analyses en Temps Réel",
       description:
-        "Get instant insights into your operations with comprehensive dashboards and reports. Make data-driven decisions to optimize your manufacturing efficiency.",
+        "Obtenez des informations instantanées sur vos opérations avec des tableaux de bord et des rapports complets. Prenez des décisions basées sur les données pour optimiser l'efficacité de votre fabrication.",
       image: "https://placehold.co/600x400/1a1a1a/ffffff?text=Analytics",
     },
     {
-      title: "Supply Chain Integration",
+      title: "Intégration de la Chaîne d'Approvisionnement",
       description:
-        "Seamlessly connect with suppliers and distributors. Automate ordering, track shipments, and maintain optimal inventory levels automatically.",
+        "Connectez-vous facilement avec les fournisseurs et les distributeurs. Automatisez les commandes, suivez les expéditions et maintenez automatiquement des niveaux de stock optimaux.",
       image: "https://placehold.co/600x400/1a1a1a/ffffff?text=Supply+Chain",
     },
     {
-      title: "Quality Assurance",
+      title: "Assurance Qualité",
       description:
-        "Ensure product quality at every stage with built-in quality control workflows. Document inspections, track defects, and maintain compliance standards.",
+        "Assurez la qualité du produit à chaque étape avec des flux de travail de contrôle qualité intégrés. Documentez les inspections, suivez les défauts et maintenez les normes de conformité.",
       image: "https://placehold.co/600x400/1a1a1a/ffffff?text=Quality+Control",
     },
   ];
@@ -74,11 +74,11 @@ export default function Home() {
         <div className="w-full max-w-7xl px-5 pt-12 pb-8">
           <div className="text-center space-y-4">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-              Transform Your Manufacturing
+              Transformez Votre Fabrication
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              The complete solution for modern manufacturing operations. Streamline
-              your processes, boost productivity, and scale your business.
+              La solution complète pour les opérations de fabrication modernes. Rationalisez
+              vos processus, augmentez la productivité et développez votre entreprise.
             </p>
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
           <p>
-            Powered by{" "}
+            Propulsé par{" "}
             <a
               href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
               target="_blank"
