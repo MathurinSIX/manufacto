@@ -12,7 +12,7 @@ export async function CreditsDisplay() {
   if (user?.id) {
     // Fetch all credits for the user and sum the amount
     const { data: creditsData, error } = await supabase
-      .from("credits")
+      .from("credit")
       .select("amount")
       .eq("user_id", user.id);
 

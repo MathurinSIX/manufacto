@@ -47,12 +47,20 @@ export default function Home() {
         {/* Top Navigation Bar */}
         <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
           <div className="w-full max-w-7xl flex justify-between items-center p-3 px-5 text-sm">
-            <Link
-              href={"/"}
-              className="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
-            >
-              Manufacto
-            </Link>
+            <div className="flex items-center gap-6">
+              <Link
+                href={"/"}
+                className="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
+              >
+                Manufacto
+              </Link>
+              <Link
+                href="/activities"
+                className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Activités
+              </Link>
+            </div>
             <div className="flex items-center gap-4">
               {!hasEnvVars ? (
                 <EnvVarWarning />
