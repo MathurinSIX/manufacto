@@ -19,12 +19,14 @@ import { useState } from "react";
 interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToSignUp?: () => void;
   onSuccess?: () => void;
+  redirectTo?: string;
 }
 
 export function LoginForm({
   className,
   onSwitchToSignUp,
   onSuccess,
+  redirectTo,
   ...props
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
@@ -48,6 +50,8 @@ export function LoginForm({
       // Call onSuccess callback if provided, otherwise redirect
       if (onSuccess) {
         onSuccess();
+      } else if (redirectTo) {
+        router.push(redirectTo);
       } else {
         router.push("/protected");
       }

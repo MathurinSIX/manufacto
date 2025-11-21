@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/auth-modal";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface CreditsDisplayClientProps {
   credits: number;
@@ -29,10 +30,10 @@ export function CreditsDisplayClient({
 
   if (isLoggedIn) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-background">
+      <Link href="/account" className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-background hover:bg-muted transition-colors cursor-pointer">
         <span className="text-sm font-medium">Crédits :</span>
         <span className="text-sm font-bold">{displayCredits}</span>
-      </div>
+      </Link>
     );
   }
 

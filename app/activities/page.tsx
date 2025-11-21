@@ -1,11 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
-import { Suspense } from "react";
 
 import { createClient } from "@/lib/supabase/server";
-import { AuthButton } from "@/components/auth-button";
-import { CreditsDisplay } from "@/components/credits-display";
-import { EnvVarWarning } from "@/components/env-var-warning";
+import { Navigation } from "@/components/navigation";
 import {
   Card,
   CardContent,
@@ -13,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { hasEnvVars } from "@/lib/utils";
+import { ActivitySessionPicker } from "@/components/activity-session-picker";
 
 const activityContent = {
   couture_autonomie: {
@@ -59,38 +55,7 @@ export default async function ActivitiesPage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30">
-        <div className="w-full max-w-7xl flex justify-between items-center p-3 px-5 text-sm">
-          <div className="flex items-center gap-6">
-            <Link
-              href={"/"}
-              className="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
-            >
-              Manufacto
-            </Link>
-            <Link
-              href="/activities"
-              className="text-base font-medium text-foreground"
-            >
-              Activités
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <>
-                <Suspense>
-                  <CreditsDisplay />
-                </Suspense>
-                <Suspense>
-                  <AuthButton />
-                </Suspense>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Navigation />
       <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
       <div className="w-full max-w-6xl space-y-10">
         <div className="text-center space-y-3">
@@ -134,6 +99,16 @@ export default async function ActivitiesPage() {
                     </span>
                   )}
                 </p>
+                <ActivitySessionPicker
+                  activityId={
+                    activity.id &&
+                    typeof activity.id === "string" &&
+                    activity.id.length === 36
+                      ? activity.id
+                      : undefined
+                  }
+                  activityTitle={activity.title}
+                />
               </CardContent>
             </Card>
           ))}
