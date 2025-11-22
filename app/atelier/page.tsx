@@ -1,5 +1,4 @@
 import { Navigation } from "@/components/navigation";
-import { Button } from "@/components/ui/button";
 
 export default async function AtelierPage() {
   return (
@@ -18,26 +17,6 @@ export default async function AtelierPage() {
               Découvrez notre espace de création et de fabrication. L&apos;atelier
               est un lieu dédié à la couture, à la création et à l&apos;apprentissage.
             </p>
-          </div>
-
-          <div className="text-center space-y-6">
-            <h2 className="text-3xl md:text-4xl font-bold">
-              Venez visiter l&apos;atelier !
-            </h2>
-
-            {/* Banner Section */}
-            <div className="bg-muted/50 border rounded-lg p-6 md:p-8 space-y-4">
-              <p className="text-lg text-muted-foreground">
-                Tous les mardi soir, de 18h30 à 19h, Martin, Nafissa, Cyprien et Delphine
-                vous présenteront le lieu et son fonctionnement
-              </p>
-              <p className="text-lg text-muted-foreground">
-                C&apos;est gratuit, sur inscription :
-              </p>
-              <Button className="mt-4">
-                Réserver
-              </Button>
-            </div>
           </div>
         </div>
       </div>

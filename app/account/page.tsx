@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CreditHistoryItem } from "@/components/credit-history-item";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
@@ -39,10 +40,11 @@ export default async function AccountPage() {
 
   // Fetch registrations with session and activity details
   const { data: registrations, error: registrationsError } = await supabase
-    .from("registrations")
+    .from("registration")
     .select(`
       id,
       created_at,
+      payment_type,
       session_id,
       session:session_id (
         id,
@@ -63,18 +65,70 @@ export default async function AccountPage() {
   }
 
   // Separate upcoming and past registrations
+  // First, let's try to fetch sessions separately if nested query fails
+  let sessionsMap = new Map<string, any>();
+  if (registrations && registrations.length > 0) {
+    const sessionIds = registrations
+      .map((reg) => reg.session_id)
+      .filter((id): id is string => !!id);
+    
+    if (sessionIds.length > 0) {
+      const { data: sessionsData } = await supabase
+        .from("session")
+        .select(`
+          id,
+          start_ts,
+          end_ts,
+          activity_id,
+          activity:activity_id (
+            id,
+            name
+          )
+        `)
+        .in("id", sessionIds);
+      
+      if (sessionsData) {
+        sessionsData.forEach((session: any) => {
+          sessionsMap.set(session.id, session);
+        });
+      }
+    }
+  }
+
   const upcomingRegistrations =
     registrations?.filter((reg) => {
-      if (!reg.session || typeof reg.session !== "object") return false;
-      const session = reg.session as any;
-      return session.start_ts && session.start_ts >= now;
+      // Try to get session from nested query first, then from separate query
+      let session = Array.isArray(reg.session) 
+        ? reg.session[0] 
+        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      
+      // Fallback to separate query result
+      if (!session && reg.session_id) {
+        session = sessionsMap.get(reg.session_id);
+      }
+      
+      if (!session || !session.start_ts) {
+        return false;
+      }
+      return session.start_ts >= now;
     }) || [];
 
   const pastRegistrations =
     registrations?.filter((reg) => {
-      if (!reg.session || typeof reg.session !== "object") return false;
-      const session = reg.session as any;
-      return session.start_ts && session.start_ts < now;
+      // Try to get session from nested query first, then from separate query
+      let session = Array.isArray(reg.session) 
+        ? reg.session[0] 
+        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      
+      // Fallback to separate query result
+      if (!session && reg.session_id) {
+        session = sessionsMap.get(reg.session_id);
+      }
+      
+      if (!session || !session.start_ts) {
+        return false;
+      }
+      return session.start_ts < now;
     }) || [];
 
   // Fetch credit history
@@ -83,6 +137,38 @@ export default async function AccountPage() {
     .select("id, amount, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  // Fetch registrations linked to these credits to get session information
+  const creditIds = creditHistory?.map((c) => c.id) || [];
+  const { data: registrationsWithCredits } = creditIds.length > 0
+    ? await supabase
+        .from("registration")
+        .select(`
+          credit_id,
+          session_id,
+          session:session_id (
+            id,
+            start_ts,
+            end_ts,
+            activity_id,
+            activity:activity_id (
+              id,
+              name
+            )
+          )
+        `)
+        .in("credit_id", creditIds)
+    : { data: null };
+
+  // Create a map of credit_id to registration/session info
+  const creditSessionMap = new Map<string, any>();
+  if (registrationsWithCredits) {
+    registrationsWithCredits.forEach((reg: any) => {
+      if (reg.credit_id) {
+        creditSessionMap.set(reg.credit_id, reg);
+      }
+    });
+  }
 
   if (creditError) {
     console.error("Error fetching credit history:", creditError);
@@ -128,21 +214,36 @@ export default async function AccountPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {upcomingRegistrations.length === 0 ? (
+              {registrationsError && (
+                <p className="text-sm text-destructive mb-4">
+                  Erreur lors du chargement: {registrationsError.message}
+                </p>
+              )}
+              {upcomingRegistrations.length === 0 && !registrationsError ? (
                 <p className="text-muted-foreground">
                   Aucune inscription à venir
                 </p>
               ) : (
                 <div className="space-y-4">
                   {upcomingRegistrations.map((reg) => {
-                    const session = reg.session as any;
-                    const activity =
-                      session.activity && typeof session.activity === "object"
-                        ? session.activity
-                        : null;
+                    // Try to get session from nested query first, then from separate query
+                    let session = Array.isArray(reg.session) 
+                      ? reg.session[0] 
+                      : (reg.session && typeof reg.session === "object" ? reg.session : null);
+                    
+                    // Fallback to separate query result
+                    if (!session && reg.session_id) {
+                      session = sessionsMap.get(reg.session_id);
+                    }
+                    
+                    const activity = session?.activity 
+                      ? (Array.isArray(session.activity) 
+                          ? session.activity[0] 
+                          : (typeof session.activity === "object" ? session.activity : null))
+                      : null;
                     const activityName = activity?.name || "Activité inconnue";
-                    const startDate = new Date(session.start_ts);
-                    const endDate = new Date(session.end_ts);
+                    const startDate = session?.start_ts ? new Date(session.start_ts) : new Date();
+                    const endDate = session?.end_ts ? new Date(session.end_ts) : new Date();
 
                     return (
                       <div
@@ -158,6 +259,11 @@ export default async function AccountPage() {
                             {timeFormatter.format(startDate)} -{" "}
                             {timeFormatter.format(endDate)}
                           </p>
+                          {reg.payment_type && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -176,21 +282,31 @@ export default async function AccountPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {pastRegistrations.length === 0 ? (
+              {pastRegistrations.length === 0 && !registrationsError ? (
                 <p className="text-muted-foreground">
                   Aucune inscription passée
                 </p>
               ) : (
                 <div className="space-y-4">
                   {pastRegistrations.map((reg) => {
-                    const session = reg.session as any;
-                    const activity =
-                      session.activity && typeof session.activity === "object"
-                        ? session.activity
-                        : null;
+                    // Try to get session from nested query first, then from separate query
+                    let session = Array.isArray(reg.session) 
+                      ? reg.session[0] 
+                      : (reg.session && typeof reg.session === "object" ? reg.session : null);
+                    
+                    // Fallback to separate query result
+                    if (!session && reg.session_id) {
+                      session = sessionsMap.get(reg.session_id);
+                    }
+                    
+                    const activity = session?.activity 
+                      ? (Array.isArray(session.activity) 
+                          ? session.activity[0] 
+                          : (typeof session.activity === "object" ? session.activity : null))
+                      : null;
                     const activityName = activity?.name || "Activité inconnue";
-                    const startDate = new Date(session.start_ts);
-                    const endDate = new Date(session.end_ts);
+                    const startDate = session?.start_ts ? new Date(session.start_ts) : new Date();
+                    const endDate = session?.end_ts ? new Date(session.end_ts) : new Date();
 
                     return (
                       <div
@@ -206,6 +322,11 @@ export default async function AccountPage() {
                             {timeFormatter.format(startDate)} -{" "}
                             {timeFormatter.format(endDate)}
                           </p>
+                          {reg.payment_type && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -236,22 +357,28 @@ export default async function AccountPage() {
                         ? credit.amount
                         : parseFloat(String(credit.amount)) || 0;
                     const date = new Date(credit.created_at);
+                    
+                    // Check if credit has associated session through registration
+                    const registration = creditSessionMap.get(credit.id);
+                    const session = registration?.session && typeof registration.session === "object"
+                      ? registration.session as any
+                      : null;
+                    const activity = session?.activity && typeof session.activity === "object"
+                      ? session.activity
+                      : null;
 
                     return (
-                      <div
+                      <CreditHistoryItem
                         key={credit.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">
-                            +{Math.round(amount)} crédit{amount !== 1 ? "s" : ""}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {dateFormatter.format(date)} à{" "}
-                            {timeFormatter.format(date)}
-                          </p>
-                        </div>
-                      </div>
+                        amount={amount}
+                        date={date}
+                        session={session ? {
+                          start_ts: session.start_ts,
+                          end_ts: session.end_ts,
+                          activity: activity,
+                        } : null}
+                        activity={activity}
+                      />
                     );
                   })}
                 </div>

@@ -168,13 +168,25 @@ type SessionRow = {
 interface ActivitySessionPickerProps {
   activityId?: string;
   activityTitle: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  credits?: number | null;
+  price?: number | null;
+  isLoggedIn?: boolean;
 }
 
 export function ActivitySessionPicker({
   activityId,
   activityTitle,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  credits,
+  price,
+  isLoggedIn,
 }: ActivitySessionPickerProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -187,6 +199,10 @@ export function ActivitySessionPicker({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userCredits, setUserCredits] = useState<number>(0);
+  const [isAlreadyRegistered, setIsAlreadyRegistered] = useState<boolean>(false);
+  const [registeredSessionIds, setRegisteredSessionIds] = useState<Set<string>>(new Set());
+  const [registrationDates, setRegistrationDates] = useState<Map<string, string>>(new Map());
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
   const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
@@ -207,6 +223,96 @@ export function ActivitySessionPicker({
       active = false;
     };
   }, [supabase]);
+
+  useEffect(() => {
+    if (!userId) {
+      setUserCredits(0);
+      return;
+    }
+    let active = true;
+    const fetchUserCredits = async () => {
+      const { data: creditsData, error } = await supabase
+        .from("credit")
+        .select("amount")
+        .eq("user_id", userId);
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Error fetching credits:", error);
+        setUserCredits(0);
+        return;
+      }
+
+      if (creditsData && Array.isArray(creditsData)) {
+        const totalCredits = creditsData.reduce((sum, row) => {
+          let amount = 0;
+          if (row.amount != null) {
+            if (typeof row.amount === 'number') {
+              amount = row.amount;
+            } else if (typeof row.amount === 'string') {
+              amount = parseFloat(row.amount) || 0;
+            }
+          }
+          return sum + amount;
+        }, 0);
+        setUserCredits(totalCredits);
+      } else {
+        setUserCredits(0);
+      }
+    };
+    fetchUserCredits();
+    return () => {
+      active = false;
+    };
+  }, [userId, supabase]);
+
+  useEffect(() => {
+    if (!selectedSessionId || !userId) {
+      setIsAlreadyRegistered(false);
+      return;
+    }
+    setIsAlreadyRegistered(registeredSessionIds.has(selectedSessionId));
+  }, [selectedSessionId, registeredSessionIds, userId]);
+
+  useEffect(() => {
+    if (!userId || !sessions.length) {
+      setRegisteredSessionIds(new Set());
+      return;
+    }
+    let active = true;
+    const fetchUserRegistrations = async () => {
+      const sessionIds = sessions.map(s => s.id);
+      const { data, error } = await supabase
+        .from("registration")
+        .select("session_id, created_at")
+        .eq("user_id", userId)
+        .in("session_id", sessionIds);
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Error fetching registrations:", error);
+        setRegisteredSessionIds(new Set());
+        return;
+      }
+
+      const registeredSet = new Set<string>();
+      const registrationMap = new Map<string, string>();
+      if (data) {
+        data.forEach((reg) => {
+          registeredSet.add(reg.session_id);
+          registrationMap.set(reg.session_id, reg.created_at);
+        });
+      }
+      setRegisteredSessionIds(registeredSet);
+      setRegistrationDates(registrationMap);
+    };
+    fetchUserRegistrations();
+    return () => {
+      active = false;
+    };
+  }, [userId, sessions, supabase]);
 
   useEffect(() => {
     if (!open || !activityId) return;
@@ -299,9 +405,10 @@ export function ActivitySessionPicker({
     setSelectedSessionId(sessionId);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setIsAlreadyRegistered(false);
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (paymentType?: string) => {
     if (!selectedSessionId) return;
     if (!userId) {
       const params = new URLSearchParams();
@@ -309,35 +416,62 @@ export function ActivitySessionPicker({
       router.push(`/auth/login?${params.toString()}`);
       return;
     }
+    
+    // Check if user has enough credits when using credits
+    if (credits != null && userCredits < credits) {
+      setErrorMessage(`Vous n'avez pas assez de crédits. Vous avez ${userCredits} crédit(s), ${credits} crédit(s) requis.`);
+      return;
+    }
+
     setIsRegistering(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    const { error } = await supabase
-      .from("registrations")
-      .insert({ session_id: selectedSessionId });
+    
+    const registrationData: { session_id: string; user_id: string; payment_type?: string } = {
+      session_id: selectedSessionId,
+      user_id: userId,
+    };
+    
+    if (paymentType) {
+      registrationData.payment_type = paymentType;
+    }
+    
+    const { data: insertedData, error } = await supabase
+      .from("registration")
+      .insert(registrationData)
+      .select("created_at")
+      .single();
     setIsRegistering(false);
     if (error) {
       console.error(error);
       setErrorMessage("Votre inscription n'a pas pu être enregistrée.");
       return;
     }
+    // Update registered sessions
+    setRegisteredSessionIds(prev => new Set(prev).add(selectedSessionId));
+    if (insertedData?.created_at) {
+      setRegistrationDates(prev => new Map(prev).set(selectedSessionId, insertedData.created_at));
+    }
+    setIsAlreadyRegistered(true);
     setSuccessMessage("Inscription confirmée ! Nous vous attendons à l'atelier.");
     router.refresh();
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="secondary"
-          size="lg"
-          className="mt-4"
-          disabled={!activityId}
-        >
-          <CalendarIcon className="h-4 w-4" />
-          Sélectionner une session
-        </Button>
-      </DialogTrigger>
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="mt-4"
+            disabled={!activityId}
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Sélectionner une session
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
@@ -378,16 +512,22 @@ export function ActivitySessionPicker({
                     const start = new Date(session.start_ts);
                     const end = new Date(session.end_ts);
                     const isSelected = session.id === selectedSessionId;
+                    const isRegistered = registeredSessionIds.has(session.id);
+                    const registrationDate = isRegistered && registrationDates.has(session.id) 
+                      ? new Date(registrationDates.get(session.id)!) 
+                      : null;
                     return (
                       <button
                         key={session.id}
                         type="button"
+                        disabled={isRegistered}
                         onClick={() => handleSelectSession(session.id)}
                         className={cn(
                           "w-full rounded-lg border p-4 text-left transition-colors",
                           isSelected
                             ? "border-primary bg-primary/5"
                             : "hover:bg-muted",
+                          isRegistered && "bg-green-50 border-green-200 cursor-not-allowed opacity-75",
                         )}
                       >
                         <div className="flex items-center justify-between">
@@ -399,12 +539,20 @@ export function ActivitySessionPicker({
                             <p className="text-sm text-muted-foreground capitalize">
                               {dateFormatter.format(start)}
                             </p>
+                            {isRegistered && (
+                              <p className="text-sm text-green-600 font-medium mt-1">
+                                Déjà inscrit
+                              </p>
+                            )}
                           </div>
-                          {isSelected && (
+                          {isSelected && !isRegistered && (
                             <CheckCircle2 className="h-5 w-5 text-primary" />
                           )}
+                          {isRegistered && (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          )}
                         </div>
-                        {session.max_registrations !== null && (
+                        {session.max_registrations !== null && !isRegistered && (
                           <p className="mt-2 text-xs text-muted-foreground">
                             {session.max_registrations} places disponibles
                           </p>
@@ -430,16 +578,47 @@ export function ActivitySessionPicker({
         )}
 
         <DialogFooter className="flex-col gap-3 sm:flex-row">
-          <Button
-            className="w-full sm:w-auto"
-            disabled={!selectedSessionId || isRegistering}
-            onClick={handleRegister}
-          >
-            {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
-          </Button>
+          {isLoggedIn && selectedSessionId && (
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
+              {credits != null && (
+                <Button
+                  variant="default"
+                  className="w-full sm:w-auto"
+                  disabled={isRegistering || userCredits < credits || isAlreadyRegistered}
+                  onClick={() => handleRegister("credit")}
+                >
+                  {isAlreadyRegistered ? "Déjà inscrit" : isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
+                </Button>
+              )}
+              {price != null && (
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={isRegistering || isAlreadyRegistered}
+                  onClick={handleRegister}
+                >
+                  {isAlreadyRegistered ? "Déjà inscrit" : isRegistering ? "Inscription..." : `Réserver pour ${price.toFixed(2)}€`}
+                </Button>
+              )}
+            </div>
+          )}
+          {(!isLoggedIn || (!credits && !price)) && (
+            <Button
+              className="w-full sm:w-auto"
+              disabled={!selectedSessionId || isRegistering || isAlreadyRegistered}
+              onClick={handleRegister}
+            >
+              {isAlreadyRegistered ? "Déjà inscrit" : isRegistering ? "Inscription..." : "Confirmer mon inscription"}
+            </Button>
+          )}
           {!userId && (
             <p className="text-xs text-muted-foreground">
               Connectez-vous pour finaliser votre inscription.
+            </p>
+          )}
+          {userId && credits != null && userCredits < credits && !isAlreadyRegistered && (
+            <p className="text-xs text-destructive">
+              Crédits insuffisants. Vous avez {userCredits} crédit(s), {credits} crédit(s) requis.
             </p>
           )}
         </DialogFooter>

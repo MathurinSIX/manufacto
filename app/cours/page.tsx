@@ -9,42 +9,31 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ActivitySessionPicker } from "@/components/activity-session-picker";
-
-const activityContent = {
-  couture_atelier_1: {
-    title: "Atelier Couture Niveau 1",
-    description:
-      "Apprenez les bases de la machine à coudre, réalisez vos premières pièces et repartez avec les fondamentaux indispensables.",
-    image:
-      "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=800&q=80",
-  },
-} satisfies Record<
-  string,
-  { title: string; description: string; image: string }
->;
+import { ActivityReservationButtons } from "@/components/activity-reservation-buttons";
 
 export default async function CoursPage() {
   const supabase = await createClient();
 
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits");
+    .select("id, name, description, image_url, nb_credits, price")
+    .eq("type", "cours");
 
   if (error) {
     console.error("Error fetching activities", error);
   }
 
-  const entries = Object.entries(activityContent).map(
-    ([name, content]) => {
-      const dbActivity = data?.find((activity) => activity.name === name);
-      return {
-        ...content,
-        id: dbActivity?.id ?? name,
-        credits: dbActivity?.nb_credits ?? null,
-      };
-    },
-  );
+  const entries =
+    data?.map((activity) => ({
+      id: activity.id,
+      name: activity.name || "Activité",
+      description: activity.description || "",
+      image: activity.image_url || "",
+      credits: activity.nb_credits ?? null,
+      price: activity.price ?? null,
+    })) || [];
 
   return (
     <main className="min-h-screen flex flex-col items-center">
@@ -68,31 +57,47 @@ export default async function CoursPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {entries.map((activity) => (
               <Card key={activity.id} className="overflow-hidden">
-                <div className="relative h-56 w-full">
-                  <Image
-                    src={activity.image}
-                    alt={activity.title}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  />
-                </div>
+                {activity.image && (
+                  <div className="relative h-56 w-full">
+                    <Image
+                      src={activity.image}
+                      alt={activity.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    />
+                  </div>
+                )}
                 <CardHeader>
-                  <CardTitle>{activity.title}</CardTitle>
-                  <CardDescription>{activity.description}</CardDescription>
+                  <CardTitle>{activity.name}</CardTitle>
+                  {activity.description && (
+                    <CardDescription>{activity.description}</CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">Crédits requis</p>
-                  <p className="text-2xl font-semibold">
-                    {activity.credits !== null ? (
-                      <span>{activity.credits}</span>
-                    ) : (
-                      <span className="text-base text-muted-foreground">
-                        À définir
-                      </span>
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Crédits requis</p>
+                      <p className="text-2xl font-semibold">
+                        {activity.credits !== null ? (
+                          <span>{activity.credits}</span>
+                        ) : (
+                          <span className="text-base text-muted-foreground">
+                            À définir
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {activity.price !== null && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Prix</p>
+                        <p className="text-2xl font-semibold">
+                          {activity.price.toFixed(2)} €
+                        </p>
+                      </div>
                     )}
-                  </p>
-                  <ActivitySessionPicker
+                  </div>
+                  <ActivityReservationButtons
                     activityId={
                       activity.id &&
                       typeof activity.id === "string" &&
@@ -100,7 +105,10 @@ export default async function CoursPage() {
                         ? activity.id
                         : undefined
                     }
-                    activityTitle={activity.title}
+                    activityTitle={activity.name}
+                    credits={activity.credits}
+                    price={activity.price}
+                    isLoggedIn={!!user}
                   />
                 </CardContent>
               </Card>
