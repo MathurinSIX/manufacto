@@ -9,24 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CreditHistoryItem } from "@/components/credit-history-item";
-
-const PARIS_TIMEZONE = "Europe/Paris";
-
-const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: PARIS_TIMEZONE,
-});
-
-const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: PARIS_TIMEZONE,
-});
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UpcomingReservationsList } from "@/components/upcoming-reservations-list";
+import { PastReservationsList } from "@/components/past-reservations-list";
+import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
+import { CreditHistoryList } from "@/components/credit-history-list";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -43,7 +30,6 @@ export default async function AccountPage() {
     .from("registration")
     .select(`
       id,
-      created_at,
       payment_type,
       session_id,
       session:session_id (
@@ -57,8 +43,47 @@ export default async function AccountPage() {
         )
       )
     `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .eq("user_id", user.id);
+
+  // Fetch latest registration_status for each registration
+  const registrationIds = registrations?.map((reg) => reg.id) || [];
+  let registrationStatusMap: Record<string, { status: string; created_at: string }> = {};
+  
+  if (registrationIds.length > 0) {
+    // Get the latest status for each registration
+    const { data: statuses } = await supabase
+      .from("registration_status")
+      .select("registration_id, status, created_at")
+      .in("registration_id", registrationIds)
+      .order("created_at", { ascending: false });
+
+    if (statuses) {
+      // Create an object with the latest status for each registration
+      const seenRegistrations = new Set<string>();
+      statuses.forEach((status) => {
+        if (!seenRegistrations.has(status.registration_id)) {
+          registrationStatusMap[status.registration_id] = {
+            status: status.status,
+            created_at: status.created_at,
+          };
+          seenRegistrations.add(status.registration_id);
+        }
+      });
+    }
+  }
+
+  // Sort registrations by latest registration_status created_at (or registration id as fallback)
+  const sortedRegistrations = registrations?.sort((a, b) => {
+    const statusA = registrationStatusMap[a.id];
+    const statusB = registrationStatusMap[b.id];
+    const dateA = statusA?.created_at ? new Date(statusA.created_at).getTime() : 0;
+    const dateB = statusB?.created_at ? new Date(statusB.created_at).getTime() : 0;
+    // If both have no status, maintain original order (by id)
+    if (dateA === 0 && dateB === 0) {
+      return a.id.localeCompare(b.id);
+    }
+    return dateB - dateA; // Descending order (newest first)
+  }) || [];
 
   if (registrationsError) {
     console.error("Error fetching registrations:", registrationsError);
@@ -66,7 +91,7 @@ export default async function AccountPage() {
 
   // Separate upcoming and past registrations
   // First, let's try to fetch sessions separately if nested query fails
-  let sessionsMap = new Map<string, any>();
+  let sessionsMap: Record<string, any> = {};
   if (registrations && registrations.length > 0) {
     const sessionIds = registrations
       .map((reg) => reg.session_id)
@@ -89,14 +114,14 @@ export default async function AccountPage() {
       
       if (sessionsData) {
         sessionsData.forEach((session: any) => {
-          sessionsMap.set(session.id, session);
+          sessionsMap[session.id] = session;
         });
       }
     }
   }
 
   const upcomingRegistrations =
-    registrations?.filter((reg) => {
+    sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
       let session = Array.isArray(reg.session) 
         ? reg.session[0] 
@@ -104,17 +129,24 @@ export default async function AccountPage() {
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
-        session = sessionsMap.get(reg.session_id);
+        session = sessionsMap[reg.session_id];
       }
       
       if (!session || !session.start_ts) {
         return false;
       }
+      
+      // Exclude cancelled registrations from upcoming registrations
+      const latestStatus = registrationStatusMap[reg.id];
+      if (latestStatus && latestStatus.status === "CANCELLED") {
+        return false;
+      }
+      
       return session.start_ts >= now;
     }) || [];
 
   const pastRegistrations =
-    registrations?.filter((reg) => {
+    sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
       let session = Array.isArray(reg.session) 
         ? reg.session[0] 
@@ -122,13 +154,26 @@ export default async function AccountPage() {
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
-        session = sessionsMap.get(reg.session_id);
+        session = sessionsMap[reg.session_id];
       }
       
       if (!session || !session.start_ts) {
         return false;
       }
+      
+      // Exclude cancelled registrations from past registrations
+      const latestStatus = registrationStatusMap[reg.id];
+      if (latestStatus && latestStatus.status === "CANCELLED") {
+        return false;
+      }
+      
       return session.start_ts < now;
+    }) || [];
+
+  const cancelledRegistrations =
+    sortedRegistrations.filter((reg) => {
+      const latestStatus = registrationStatusMap[reg.id];
+      return latestStatus && latestStatus.status === "CANCELLED";
     }) || [];
 
   // Fetch credit history
@@ -138,34 +183,70 @@ export default async function AccountPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  // Fetch registrations linked to these credits to get session information
+  // Fetch registration_status linked to these credits
   const creditIds = creditHistory?.map((c) => c.id) || [];
-  const { data: registrationsWithCredits } = creditIds.length > 0
+  const { data: registrationStatusesWithCredits } = creditIds.length > 0
     ? await supabase
-        .from("registration")
+        .from("registration_status")
         .select(`
+          id,
           credit_id,
-          session_id,
-          session:session_id (
+          registration_id,
+          status,
+          created_at,
+          registration:registration_id (
             id,
-            start_ts,
-            end_ts,
-            activity_id,
-            activity:activity_id (
+            session_id,
+            payment_type,
+            session:session_id (
               id,
-              name
+              start_ts,
+              end_ts,
+              activity_id,
+              activity:activity_id (
+                id,
+                name
+              )
             )
           )
         `)
         .in("credit_id", creditIds)
+        .order("created_at", { ascending: false })
     : { data: null };
 
-  // Create a map of credit_id to registration/session info
-  const creditSessionMap = new Map<string, any>();
-  if (registrationsWithCredits) {
-    registrationsWithCredits.forEach((reg: any) => {
-      if (reg.credit_id) {
-        creditSessionMap.set(reg.credit_id, reg);
+  // Create an object of credit_id to registration/session info with status
+  // Only use the latest registration_status for each credit (already ordered by created_at desc)
+  const creditSessionMap: Record<string, any> = {};
+  if (registrationStatusesWithCredits) {
+    const seenCredits = new Set<string>();
+    registrationStatusesWithCredits.forEach((regStatus: any) => {
+      if (regStatus.credit_id && regStatus.registration && !seenCredits.has(regStatus.credit_id)) {
+        // Handle nested registration data (could be array or object)
+        let registration = Array.isArray(regStatus.registration)
+          ? regStatus.registration[0]
+          : regStatus.registration;
+
+        if (registration) {
+          // Handle nested session data
+          let session = null;
+          if (registration.session) {
+            if (Array.isArray(registration.session)) {
+              session = registration.session[0] || null;
+            } else if (typeof registration.session === "object") {
+              session = registration.session;
+            }
+          }
+
+          creditSessionMap[regStatus.credit_id] = {
+            ...registration,
+            session: session,
+            status: {
+              status: regStatus.status,
+              created_at: regStatus.created_at,
+            },
+          };
+          seenCredits.add(regStatus.credit_id);
+        }
       }
     });
   }
@@ -193,7 +274,7 @@ export default async function AccountPage() {
             <div>
               <h1 className="text-4xl md:text-5xl font-bold">Mon Compte</h1>
               <p className="text-lg text-muted-foreground mt-2">
-                Gérez vos inscriptions et consultez votre historique
+                Gérez vos réservations et consultez votre historique
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -205,134 +286,45 @@ export default async function AccountPage() {
             </div>
           </div>
 
-          {/* Upcoming Registrations */}
+          {/* Reservations with Tabs */}
           <Card>
             <CardHeader>
-              <CardTitle>Mes inscriptions à venir</CardTitle>
+              <CardTitle>Mes réservations</CardTitle>
               <CardDescription>
-                Vos prochaines sessions programmées
+                Gérez vos réservations à venir, passées et annulées
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {registrationsError && (
-                <p className="text-sm text-destructive mb-4">
-                  Erreur lors du chargement: {registrationsError.message}
-                </p>
-              )}
-              {upcomingRegistrations.length === 0 && !registrationsError ? (
-                <p className="text-muted-foreground">
-                  Aucune inscription à venir
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {upcomingRegistrations.map((reg) => {
-                    // Try to get session from nested query first, then from separate query
-                    let session = Array.isArray(reg.session) 
-                      ? reg.session[0] 
-                      : (reg.session && typeof reg.session === "object" ? reg.session : null);
-                    
-                    // Fallback to separate query result
-                    if (!session && reg.session_id) {
-                      session = sessionsMap.get(reg.session_id);
-                    }
-                    
-                    const activity = session?.activity 
-                      ? (Array.isArray(session.activity) 
-                          ? session.activity[0] 
-                          : (typeof session.activity === "object" ? session.activity : null))
-                      : null;
-                    const activityName = activity?.name || "Activité inconnue";
-                    const startDate = session?.start_ts ? new Date(session.start_ts) : new Date();
-                    const endDate = session?.end_ts ? new Date(session.end_ts) : new Date();
-
-                    return (
-                      <div
-                        key={reg.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">{activityName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {dateFormatter.format(startDate)}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {timeFormatter.format(startDate)} -{" "}
-                            {timeFormatter.format(endDate)}
-                          </p>
-                          {reg.payment_type && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Past Registrations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Mes inscriptions passées</CardTitle>
-              <CardDescription>
-                Historique de vos participations
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pastRegistrations.length === 0 && !registrationsError ? (
-                <p className="text-muted-foreground">
-                  Aucune inscription passée
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {pastRegistrations.map((reg) => {
-                    // Try to get session from nested query first, then from separate query
-                    let session = Array.isArray(reg.session) 
-                      ? reg.session[0] 
-                      : (reg.session && typeof reg.session === "object" ? reg.session : null);
-                    
-                    // Fallback to separate query result
-                    if (!session && reg.session_id) {
-                      session = sessionsMap.get(reg.session_id);
-                    }
-                    
-                    const activity = session?.activity 
-                      ? (Array.isArray(session.activity) 
-                          ? session.activity[0] 
-                          : (typeof session.activity === "object" ? session.activity : null))
-                      : null;
-                    const activityName = activity?.name || "Activité inconnue";
-                    const startDate = session?.start_ts ? new Date(session.start_ts) : new Date();
-                    const endDate = session?.end_ts ? new Date(session.end_ts) : new Date();
-
-                    return (
-                      <div
-                        key={reg.id}
-                        className="flex items-center justify-between p-4 border rounded-lg opacity-75"
-                      >
-                        <div>
-                          <p className="font-medium">{activityName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {dateFormatter.format(startDate)}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {timeFormatter.format(startDate)} -{" "}
-                            {timeFormatter.format(endDate)}
-                          </p>
-                          {reg.payment_type && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <Tabs defaultValue="upcoming" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="upcoming">À venir</TabsTrigger>
+                  <TabsTrigger value="past">Passées</TabsTrigger>
+                  <TabsTrigger value="cancelled">Annulées</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upcoming" className="mt-4">
+                  <UpcomingReservationsList
+                    registrations={upcomingRegistrations}
+                    sessionsMap={sessionsMap}
+                    registrationStatusMap={registrationStatusMap}
+                    error={registrationsError?.message}
+                  />
+                </TabsContent>
+                <TabsContent value="past" className="mt-4">
+                  <PastReservationsList
+                    registrations={pastRegistrations}
+                    sessionsMap={sessionsMap}
+                    error={registrationsError?.message}
+                  />
+                </TabsContent>
+                <TabsContent value="cancelled" className="mt-4">
+                  <CancelledReservationsList
+                    registrations={cancelledRegistrations}
+                    sessionsMap={sessionsMap}
+                    registrationStatusMap={registrationStatusMap}
+                    error={registrationsError?.message}
+                  />
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
@@ -345,44 +337,10 @@ export default async function AccountPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!creditHistory || creditHistory.length === 0 ? (
-                <p className="text-muted-foreground">
-                  Aucun historique de crédits
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {creditHistory.map((credit) => {
-                    const amount =
-                      typeof credit.amount === "number"
-                        ? credit.amount
-                        : parseFloat(String(credit.amount)) || 0;
-                    const date = new Date(credit.created_at);
-                    
-                    // Check if credit has associated session through registration
-                    const registration = creditSessionMap.get(credit.id);
-                    const session = registration?.session && typeof registration.session === "object"
-                      ? registration.session as any
-                      : null;
-                    const activity = session?.activity && typeof session.activity === "object"
-                      ? session.activity
-                      : null;
-
-                    return (
-                      <CreditHistoryItem
-                        key={credit.id}
-                        amount={amount}
-                        date={date}
-                        session={session ? {
-                          start_ts: session.start_ts,
-                          end_ts: session.end_ts,
-                          activity: activity,
-                        } : null}
-                        activity={activity}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+              <CreditHistoryList
+                creditHistory={creditHistory || []}
+                creditSessionMap={creditSessionMap}
+              />
             </CardContent>
           </Card>
         </div>

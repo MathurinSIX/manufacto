@@ -2,7 +2,6 @@ import { Navigation } from "@/components/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { MonthlyActivitiesCalendar } from "@/components/monthly-activities-calendar";
 
 export default function Home() {
   return (
@@ -13,7 +12,7 @@ export default function Home() {
         {/* Hero Section with Big Picture */}
         <div className="relative w-full h-[70vh] min-h-[500px]">
           <Image
-            src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1920&q=80"
+            src="https://images.unsplash.com/photo-1659930087003-2d64e33181f7?auto=format&fit=crop&w=1920&q=80"
             alt="Manufacto Atelier"
             fill
             className="object-cover"
@@ -58,7 +57,7 @@ export default function Home() {
             </div>
             <div className="relative w-full h-96 rounded-lg overflow-hidden">
               <Image
-                src="https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=800&q=80"
+                src="https://images.unsplash.com/photo-1597960194599-22929afc25b1?auto=format&fit=crop&w=800&q=80"
                 alt="Concept Manufacto"
                 fill
                 className="object-cover"
@@ -79,7 +78,7 @@ export default function Home() {
                 <div className="flex-1 text-base md:text-lg text-muted-foreground">
                   <p>
                     Tous les mardi soir, de 18h30 à 19h, Martin, Nafissa, Cyprien et Delphine
-                    vous présenteront le lieu et son fonctionnement. C&apos;est gratuit, sur inscription :
+                    vous présenteront le lieu et son fonctionnement. C&apos;est gratuit, sur réservation :
                   </p>
                 </div>
                 <div className="flex-shrink-0">
@@ -161,18 +160,6 @@ export default function Home() {
                   </Button>
                 </Link>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Monthly Activities Calendar Section */}
-        <section className="w-full py-20">
-          <div className="w-full max-w-7xl mx-auto px-5">
-            <h2 className="text-3xl md:text-4xl font-bold mb-8 text-center">
-              Les cours du mois
-            </h2>
-            <div className="bg-muted/30 border rounded-lg p-6 md:p-8">
-              <MonthlyActivitiesCalendar />
             </div>
           </div>
         </section>
