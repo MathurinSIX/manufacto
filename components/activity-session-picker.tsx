@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { AuthModal } from "@/components/auth-modal";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -209,6 +210,7 @@ export function ActivitySessionPicker({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
   const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -222,8 +224,19 @@ export function ActivitySessionPicker({
       setUserId(data.user?.id ?? null);
     };
     fetchUser();
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) {
+        setUserId(session?.user?.id ?? null);
+      }
+    });
+
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, [supabase]);
 
@@ -746,24 +759,38 @@ export function ActivitySessionPicker({
               )}
             </div>
           )}
-          {(!isLoggedIn || (!credits && !price)) && !isAlreadyRegistered && (
-            <Button
-              className="w-full sm:w-auto"
-              disabled={!selectedSessionId || isRegistering}
-              onClick={handleRegister}
-            >
-              {isRegistering ? "Réservation..." : "Confirmer ma réservation"}
-            </Button>
+          {!userId && !isAlreadyRegistered && selectedSessionId && (
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
+              <Button
+                variant="default"
+                className="w-full sm:w-auto"
+                onClick={() => setIsAuthModalOpen(true)}
+              >
+                Me connecter
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Connectez-vous pour finaliser votre réservation.
+              </p>
+            </div>
+          )}
+          {!userId && !isAlreadyRegistered && !selectedSessionId && (
+            <p className="text-xs text-muted-foreground">
+              Sélectionnez une session pour continuer.
+            </p>
           )}
           {isAlreadyRegistered && !isLoggedIn && (
             <p className="text-xs text-muted-foreground">
               Vous êtes déjà inscrit à cette session.
             </p>
           )}
-          {!userId && !isAlreadyRegistered && (
-            <p className="text-xs text-muted-foreground">
-              Connectez-vous pour finaliser votre réservation.
-            </p>
+          {userId && (!credits && !price) && !isAlreadyRegistered && selectedSessionId && (
+            <Button
+              className="w-full sm:w-auto"
+              disabled={isRegistering}
+              onClick={handleRegister}
+            >
+              {isRegistering ? "Réservation..." : "Confirmer ma réservation"}
+            </Button>
           )}
           {userId && credits != null && userCredits < credits && !isAlreadyRegistered && (
             <p className="text-xs text-destructive">
@@ -771,6 +798,18 @@ export function ActivitySessionPicker({
             </p>
           )}
         </DialogFooter>
+        <AuthModal
+          open={isAuthModalOpen}
+          onOpenChange={setIsAuthModalOpen}
+          defaultView="login"
+          onSuccess={async () => {
+            setIsAuthModalOpen(false);
+            // Re-fetch user after successful login
+            const { data } = await supabase.auth.getUser();
+            setUserId(data.user?.id ?? null);
+            router.refresh();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

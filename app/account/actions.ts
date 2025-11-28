@@ -40,3 +40,4 @@ export async function cancelRegistration(registrationId: string) {
   return { success: true };
 }
 
+
