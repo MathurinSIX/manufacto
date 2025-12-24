@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { AuthModal } from "@/components/auth-modal";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -200,17 +199,9 @@ export function ActivitySessionPicker({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userCredits, setUserCredits] = useState<number>(0);
-  const [isAlreadyRegistered, setIsAlreadyRegistered] = useState<boolean>(false);
-  const [registeredSessionIds, setRegisteredSessionIds] = useState<Set<string>>(new Set());
-  const [allRegisteredSessionIds, setAllRegisteredSessionIds] = useState<Set<string>>(new Set());
-  const [registrationDates, setRegistrationDates] = useState<Map<string, string>>(new Map());
-  const [sessionToRegistrationMap, setSessionToRegistrationMap] = useState<Map<string, string>>(new Map());
-  const [isCancelling, setIsCancelling] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
   const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -224,175 +215,10 @@ export function ActivitySessionPicker({
       setUserId(data.user?.id ?? null);
     };
     fetchUser();
-
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) {
-        setUserId(session?.user?.id ?? null);
-      }
-    });
-
     return () => {
       active = false;
-      subscription.unsubscribe();
     };
   }, [supabase]);
-
-  useEffect(() => {
-    if (!userId) {
-      setUserCredits(0);
-      return;
-    }
-    let active = true;
-    const fetchUserCredits = async () => {
-      const { data: creditsData, error } = await supabase
-        .from("credit")
-        .select("amount")
-        .eq("user_id", userId);
-
-      if (!active) return;
-
-      if (error) {
-        console.error("Error fetching credits:", error);
-        setUserCredits(0);
-        return;
-      }
-
-      if (creditsData && Array.isArray(creditsData)) {
-        const totalCredits = creditsData.reduce((sum, row) => {
-          let amount = 0;
-          if (row.amount != null) {
-            if (typeof row.amount === 'number') {
-              amount = row.amount;
-            } else if (typeof row.amount === 'string') {
-              amount = parseFloat(row.amount) || 0;
-            }
-          }
-          return sum + amount;
-        }, 0);
-        setUserCredits(totalCredits);
-      } else {
-        setUserCredits(0);
-      }
-    };
-    fetchUserCredits();
-    return () => {
-      active = false;
-    };
-  }, [userId, supabase]);
-
-  useEffect(() => {
-    if (!selectedSessionId || !userId) {
-      setIsAlreadyRegistered(false);
-      return;
-    }
-    // Check if session has an ACTIVE registration (to show Cancel button)
-    // This prevents the state from being reset when clicking/unclicking/reclicking
-    setIsAlreadyRegistered(registeredSessionIds.has(selectedSessionId));
-  }, [selectedSessionId, registeredSessionIds, userId]);
-
-  useEffect(() => {
-    if (!userId || !sessions.length) {
-      setRegisteredSessionIds(new Set());
-      setAllRegisteredSessionIds(new Set());
-      return;
-    }
-    let active = true;
-    const fetchUserRegistrations = async () => {
-      const sessionIds = sessions.map(s => s.id);
-      // First, get registrations for these sessions
-      const { data: registrations, error: regError } = await supabase
-        .from("registration")
-        .select("id, session_id")
-        .eq("user_id", userId)
-        .in("session_id", sessionIds);
-
-      if (!active) return;
-
-      if (regError) {
-        console.error("Error fetching registrations:", regError);
-        setRegisteredSessionIds(new Set());
-        setAllRegisteredSessionIds(new Set());
-        return;
-      }
-
-      if (!registrations || registrations.length === 0) {
-        setRegisteredSessionIds(new Set());
-        setAllRegisteredSessionIds(new Set());
-        return;
-      }
-
-      // Get the latest registration_status for each registration
-      const registrationIds = registrations.map(reg => reg.id);
-      const { data: statuses, error: statusError } = await supabase
-        .from("registration_status")
-        .select("registration_id, status, created_at")
-        .in("registration_id", registrationIds)
-        .order("created_at", { ascending: false });
-
-      if (!active) return;
-
-      if (statusError) {
-        console.error("Error fetching registration statuses:", statusError);
-        setRegisteredSessionIds(new Set());
-        setAllRegisteredSessionIds(new Set());
-        return;
-      }
-
-      // Create maps: session_id -> registration_id, and registration_id -> latest status
-      const sessionToRegMap = new Map<string, string>();
-      registrations.forEach((reg) => {
-        if (reg.session_id) {
-          sessionToRegMap.set(reg.session_id, reg.id);
-        }
-      });
-
-      const registrationStatusMap = new Map<string, { status: string; created_at: string }>();
-      if (statuses) {
-        const seenRegistrations = new Set<string>();
-        statuses.forEach((status) => {
-          if (!seenRegistrations.has(status.registration_id)) {
-            registrationStatusMap.set(status.registration_id, {
-              status: status.status,
-              created_at: status.created_at,
-            });
-            seenRegistrations.add(status.registration_id);
-          }
-        });
-      }
-
-      // Build the final sets and maps
-      // Only consider sessions with latest status ACTIVE (or no status, default to ACTIVE) as registered
-      const registeredSet = new Set<string>();
-      const allRegisteredSet = new Set<string>();
-      const registrationDateMap = new Map<string, string>();
-      
-      sessionToRegMap.forEach((registrationId, sessionId) => {
-        // Track ALL sessions with any registration (to prevent rebooking)
-        allRegisteredSet.add(sessionId);
-        
-        const latestStatus = registrationStatusMap.get(registrationId);
-        // Only consider ACTIVE or no status (default to ACTIVE) as registered
-        if (!latestStatus || latestStatus.status === "ACTIVE") {
-          registeredSet.add(sessionId);
-          if (latestStatus?.created_at) {
-            registrationDateMap.set(sessionId, latestStatus.created_at);
-          }
-        }
-      });
-
-      setRegisteredSessionIds(registeredSet);
-      setAllRegisteredSessionIds(allRegisteredSet);
-      setRegistrationDates(registrationDateMap);
-      setSessionToRegistrationMap(sessionToRegMap);
-    };
-    fetchUserRegistrations();
-    return () => {
-      active = false;
-    };
-  }, [userId, sessions, supabase]);
 
   useEffect(() => {
     if (!open || !activityId) return;
@@ -485,10 +311,9 @@ export function ActivitySessionPicker({
     setSelectedSessionId(sessionId);
     setSuccessMessage(null);
     setErrorMessage(null);
-    // Don't reset isAlreadyRegistered here - let the useEffect handle it based on registeredSessionIds
   };
 
-  const handleRegister = async (paymentType?: string) => {
+  const handleRegister = async () => {
     if (!selectedSessionId) return;
     if (!userId) {
       const params = new URLSearchParams();
@@ -496,109 +321,19 @@ export function ActivitySessionPicker({
       router.push(`/auth/login?${params.toString()}`);
       return;
     }
-    
-    // Prevent rebooking if there's already an ACTIVE registration
-    if (registeredSessionIds.has(selectedSessionId)) {
-      setErrorMessage("Vous êtes déjà inscrit à cette session.");
-      return;
-    }
-    
-    // Check if user has enough credits when using credits
-    if (credits != null && userCredits < credits) {
-      setErrorMessage(`Vous n'avez pas assez de crédits. Vous avez ${userCredits} crédit(s), ${credits} crédit(s) requis.`);
-      return;
-    }
-
     setIsRegistering(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    
-    const registrationData: { session_id: string; user_id: string; payment_type?: string } = {
-      session_id: selectedSessionId,
-      user_id: userId,
-    };
-    
-    if (paymentType) {
-      registrationData.payment_type = paymentType;
-    }
-    
-    const { data: insertedRegistration, error: regError } = await supabase
-      .from("registration")
-      .insert(registrationData)
-      .select("id")
-      .single();
-    
+    const { error } = await supabase
+      .from("registrations")
+      .insert({ session_id: selectedSessionId });
     setIsRegistering(false);
-    if (regError || !insertedRegistration) {
-      console.error(regError);
-      setErrorMessage("Votre réservation n'a pas pu être enregistrée.");
+    if (error) {
+      console.error(error);
+      setErrorMessage("Votre inscription n'a pas pu être enregistrée.");
       return;
     }
-
-    // Fetch the automatically created registration_status from the backend
-    const { data: statusData, error: statusError } = await supabase
-      .from("registration_status")
-      .select("created_at")
-      .eq("registration_id", insertedRegistration.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    // Update registered sessions
-    setRegisteredSessionIds(prev => new Set(prev).add(selectedSessionId));
-    setAllRegisteredSessionIds(prev => new Set(prev).add(selectedSessionId));
-    if (statusData?.created_at) {
-      setRegistrationDates(prev => new Map(prev).set(selectedSessionId, statusData.created_at));
-    }
-    // Update sessionToRegistrationMap
-    setSessionToRegistrationMap(prev => new Map(prev).set(selectedSessionId, insertedRegistration.id));
-    setIsAlreadyRegistered(true);
-    setSuccessMessage("Réservation confirmée ! Nous vous attendons à l'atelier.");
-    router.refresh();
-  };
-
-  const handleCancel = async () => {
-    if (!selectedSessionId || !userId) return;
-    
-    const registrationId = sessionToRegistrationMap.get(selectedSessionId);
-    if (!registrationId) {
-      setErrorMessage("Impossible de trouver la réservation à annuler.");
-      return;
-    }
-
-    if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
-      return;
-    }
-
-    setIsCancelling(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    // Insert a CANCELLED status
-    const { error: statusError } = await supabase
-      .from("registration_status")
-      .insert({
-        registration_id: registrationId,
-        status: "CANCELLED",
-      });
-
-    setIsCancelling(false);
-    if (statusError) {
-      console.error(statusError);
-      setErrorMessage("L'annulation n'a pas pu être effectuée.");
-      return;
-    }
-
-    // Update state to reflect cancellation
-    // Remove from active registrations (but keep in allRegisteredSessionIds to prevent rebooking)
-    setRegisteredSessionIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(selectedSessionId);
-      return newSet;
-    });
-    // Keep in allRegisteredSessionIds to prevent rebooking
-    // isAlreadyRegistered will remain true because the session is still in allRegisteredSessionIds
-    setSuccessMessage("Réservation annulée avec succès.");
+    setSuccessMessage("Inscription confirmée ! Nous vous attendons à l'atelier.");
     router.refresh();
   };
 
@@ -657,10 +392,6 @@ export function ActivitySessionPicker({
                     const start = new Date(session.start_ts);
                     const end = new Date(session.end_ts);
                     const isSelected = session.id === selectedSessionId;
-                    const isRegistered = registeredSessionIds.has(session.id);
-                    const registrationDate = isRegistered && registrationDates.has(session.id) 
-                      ? new Date(registrationDates.get(session.id)!) 
-                      : null;
                     return (
                       <button
                         key={session.id}
@@ -671,7 +402,6 @@ export function ActivitySessionPicker({
                           isSelected
                             ? "border-primary bg-primary/5"
                             : "hover:bg-muted",
-                          isRegistered && "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
                         )}
                       >
                         <div className="flex items-center justify-between">
@@ -683,20 +413,12 @@ export function ActivitySessionPicker({
                             <p className="text-sm text-muted-foreground capitalize">
                               {dateFormatter.format(start)}
                             </p>
-                            {isRegistered && (
-                              <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">
-                                Déjà inscrit
-                              </p>
-                            )}
                           </div>
-                          {isSelected && !isRegistered && (
+                          {isSelected && (
                             <CheckCircle2 className="h-5 w-5 text-primary" />
                           )}
-                          {isRegistered && (
-                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                          )}
                         </div>
-                        {session.max_registrations !== null && !isRegistered && (
+                        {session.max_registrations !== null && (
                           <p className="mt-2 text-xs text-muted-foreground">
                             {session.max_registrations} places disponibles
                           </p>
@@ -722,94 +444,45 @@ export function ActivitySessionPicker({
         )}
 
         <DialogFooter className="flex-col gap-3 sm:flex-row">
-          {userId && selectedSessionId && (
+          {isLoggedIn && selectedSessionId && (
             <div className="flex flex-col gap-2 w-full sm:w-auto">
-              {isAlreadyRegistered ? (
+              {credits !== null && (
                 <Button
-                  variant="destructive"
+                  variant="default"
                   className="w-full sm:w-auto"
-                  disabled={isCancelling}
-                  onClick={handleCancel}
+                  disabled={isRegistering}
+                  onClick={handleRegister}
                 >
-                  {isCancelling ? "Annulation..." : "Annuler la réservation"}
+                  {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
                 </Button>
-              ) : (
-                <>
-                  {credits != null && userCredits >= credits && (
-                    <Button
-                      variant="default"
-                      className="w-full sm:w-auto"
-                      disabled={isRegistering}
-                      onClick={() => handleRegister("credit")}
-                    >
-                      {isRegistering ? "Réservation..." : `Réserver pour ${credits} crédits`}
-                    </Button>
-                  )}
-                  {price != null && (
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      disabled={isRegistering}
-                      onClick={handleRegister}
-                    >
-                      {isRegistering ? "Réservation..." : `Réserver pour ${price.toFixed(2)}€`}
-                    </Button>
-                  )}
-                </>
+              )}
+              {price !== null && (
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={isRegistering}
+                  onClick={handleRegister}
+                >
+                  {isRegistering ? "Inscription..." : `Réserver pour ${price.toFixed(2)}€`}
+                </Button>
               )}
             </div>
           )}
-          {!userId && !isAlreadyRegistered && selectedSessionId && (
-            <div className="flex flex-col gap-2 w-full sm:w-auto">
-              <Button
-                variant="default"
-                className="w-full sm:w-auto"
-                onClick={() => setIsAuthModalOpen(true)}
-              >
-                Me connecter
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Connectez-vous pour finaliser votre réservation.
-              </p>
-            </div>
-          )}
-          {!userId && !isAlreadyRegistered && !selectedSessionId && (
-            <p className="text-xs text-muted-foreground">
-              Sélectionnez une session pour continuer.
-            </p>
-          )}
-          {isAlreadyRegistered && !isLoggedIn && (
-            <p className="text-xs text-muted-foreground">
-              Vous êtes déjà inscrit à cette session.
-            </p>
-          )}
-          {userId && (!credits && !price) && !isAlreadyRegistered && selectedSessionId && (
+          {(!isLoggedIn || (!credits && !price)) && (
             <Button
               className="w-full sm:w-auto"
-              disabled={isRegistering}
+              disabled={!selectedSessionId || isRegistering}
               onClick={handleRegister}
             >
-              {isRegistering ? "Réservation..." : "Confirmer ma réservation"}
+              {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
             </Button>
           )}
-          {userId && credits != null && userCredits < credits && !isAlreadyRegistered && (
-            <p className="text-xs text-destructive">
-              Crédits insuffisants. Vous avez {userCredits} crédit(s), {credits} crédit(s) requis.
+          {!userId && (
+            <p className="text-xs text-muted-foreground">
+              Connectez-vous pour finaliser votre inscription.
             </p>
           )}
         </DialogFooter>
-        <AuthModal
-          open={isAuthModalOpen}
-          onOpenChange={setIsAuthModalOpen}
-          defaultView="login"
-          onSuccess={async () => {
-            setIsAuthModalOpen(false);
-            // Re-fetch user after successful login
-            const { data } = await supabase.auth.getUser();
-            setUserId(data.user?.id ?? null);
-            router.refresh();
-          }}
-        />
       </DialogContent>
     </Dialog>
   );

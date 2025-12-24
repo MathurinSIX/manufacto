@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "./logout-button";
-import { LoginButton } from "./login-button";
 
 export async function AuthButton() {
   const supabase = await createClient();
@@ -11,7 +10,7 @@ export async function AuthButton() {
   const user = data?.claims;
 
   if (!user) {
-    return <LoginButton />;
+    return null;
   }
 
   const userMetadata =
