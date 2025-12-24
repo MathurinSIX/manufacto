@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { NavLinks } from "@/components/nav-links";
 import { CreditsDisplay } from "@/components/credits-display";
+import { AdminButton } from "@/components/admin-button";
 
 export function Navigation() {
   return (
@@ -16,7 +17,10 @@ export function Navigation() {
         <div className="absolute left-1/2 transform -translate-x-1/2">
           <NavLinks />
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          <Suspense>
+            <AdminButton />
+          </Suspense>
           <Suspense>
             <CreditsDisplay />
           </Suspense>

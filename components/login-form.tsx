@@ -53,7 +53,7 @@ export function LoginForm({
       } else if (redirectTo) {
         router.push(redirectTo);
       } else {
-        router.push("/protected");
+        router.push("/");
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Une erreur s'est produite");

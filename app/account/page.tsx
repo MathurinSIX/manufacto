@@ -23,6 +23,7 @@ export default async function AccountPage() {
     redirect("/auth/login");
   }
 
+
   const now = new Date().toISOString();
 
   // Fetch registrations with session and activity details

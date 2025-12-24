@@ -47,7 +47,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  // Only protect the /account route - all other pages are accessible without authentication
+  // Protect the /account route - all other pages are accessible without authentication
   if (
     request.nextUrl.pathname.startsWith("/account") &&
     !user
@@ -56,6 +56,25 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
+  }
+
+  // Protect the /admin route - only admins can access
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (!user) {
+      // no user trying to access admin page, redirect to login
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      return NextResponse.redirect(url);
+    }
+    // Check if user is admin (app_metadata.role === 'admin')
+    // Note: app_metadata is available in the JWT claims
+    const userRole = (user as any)?.app_metadata?.role;
+    if (userRole !== "admin") {
+      // not an admin, redirect to account page
+      const url = request.nextUrl.clone();
+      url.pathname = "/account";
+      return NextResponse.redirect(url);
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
