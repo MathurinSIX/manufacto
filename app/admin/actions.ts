@@ -9,8 +9,11 @@ function getAdminClient() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
   }
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
+  }
   return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     {
       auth: {
@@ -395,20 +398,35 @@ export async function removeUserFromSession(registrationId: string) {
 }
 
 // Get sessions from previous week for batch creation
-export async function getPreviousWeekSessions(activityId: string) {
+export async function getPreviousWeekSessions(activityId: string, weekOffset: number = -1) {
   await checkAdmin();
   const supabase = await createClient();
   
   const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  
+  // Get the Monday of the current week
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Sunday = 0, so 6 days from Monday
+  const currentMonday = new Date(now);
+  currentMonday.setDate(now.getDate() - daysFromMonday);
+  currentMonday.setHours(0, 0, 0, 0);
+  
+  // Calculate the Monday of the selected week
+  // weekOffset: -1 = previous week, -2 = 2 weeks ago, 0 = current week, etc.
+  const selectedWeekMonday = new Date(currentMonday);
+  selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
+  
+  // Calculate the Sunday of the selected week (end of week)
+  const selectedWeekSunday = new Date(selectedWeekMonday);
+  selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 7);
+  selectedWeekSunday.setHours(23, 59, 59, 999);
   
   const { data: sessions, error } = await supabase
     .from("session")
     .select("id, start_ts, end_ts, activity_id, max_registrations")
     .eq("activity_id", activityId)
-    .gte("start_ts", twoWeeksAgo.toISOString())
-    .lt("start_ts", oneWeekAgo.toISOString())
+    .gte("start_ts", selectedWeekMonday.toISOString())
+    .lt("start_ts", selectedWeekSunday.toISOString())
     .order("start_ts");
   
   if (error) {
@@ -418,23 +436,57 @@ export async function getPreviousWeekSessions(activityId: string) {
   return { sessions: sessions || [], error: null };
 }
 
-// Create activities by batch based on previous week
-export async function createActivitiesBatch(activityId: string) {
+// Create a single session
+export async function createSession(
+  activityId: string,
+  start_ts: string,
+  end_ts: string,
+  max_registrations: number | null
+) {
   await checkAdmin();
   const supabase = await createClient();
   
-  // Get sessions from previous week
-  const { sessions, error: fetchError } = await getPreviousWeekSessions(activityId);
+  const { data, error } = await supabase
+    .from("session")
+    .insert({
+      activity_id: activityId,
+      start_ts,
+      end_ts,
+      max_registrations,
+    })
+    .select()
+    .single();
   
-  if (fetchError || !sessions || sessions.length === 0) {
-    return { error: "No sessions found in previous week to duplicate", created: 0 };
+  if (error) {
+    console.error("Error creating session:", error);
+    return { error: error.message, session: null };
   }
   
-  // Create new sessions one week later
+  revalidatePath("/admin");
+  return { session: data, error: null };
+}
+
+// Create activities by batch based on previous week
+export async function createActivitiesBatch(activityId: string, weekOffset: number = -1, targetWeekOffset: number = 0) {
+  await checkAdmin();
+  const supabase = await createClient();
+  
+  // Get sessions from selected week
+  const { sessions, error: fetchError } = await getPreviousWeekSessions(activityId, weekOffset);
+  
+  if (fetchError || !sessions || sessions.length === 0) {
+    return { error: "No sessions found in selected week to duplicate", created: 0 };
+  }
+  
+  // Calculate how many weeks ahead to create the new sessions
+  // targetWeekOffset - weekOffset gives us the difference
+  const weeksAhead = targetWeekOffset - weekOffset;
+  
+  // Create new sessions the specified number of weeks later
   const newSessions = sessions.map(session => {
     const oldStart = new Date(session.start_ts);
     const oldEnd = new Date(session.end_ts);
-    const weekInMs = 7 * 24 * 60 * 60 * 1000;
+    const weekInMs = weeksAhead * 7 * 24 * 60 * 60 * 1000;
     
     return {
       activity_id: activityId,
@@ -555,6 +607,36 @@ export async function updateActivity(
   
   revalidatePath("/admin");
   return { activity: data[0], error: null };
+}
+
+// Update a session
+export async function updateSession(
+  sessionId: string,
+  start_ts: string,
+  end_ts: string,
+  max_registrations: number | null
+) {
+  await checkAdmin();
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("session")
+    .update({
+      start_ts,
+      end_ts,
+      max_registrations,
+    })
+    .eq("id", sessionId)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error("Error updating session:", error);
+    return { error: error.message, session: null };
+  }
+  
+  revalidatePath("/admin");
+  return { session: data, error: null };
 }
 
 // Delete an activity

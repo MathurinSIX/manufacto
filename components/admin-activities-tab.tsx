@@ -15,9 +15,11 @@ import {
   addUserToSession,
   removeUserFromSession,
   getAllUsers,
+  updateSession,
 } from "@/app/admin/actions";
-import { Loader2, Plus, X, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { Loader2, Plus, X, ChevronLeft, ChevronRight, Users, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -75,6 +77,12 @@ export function AdminActivitiesTab() {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
   const [adding, setAdding] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDate, setEditDate] = useState<string>("");
+  const [editStartTime, setEditStartTime] = useState<string>("");
+  const [editEndTime, setEditEndTime] = useState<string>("");
+  const [editMaxRegistrations, setEditMaxRegistrations] = useState<string>("");
 
   const loadData = async () => {
     setLoading(true);
@@ -145,6 +153,63 @@ export function AdminActivitiesTab() {
 
   // Generate hours array (6 AM to 11 PM)
   const hours = Array.from({ length: 18 }, (_, i) => i + 6);
+
+  const handleEditSession = (session: SessionWithUsers) => {
+    setSelectedSession(session);
+    const startDate = new Date(session.start_ts);
+    const endDate = new Date(session.end_ts);
+    
+    // Format date as YYYY-MM-DD
+    const dateStr = startDate.toISOString().split('T')[0];
+    setEditDate(dateStr);
+    
+    // Format time as HH:MM
+    const startTimeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+    const endTimeStr = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+    setEditStartTime(startTimeStr);
+    setEditEndTime(endTimeStr);
+    
+    setEditMaxRegistrations(session.max_registrations?.toString() || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedSession || !editDate || !editStartTime || !editEndTime) return;
+    
+    setEditing(true);
+    setError(null);
+    
+    try {
+      // Combine date and time into ISO strings
+      const startDateTime = new Date(`${editDate}T${editStartTime}:00`);
+      const endDateTime = new Date(`${editDate}T${editEndTime}:00`);
+      
+      const maxReg = editMaxRegistrations.trim() === "" ? null : parseInt(editMaxRegistrations);
+      if (maxReg !== null && (Number.isNaN(maxReg) || maxReg < 0)) {
+        setError("Le nombre maximum d'inscriptions doit être un nombre positif");
+        setEditing(false);
+        return;
+      }
+      
+      const result = await updateSession(
+        selectedSession.id,
+        startDateTime.toISOString(),
+        endDateTime.toISOString(),
+        maxReg
+      );
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditDialogOpen(false);
+        await loadData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    } finally {
+      setEditing(false);
+    }
+  };
 
   const handleAddUser = async () => {
     if (!selectedSession || !selectedUserId || !selectedPaymentType) return;
@@ -321,16 +386,25 @@ export function AdminActivitiesTab() {
                                 </span>
                               </div>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedSession(session);
-                                setUsersDialogOpen(true);
-                              }}
-                            >
-                              Voir les inscrits
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedSession(session);
+                                  setUsersDialogOpen(true);
+                                }}
+                              >
+                                Voir les inscrits
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditSession(session)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
@@ -342,6 +416,93 @@ export function AdminActivitiesTab() {
           </div>
         </div>
       )}
+
+      {/* Edit Session Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier la session</DialogTitle>
+            <DialogDescription>
+              Modifiez les détails de la session
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-date">Date</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-start-time">Heure de début</Label>
+                <Input
+                  id="edit-start-time"
+                  type="time"
+                  step="300"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-end-time">Heure de fin</Label>
+                <Input
+                  id="edit-end-time"
+                  type="time"
+                  step="300"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-max-registrations">Nombre maximum d'inscriptions</Label>
+              <Input
+                id="edit-max-registrations"
+                type="number"
+                min="0"
+                value={editMaxRegistrations}
+                onChange={(e) => setEditMaxRegistrations(e.target.value)}
+                placeholder="Illimité si vide"
+              />
+              <p className="text-xs text-muted-foreground">
+                Laissez vide pour un nombre illimité d'inscriptions
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setEditDate("");
+                setEditStartTime("");
+                setEditEndTime("");
+                setEditMaxRegistrations("");
+              }}
+            >
+              Annuler
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={editing || !editDate || !editStartTime || !editEndTime}>
+              {editing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                "Enregistrer"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Users List Dialog */}
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>

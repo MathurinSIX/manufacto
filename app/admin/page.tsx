@@ -9,11 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdminUsersTab } from "@/components/admin-users-tab";
-import { AdminActivitiesTab } from "@/components/admin-activities-tab";
-import { AdminAddActivitiesTab } from "@/components/admin-add-activities-tab";
-import { AdminActivitiesManagementTab } from "@/components/admin-activities-management-tab";
+import { AdminTabsWrapper } from "@/components/admin-tabs-wrapper";
 
 async function AdminContent() {
   const supabase = await createClient();
@@ -46,26 +42,7 @@ async function AdminContent() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="users" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="users">Utilisateurs</TabsTrigger>
-                <TabsTrigger value="activities-management">Activités</TabsTrigger>
-                <TabsTrigger value="activities">Sessions</TabsTrigger>
-                <TabsTrigger value="add-activities">Ajouter des sessions</TabsTrigger>
-              </TabsList>
-              <TabsContent value="users" className="mt-4">
-                <AdminUsersTab />
-              </TabsContent>
-              <TabsContent value="activities-management" className="mt-4">
-                <AdminActivitiesManagementTab />
-              </TabsContent>
-              <TabsContent value="activities" className="mt-4">
-                <AdminActivitiesTab />
-              </TabsContent>
-              <TabsContent value="add-activities" className="mt-4">
-                <AdminAddActivitiesTab />
-              </TabsContent>
-            </Tabs>
+            <AdminTabsWrapper />
           </CardContent>
         </Card>
       </div>
