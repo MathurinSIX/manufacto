@@ -200,7 +200,7 @@ export async function getAllActivitiesWithSessions() {
   
   const { data: activities, error: activitiesError } = await supabase
     .from("activity")
-    .select("id, name, nb_credits")
+    .select("id, name, nb_credits, type")
     .order("name");
   
   if (activitiesError) {
@@ -666,6 +666,40 @@ export async function deleteActivity(id: string) {
   
   if (error) {
     console.error("Error deleting activity:", error);
+    return { error: error.message };
+  }
+  
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+// Delete a session
+export async function deleteSession(sessionId: string) {
+  await checkAdmin();
+  const supabase = await createClient();
+  
+  // Check if there are any registrations for this session
+  const { data: registrations, error: registrationsError } = await supabase
+    .from("registration")
+    .select("id")
+    .eq("session_id", sessionId)
+    .limit(1);
+  
+  if (registrationsError) {
+    return { error: registrationsError.message };
+  }
+  
+  if (registrations && registrations.length > 0) {
+    return { error: "Impossible de supprimer une session qui a des inscriptions. Annulez d'abord toutes les inscriptions." };
+  }
+  
+  const { error } = await supabase
+    .from("session")
+    .delete()
+    .eq("id", sessionId);
+  
+  if (error) {
+    console.error("Error deleting session:", error);
     return { error: error.message };
   }
   

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createActivitiesBatch, getPreviousWeekSessions, createSession } from "@/app/admin/actions";
-import { Loader2, Calendar } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,12 +21,127 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 type Activity = {
   id: string;
   name: string;
   nb_credits: number | null;
 };
+
+type PreviewSession = {
+  date: string;
+  start: string;
+  end: string;
+  max_registrations?: number | null;
+};
+
+interface WeekCalendarPreviewProps {
+  sessions: PreviewSession[];
+  weekOffset: number;
+}
+
+function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps) {
+  const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  
+  // Calculate the Monday of the selected week
+  const weekDays = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const currentMonday = new Date(now);
+    currentMonday.setDate(now.getDate() - daysFromMonday);
+    currentMonday.setHours(0, 0, 0, 0);
+    
+    const selectedWeekMonday = new Date(currentMonday);
+    selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
+    
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(selectedWeekMonday);
+      date.setDate(selectedWeekMonday.getDate() + i);
+      return date;
+    });
+  }, [weekOffset]);
+
+  // Group sessions by date
+  const sessionsByDate = useMemo(() => {
+    const map = new Map<string, PreviewSession[]>();
+    sessions.forEach(session => {
+      const dateKey = session.date;
+      if (!map.has(dateKey)) {
+        map.set(dateKey, []);
+      }
+      map.get(dateKey)!.push(session);
+    });
+    return map;
+  }, [sessions]);
+
+  const formatDateKey = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const formatDayLabel = (date: Date) => {
+    return date.toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+    });
+  };
+
+  return (
+    <div className="border rounded-lg p-4 bg-background">
+      <div className="grid grid-cols-7 gap-2 items-start">
+        {WEEKDAY_LABELS.map((label, index) => {
+          const day = weekDays[index];
+          const dateKey = formatDateKey(day);
+          const daySessions = sessionsByDate.get(dateKey) || [];
+          const isToday = formatDateKey(new Date()) === dateKey;
+
+          return (
+            <div
+              key={index}
+              className={cn(
+                "flex flex-col w-full rounded-md border p-2 text-sm transition-colors",
+                isToday && "ring-2 ring-primary bg-primary/5",
+                daySessions.length > 0 && "bg-primary/5 border-primary/20",
+                daySessions.length === 0 && "bg-muted/30"
+              )}
+            >
+              <div className="mb-2 border-b pb-1 flex-shrink-0">
+                <p className="text-xs font-semibold text-muted-foreground uppercase">
+                  {label}
+                </p>
+                <p className="text-sm font-medium">
+                  {formatDayLabel(day)}
+                </p>
+              </div>
+              <div className="space-y-1 w-full">
+                {daySessions.length > 0 ? (
+                  daySessions.map((session, sessionIndex) => (
+                    <div
+                      key={sessionIndex}
+                      className="text-xs bg-primary/20 text-primary-foreground rounded px-2 py-1.5 border border-primary/30 w-full"
+                    >
+                      <p className="font-medium">
+                        {session.start} - {session.end}
+                      </p>
+                      {session.max_registrations && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Max: {session.max_registrations}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground/50 italic">Aucune session</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function AdminAddActivitiesTab() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -83,6 +198,16 @@ export function AdminAddActivitiesTab() {
     generatePreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualWeekOffset, manualStartTime, manualDuration, repeatInterval, repeatTimes, selectedDays]);
+
+  // Auto-preview for batch tab when activity and week are selected
+  useEffect(() => {
+    if (selectedActivityId && selectedWeekOffset !== undefined) {
+      handlePreview();
+    } else {
+      setPreviewSessions([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedActivityId, selectedWeekOffset]);
 
   const getWeekLabel = (offset: number): string => {
     const now = new Date();
@@ -399,23 +524,12 @@ export function AdminAddActivitiesTab() {
           </div>
 
           <div className="flex gap-2">
-            <Button
-              onClick={handlePreview}
-              disabled={!selectedActivityId || loadingPreview}
-              variant="outline"
-            >
-              {loadingPreview ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Chargement...
-                </>
-              ) : (
-                <>
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Prévisualiser
-                </>
-              )}
-            </Button>
+            {loadingPreview && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement de l'aperçu...
+              </div>
+            )}
             {previewSessions.length > 0 && (
               <Button
                 onClick={handleCreateBatch}
@@ -434,35 +548,28 @@ export function AdminAddActivitiesTab() {
           </div>
         </div>
 
-        {previewSessions.length > 0 && (
+        {(loadingPreview || previewSessions.length > 0) && (
           <div className="mt-6 space-y-4">
-            <h4 className="font-medium">Aperçu des sessions à créer :</h4>
-            <div className="border rounded-lg divide-y">
-              {previewSessions.map((session, index) => {
-                const targetWeekStart = getTargetWeekDate(session.start_ts);
-                const targetWeekEnd = getTargetWeekDate(session.end_ts);
-
-                return (
-                  <div key={index} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">
-                          {formatDate(targetWeekStart.toISOString())}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatTime(targetWeekStart.toISOString())} - {formatTime(targetWeekEnd.toISOString())}
-                        </p>
-                        {session.max_registrations && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Max: {session.max_registrations} inscription{session.max_registrations > 1 ? "s" : ""}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {loadingPreview ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement de l'aperçu...
+              </div>
+            ) : previewSessions.length > 0 ? (
+              <>
+                <h4 className="font-medium">Aperçu des sessions à créer :</h4>
+                <WeekCalendarPreview sessions={previewSessions.map((session) => {
+                  const targetWeekStart = getTargetWeekDate(session.start_ts);
+                  const targetWeekEnd = getTargetWeekDate(session.end_ts);
+                  return {
+                    date: targetWeekStart.toISOString().split('T')[0],
+                    start: formatTime(targetWeekStart.toISOString()),
+                    end: formatTime(targetWeekEnd.toISOString()),
+                    max_registrations: session.max_registrations,
+                  };
+                })} weekOffset={targetWeekOffset} />
+              </>
+            ) : null}
           </div>
         )}
 
@@ -471,8 +578,8 @@ export function AdminAddActivitiesTab() {
               <ul className="list-disc list-inside space-y-1">
                 <li>Sélectionnez une activité</li>
                 <li>Sélectionnez la semaine dont vous souhaitez copier les sessions</li>
-                <li>Cliquez sur "Prévisualiser" pour voir les sessions de la semaine sélectionnée</li>
-                <li>Les nouvelles sessions seront créées pour la semaine suivante</li>
+                <li>L'aperçu des sessions s'affiche automatiquement ci-dessous</li>
+                <li>Les nouvelles sessions seront créées pour la semaine cible sélectionnée</li>
                 <li>Cliquez sur "Créer" pour créer toutes les sessions en une fois</li>
               </ul>
             </div>
@@ -521,14 +628,44 @@ export function AdminAddActivitiesTab() {
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="manual-start-time">Heure de début *</Label>
-                <Input
-                  id="manual-start-time"
-                  type="time"
-                  step="300"
-                  value={manualStartTime}
-                  onChange={(e) => setManualStartTime(e.target.value)}
-                  required
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={manualStartTime ? (manualStartTime.split(':')[0] || "00") : ""}
+                    onValueChange={(hour) => {
+                      const currentMinute = manualStartTime && manualStartTime.includes(':') ? manualStartTime.split(':')[1] : "00";
+                      setManualStartTime(`${hour.padStart(2, '0')}:${currentMinute.padStart(2, '0')}`);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Heure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                        <SelectItem key={hour} value={hour.toString().padStart(2, '0')}>
+                          {hour.toString().padStart(2, '0')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={manualStartTime && manualStartTime.includes(':') ? (manualStartTime.split(':')[1] || "00") : ""}
+                    onValueChange={(minute) => {
+                      const currentHour = manualStartTime && manualStartTime.includes(':') ? manualStartTime.split(':')[0] : "00";
+                      setManualStartTime(`${currentHour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Minute" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => i * 5).map((minute) => (
+                        <SelectItem key={minute} value={minute.toString().padStart(2, '0')}>
+                          {minute.toString().padStart(2, '0')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="manual-duration">Durée (minutes) *</Label>
@@ -607,14 +744,6 @@ export function AdminAddActivitiesTab() {
             </div>
 
               <div className="flex gap-2">
-                <Button
-                  onClick={generatePreview}
-                  disabled={!manualActivityId || !manualStartTime || !manualDuration || selectedDays.length === 0}
-                  variant="outline"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Prévisualiser
-                </Button>
                 {manualPreview.length > 0 && (
                   <Button
                     onClick={handleCreateManualSession}
@@ -633,30 +762,18 @@ export function AdminAddActivitiesTab() {
               </div>
             </div>
 
-            {manualPreview.length > 0 && (
+            {(manualActivityId && manualStartTime && manualDuration && selectedDays.length > 0) && (
               <div className="mt-6 space-y-4">
-                <h4 className="font-medium">Aperçu des sessions à créer ({manualPreview.length} session{manualPreview.length > 1 ? "s" : ""}) :</h4>
-                <div className="border rounded-lg divide-y max-h-96 overflow-y-auto">
-                  {manualPreview.map((session, index) => (
-                    <div key={index} className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">
-                            {new Date(session.date).toLocaleDateString("fr-FR", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {session.start} - {session.end}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {manualPreview.length > 0 ? (
+                  <>
+                    <h4 className="font-medium">Aperçu des sessions à créer ({manualPreview.length} session{manualPreview.length > 1 ? "s" : ""}) :</h4>
+                    <WeekCalendarPreview sessions={manualPreview.map(s => ({ ...s, max_registrations: null }))} weekOffset={manualWeekOffset} />
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
+                    Aucune session à prévisualiser. Vérifiez que tous les champs requis sont remplis.
+                  </div>
+                )}
               </div>
             )}
           </div>
