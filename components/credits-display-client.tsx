@@ -45,8 +45,7 @@ export function CreditsDisplayClient({
         className="gap-2"
         onClick={() => setIsModalOpen(true)}
       >
-        <span className="text-sm font-medium">Crédits :</span>
-        <span className="text-sm font-bold">0</span>
+        <span className="text-sm font-medium">Se connecter</span>
       </Button>
       <AuthModal
         open={isModalOpen}
