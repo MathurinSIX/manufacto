@@ -84,7 +84,7 @@ export async function getAllUsers() {
 }
 
 // Add credit to a user
-export async function addCreditToUser(userId: string, amount: number) {
+export async function addCreditToUser(userId: string, amount: number, paymentType?: string) {
   await checkAdmin();
   const supabase = await createClient();
   
@@ -92,11 +92,16 @@ export async function addCreditToUser(userId: string, amount: number) {
     return { error: "Le montant doit être supérieur à 0", credit: null };
   }
   
+  if (!paymentType) {
+    return { error: "Le type de paiement est requis", credit: null };
+  }
+  
   const { data, error } = await supabase
     .from("credit")
     .insert({
       user_id: userId,
       amount: amount,
+      payment_type: paymentType,
     })
     .select()
     .maybeSingle();
@@ -267,7 +272,7 @@ export async function getAllActivitiesWithSessions() {
   // Get user details for registrations
   const adminClient = getAdminClient();
   const { data: usersData } = await adminClient.auth.admin.listUsers();
-  const usersMap = new Map(usersData.users.map(u => [u.id, u]));
+  const usersMap = new Map(usersData?.users?.map(u => [u.id, u] as [string, typeof u]) || []);
   
   // Group sessions by activity and date
   const activitiesWithSessions = activities?.map(activity => {
@@ -305,6 +310,8 @@ export async function getAllActivitiesWithSessions() {
           ...session,
           registeredUsers,
           max_registrations: session.max_registrations ?? null,
+          activity_name: activity.name,
+          activity_type: activity.type,
         };
       });
       

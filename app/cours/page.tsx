@@ -2,6 +2,8 @@ import Image from "next/image";
 
 import { createClient } from "@/lib/supabase/server";
 import { Navigation } from "@/components/navigation";
+import { unstable_noStore } from "next/cache";
+import { Suspense } from "react";
 import {
   Card,
   CardContent,
@@ -11,7 +13,8 @@ import {
 } from "@/components/ui/card";
 import { ActivityReservationButtons } from "@/components/activity-reservation-buttons";
 
-export default async function CoursPage() {
+async function CoursContent() {
+  unstable_noStore();
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,9 +39,7 @@ export default async function CoursPage() {
     })) || [];
 
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
-      <div className="flex-1 w-full flex flex-col items-center">
+    <div className="flex-1 w-full flex flex-col items-center">
         {/* Hero Section with Big Picture */}
         <div className="relative w-full h-[50vh] min-h-[400px]">
           <Image
@@ -133,6 +134,18 @@ export default async function CoursPage() {
           </div>
         </div>
       </div>
+  );
+}
+
+export default function CoursPage() {
+  return (
+    <main className="min-h-screen flex flex-col items-center">
+      <Suspense fallback={<nav className="w-full h-16" />}>
+        <Navigation />
+      </Suspense>
+      <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
+        <CoursContent />
+      </Suspense>
     </main>
   );
 }

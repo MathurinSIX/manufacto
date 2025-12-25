@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Navigation } from "@/components/navigation";
-import { LogoutButton } from "@/components/logout-button";
 import { redirect } from "next/navigation";
+import { unstable_noStore } from "next/cache";
+import { Suspense } from "react";
 import {
   Card,
   CardContent,
@@ -14,22 +15,55 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
-import { unstable_noStore } from "next/cache";
-import { Suspense } from "react";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
-async function AccountContent() {
+// Get admin client for admin operations
+function getAdminClient() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
+  }
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
+  }
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+}
+
+async function UserAccountContent({
+  params,
+}: {
+  params: Promise<{ userId: string }>;
+}) {
   unstable_noStore();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/auth/login");
+  // Check if current user is admin
+  if (!currentUser || currentUser.app_metadata?.role !== "admin") {
+    redirect("/account");
   }
 
+  const { userId } = await params;
+
+  // Get the target user's information using admin client
+  const adminClient = getAdminClient();
+  const { data: { user: targetUser }, error: userError } = await adminClient.auth.admin.getUserById(userId);
+
+  if (userError || !targetUser) {
+    redirect("/admin");
+  }
 
   const now = new Date().toISOString();
 
-  // Fetch registrations with session and activity details
+  // Fetch registrations with session and activity details for the target user
   const { data: registrations, error: registrationsError } = await supabase
     .from("registration")
     .select(`
@@ -47,7 +81,7 @@ async function AccountContent() {
         )
       )
     `)
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   // Fetch latest registration_status for each registration
   const registrationIds = registrations?.map((reg) => reg.id) || [];
@@ -184,7 +218,7 @@ async function AccountContent() {
   const { data: creditHistory, error: creditError } = await supabase
     .from("credit")
     .select("id, amount, created_at")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   // Fetch registration_status linked to these credits
@@ -269,14 +303,19 @@ async function AccountContent() {
       return sum + amount;
     }, 0) || 0;
 
+  // Get user display name
+  const userName = targetUser.user_metadata?.first_name && targetUser.user_metadata?.last_name
+    ? `${targetUser.user_metadata.first_name} ${targetUser.user_metadata.last_name}`
+    : targetUser.user_metadata?.first_name || targetUser.user_metadata?.last_name || targetUser.email;
+
   return (
     <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
         <div className="w-full max-w-6xl space-y-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl md:text-5xl font-bold">Mon Compte</h1>
+              <h1 className="text-4xl md:text-5xl font-bold">Compte de {userName}</h1>
               <p className="text-lg text-muted-foreground mt-2">
-                Gérez vos réservations et consultez votre historique
+                {targetUser.email}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -284,16 +323,15 @@ async function AccountContent() {
                 <span className="text-sm font-medium">Crédits :</span>
                 <span className="text-sm font-bold">{Math.round(totalCredits)}</span>
               </div>
-              <LogoutButton />
             </div>
           </div>
 
           {/* Reservations with Tabs */}
           <Card>
             <CardHeader>
-              <CardTitle>Mes réservations</CardTitle>
+              <CardTitle>Réservations</CardTitle>
               <CardDescription>
-                Gérez vos réservations à venir, passées et annulées
+                Réservations à venir, passées et annulées
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -335,7 +373,7 @@ async function AccountContent() {
             <CardHeader>
               <CardTitle>Historique des crédits</CardTitle>
               <CardDescription>
-                Détail de vos crédits ajoutés
+                Détail des crédits ajoutés
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -350,12 +388,18 @@ async function AccountContent() {
   );
 }
 
-export default function AccountPage() {
+export default async function UserAccountPage({
+  params,
+}: {
+  params: Promise<{ userId: string }>;
+}) {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
+      <Suspense fallback={<nav className="w-full h-16" />}>
+        <Navigation />
+      </Suspense>
       <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
-        <AccountContent />
+        <UserAccountContent params={params} />
       </Suspense>
     </main>
   );

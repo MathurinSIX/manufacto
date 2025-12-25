@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { CreditsDisplayClient } from "./credits-display-client";
+import { unstable_noStore } from "next/cache";
 
 export async function CreditsDisplay() {
+  unstable_noStore();
   const supabase = await createClient();
   
   // Get the authenticated user

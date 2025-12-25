@@ -35,8 +35,8 @@ export async function MonthlyActivitiesCalendar() {
     activities = data;
   }
 
-  const activityMap = new Map(
-    activities?.map((a) => [a.id, a.name]) || []
+  const activityMap = new Map<string, string>(
+    activities?.map((a) => [a.id, a.name] as [string, string]) || []
   );
 
   // Group sessions by date

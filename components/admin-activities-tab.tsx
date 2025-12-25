@@ -167,36 +167,35 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
                           {session.activity_name}
                         </p>
                         <div className="flex items-center justify-between gap-1 mt-1.5">
-                          <div className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            <span className="text-sm font-bold">
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
+                            <Users className="h-4 w-4 flex-shrink-0" />
+                            <span className={`text-sm font-bold truncate ${isFull ? 'text-red-300' : ''}`}>
                               {registeredCount}{maxReg !== null && `/${maxReg}`}
-                              {isFull && <span className="text-red-300"> (Complet)</span>}
-                              {available !== null && available > 0 && <span className="text-green-300"> ({available})</span>}
+                              {available !== null && available > 0 && !isFull && <span className="text-green-300"> ({available})</span>}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-1.5 text-[10px]"
+                              className="h-4 w-4 p-0 min-w-0"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onEditSession(session);
                               }}
                             >
-                              <Pencil className="h-3 w-3" />
+                              <Pencil className="h-2 w-2" />
                             </Button>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-1.5 text-[10px] text-destructive hover:text-destructive"
+                              className="h-4 w-4 p-0 min-w-0 text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onDeleteSession(session);
                               }}
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-2 w-2" />
                             </Button>
                           </div>
                         </div>
@@ -248,7 +247,7 @@ export function AdminActivitiesTab() {
   };
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedActivityTypes, setSelectedActivityTypes] = useState<string[]>([]);
+  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
 
   const loadData = async () => {
     setLoading(true);
@@ -279,15 +278,12 @@ export function AdminActivitiesTab() {
     loadData();
   }, []);
 
-  // Get unique activity types
-  const activityTypes = useMemo(() => {
-    const types = new Set<string>();
-    activities.forEach(activity => {
-      if (activity.type) {
-        types.add(activity.type);
-      }
-    });
-    return Array.from(types).sort();
+  // Get all activities for filtering
+  const availableActivities = useMemo(() => {
+    return activities.map(activity => ({
+      id: activity.id,
+      name: activity.name,
+    })).sort((a, b) => a.name.localeCompare(b.name));
   }, [activities]);
 
   // Get all sessions for the selected date, flattened and with activity info
@@ -296,8 +292,8 @@ export function AdminActivitiesTab() {
     const allSessions: SessionWithUsers[] = [];
     
     activities.forEach(activity => {
-      // Filter by activity type if filter is active
-      if (selectedActivityTypes.length > 0 && activity.type && !selectedActivityTypes.includes(activity.type)) {
+      // Filter by activity if filter is active
+      if (selectedActivities.length > 0 && !selectedActivities.includes(activity.id)) {
         return;
       }
       
@@ -317,7 +313,7 @@ export function AdminActivitiesTab() {
     return allSessions.sort((a, b) => 
       new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime()
     );
-  }, [activities, selectedDate, selectedActivityTypes]);
+  }, [activities, selectedDate, selectedActivities]);
 
   // Get all sessions for the selected week
   const sessionsForWeek = useMemo(() => {
@@ -342,8 +338,8 @@ export function AdminActivitiesTab() {
     weekDays.forEach(dateKey => {
       const daySessions: SessionWithUsers[] = [];
       activities.forEach(activity => {
-        // Filter by activity type if filter is active
-        if (selectedActivityTypes.length > 0 && activity.type && !selectedActivityTypes.includes(activity.type)) {
+        // Filter by activity if filter is active
+        if (selectedActivities.length > 0 && !selectedActivities.includes(activity.id)) {
           return;
         }
         
@@ -365,7 +361,26 @@ export function AdminActivitiesTab() {
     });
     
     return weekSessions;
-  }, [activities, weekOffset, selectedActivityTypes]);
+  }, [activities, weekOffset, selectedActivities]);
+
+  // Update selectedSession when activities data changes (after add/remove user)
+  useEffect(() => {
+    if (selectedSession && usersDialogOpen) {
+      // Find updated session from both day and week views
+      const dateKey = new Date(selectedSession.start_ts).toISOString().split('T')[0];
+      let updatedSession = sessionsForDate.find(s => s.id === selectedSession.id);
+      
+      // If not found in day view, try week view
+      if (!updatedSession) {
+        const weekSessions = sessionsForWeek.get(dateKey);
+        updatedSession = weekSessions?.find(s => s.id === selectedSession.id);
+      }
+      
+      if (updatedSession && updatedSession.registeredUsers.length !== selectedSession.registeredUsers.length) {
+        setSelectedSession(updatedSession);
+      }
+    }
+  }, [activities, selectedSession?.id, usersDialogOpen, sessionsForDate, sessionsForWeek]);
 
   // Group sessions by hour for calendar view
   const sessionsByHour = useMemo(() => {
@@ -508,13 +523,6 @@ export function AdminActivitiesTab() {
         setError(result.error);
       } else {
         await loadData();
-        // Refresh the dialog if it's open
-        if (selectedSession) {
-          const updatedSession = sessionsForDate.find(s => s.id === selectedSession.id);
-          if (updatedSession) {
-            setSelectedSession(updatedSession);
-          }
-        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -613,32 +621,32 @@ export function AdminActivitiesTab() {
         </div>
       )}
 
-      {/* Activity Type Filter */}
-      {activityTypes.length > 0 && (
+      {/* Activity Filter */}
+      {availableActivities.length > 0 && (
         <div className="flex items-center gap-4 border rounded-lg p-4 bg-muted/50">
-          <Label className="text-sm font-medium">Filtrer par type d'activité:</Label>
+          <Label className="text-sm font-medium">Filtrer par activité:</Label>
           <div className="flex flex-wrap gap-2">
-            {activityTypes.map((type) => (
+            {availableActivities.map((activity) => (
               <Button
-                key={type}
-                variant={selectedActivityTypes.includes(type) ? "default" : "outline"}
+                key={activity.id}
+                variant={selectedActivities.includes(activity.id) ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
-                  setSelectedActivityTypes(prev =>
-                    prev.includes(type)
-                      ? prev.filter(t => t !== type)
-                      : [...prev, type]
+                  setSelectedActivities(prev =>
+                    prev.includes(activity.id)
+                      ? prev.filter(id => id !== activity.id)
+                      : [...prev, activity.id]
                   );
                 }}
               >
-                {type}
+                {activity.name}
               </Button>
             ))}
-            {selectedActivityTypes.length > 0 && (
+            {selectedActivities.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedActivityTypes([])}
+                onClick={() => setSelectedActivities([])}
                 className="text-xs"
               >
                 Réinitialiser

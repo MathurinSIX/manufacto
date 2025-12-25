@@ -2,8 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Shield } from "lucide-react";
+import { unstable_noStore } from "next/cache";
 
 export async function AdminButton() {
+  unstable_noStore();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

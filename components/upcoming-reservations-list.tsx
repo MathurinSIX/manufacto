@@ -29,7 +29,10 @@ interface Session {
   activity?: {
     id: string;
     name: string;
-  } | null;
+  } | {
+    id: string;
+    name: string;
+  }[] | null;
 }
 
 interface Registration {

@@ -163,6 +163,8 @@ type SessionRow = {
   start_ts: string;
   end_ts: string;
   max_registrations: number | null;
+  registrationCount?: number;
+  isFull?: boolean;
 };
 
 interface ActivitySessionPickerProps {
@@ -234,13 +236,76 @@ export function ActivitySessionPicker({
         .gte("start_ts", new Date().toISOString())
         .order("start_ts", { ascending: true });
       if (ignore) return;
-      setIsLoading(false);
       if (error) {
+        setIsLoading(false);
         setErrorMessage("Impossible de récupérer les sessions disponibles.");
         console.error(error);
         return;
       }
-      setSessions(data ?? []);
+      
+      // Fetch registration counts for each session
+      if (data && data.length > 0) {
+        const sessionIds = data.map(s => s.id);
+        const { data: registrations } = await supabase
+          .from("registration")
+          .select("id, session_id")
+          .in("session_id", sessionIds);
+        
+        // Get active registrations (not cancelled)
+        const registrationIds = registrations?.map(r => r.id) || [];
+        const activeRegistrationIds = new Set<string>();
+        
+        if (registrationIds.length > 0) {
+          const { data: statuses } = await supabase
+            .from("registration_status")
+            .select("registration_id, status, created_at")
+            .in("registration_id", registrationIds)
+            .order("created_at", { ascending: false });
+          
+          if (statuses) {
+            const seenRegistrations = new Set<string>();
+            statuses.forEach((status) => {
+              if (!seenRegistrations.has(status.registration_id)) {
+                seenRegistrations.add(status.registration_id);
+                if (status.status !== "CANCELLED") {
+                  activeRegistrationIds.add(status.registration_id);
+                }
+              }
+            });
+          } else {
+            // If no statuses, all registrations are active
+            registrationIds.forEach(id => {
+              activeRegistrationIds.add(id);
+            });
+          }
+        }
+        
+        // Count registrations per session
+        const registrationCounts: Record<string, number> = {};
+        registrations?.forEach(reg => {
+          if (reg.session_id && activeRegistrationIds.has(reg.id)) {
+            registrationCounts[reg.session_id] = (registrationCounts[reg.session_id] || 0) + 1;
+          }
+        });
+        
+        // Add registration count and isFull to each session
+        const sessionsWithCounts = data.map(session => {
+          const count = registrationCounts[session.id] || 0;
+          const isFull = session.max_registrations !== null && count >= session.max_registrations;
+          return {
+            ...session,
+            registrationCount: count,
+            isFull,
+          };
+        });
+        
+        if (ignore) return;
+        setSessions(sessionsWithCounts);
+      } else {
+        setSessions([]);
+      }
+      
+      setIsLoading(false);
     };
     fetchSessions();
     return () => {
@@ -392,16 +457,24 @@ export function ActivitySessionPicker({
                     const start = new Date(session.start_ts);
                     const end = new Date(session.end_ts);
                     const isSelected = session.id === selectedSessionId;
+                    const registeredCount = session.registrationCount || 0;
+                    const available = session.max_registrations !== null 
+                      ? session.max_registrations - registeredCount 
+                      : null;
+                    const isFull = session.max_registrations !== null && registeredCount >= session.max_registrations;
+                    
                     return (
                       <button
                         key={session.id}
                         type="button"
-                        onClick={() => handleSelectSession(session.id)}
+                        disabled={isFull}
+                        onClick={() => !isFull && handleSelectSession(session.id)}
                         className={cn(
                           "w-full rounded-lg border p-4 text-left transition-colors",
-                          isSelected
+                          isFull && "opacity-60 cursor-not-allowed",
+                          isSelected && !isFull
                             ? "border-primary bg-primary/5"
-                            : "hover:bg-muted",
+                            : !isFull && "hover:bg-muted",
                         )}
                       >
                         <div className="flex items-center justify-between">
@@ -414,13 +487,19 @@ export function ActivitySessionPicker({
                               {dateFormatter.format(start)}
                             </p>
                           </div>
-                          {isSelected && (
+                          {isSelected && !isFull && (
                             <CheckCircle2 className="h-5 w-5 text-primary" />
                           )}
                         </div>
                         {session.max_registrations !== null && (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {session.max_registrations} places disponibles
+                          <p className={cn(
+                            "mt-2 text-xs",
+                            isFull ? "text-destructive font-medium" : "text-muted-foreground"
+                          )}>
+                            {isFull 
+                              ? "Complet" 
+                              : `${available} place${available !== null && available > 1 ? "s" : ""} disponible${available !== null && available > 1 ? "s" : ""}`
+                            }
                           </p>
                         )}
                       </button>

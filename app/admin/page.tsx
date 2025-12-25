@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Navigation } from "@/components/navigation";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { unstable_noStore } from "next/cache";
 import {
   Card,
   CardContent,
@@ -12,6 +13,7 @@ import {
 import { AdminTabsWrapper } from "@/components/admin-tabs-wrapper";
 
 async function AdminContent() {
+  unstable_noStore();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

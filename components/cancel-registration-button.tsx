@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { cancelRegistration } from "@/app/account/actions";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,21 @@ export function CancelRegistrationButton({
   const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Clear error when component mounts
+  useEffect(() => {
+    setError(null);
+  }, []);
+
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleCancel = async () => {
     if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
