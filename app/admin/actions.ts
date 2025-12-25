@@ -4,6 +4,51 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
+const PARIS_TIMEZONE = "Europe/Paris";
+
+// Helper function to get current date/time in Paris timezone
+function getNowInParis(): Date {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
+  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
+  const second = parseInt(parts.find(p => p.type === "second")!.value);
+  return new Date(Date.UTC(year, month, day, hour, minute, second));
+}
+
+// Helper function to get Monday of a week in Paris timezone
+function getMondayInParis(date: Date): Date {
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const d = new Date(Date.UTC(year, month, day));
+  const dayOfWeek = d.getUTCDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  d.setUTCDate(d.getUTCDate() - daysFromMonday);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
 // Create admin client for admin operations
 function getAdminClient() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -409,24 +454,20 @@ export async function getPreviousWeekSessions(activityId: string, weekOffset: nu
   await checkAdmin();
   const supabase = await createClient();
   
-  const now = new Date();
+  const now = getNowInParis();
   
-  // Get the Monday of the current week
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Sunday = 0, so 6 days from Monday
-  const currentMonday = new Date(now);
-  currentMonday.setDate(now.getDate() - daysFromMonday);
-  currentMonday.setHours(0, 0, 0, 0);
+  // Get the Monday of the current week in Paris timezone
+  const currentMonday = getMondayInParis(now);
   
   // Calculate the Monday of the selected week
   // weekOffset: -1 = previous week, -2 = 2 weeks ago, 0 = current week, etc.
   const selectedWeekMonday = new Date(currentMonday);
-  selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
+  selectedWeekMonday.setUTCDate(currentMonday.getUTCDate() + weekOffset * 7);
   
   // Calculate the Sunday of the selected week (end of week)
   const selectedWeekSunday = new Date(selectedWeekMonday);
-  selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 7);
-  selectedWeekSunday.setHours(23, 59, 59, 999);
+  selectedWeekSunday.setUTCDate(selectedWeekMonday.getUTCDate() + 7);
+  selectedWeekSunday.setUTCHours(23, 59, 59, 999);
   
   const { data: sessions, error } = await supabase
     .from("session")

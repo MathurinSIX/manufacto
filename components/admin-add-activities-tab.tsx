@@ -23,6 +23,51 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
+const PARIS_TIMEZONE = "Europe/Paris";
+
+// Helper function to get current date/time in Paris timezone
+function getNowInParis(): Date {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
+  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
+  const second = parseInt(parts.find(p => p.type === "second")!.value);
+  return new Date(year, month, day, hour, minute, second);
+}
+
+// Helper function to get Monday of a week in Paris timezone
+function getMondayInParis(date: Date): Date {
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const d = new Date(year, month, day);
+  const dayOfWeek = d.getDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  d.setDate(d.getDate() - daysFromMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 type Activity = {
   id: string;
   name: string;
@@ -44,14 +89,10 @@ interface WeekCalendarPreviewProps {
 function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps) {
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
-  // Calculate the Monday of the selected week
+  // Calculate the Monday of the selected week in Paris timezone
   const weekDays = useMemo(() => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
@@ -80,11 +121,14 @@ function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps)
     return date.toISOString().split('T')[0];
   };
 
+  const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    timeZone: PARIS_TIMEZONE,
+  });
+
   const formatDayLabel = (date: Date) => {
-    return date.toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "short",
-    });
+    return dateFormatter.format(date);
   };
 
   return (
@@ -94,7 +138,7 @@ function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps)
           const day = weekDays[index];
           const dateKey = formatDateKey(day);
           const daySessions = sessionsByDate.get(dateKey) || [];
-          const isToday = formatDateKey(new Date()) === dateKey;
+          const isToday = formatDateKey(getNowInParis()) === dateKey;
 
           return (
             <div
@@ -209,13 +253,15 @@ export function AdminAddActivitiesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedActivityId, selectedWeekOffset]);
 
+  const shortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    timeZone: PARIS_TIMEZONE,
+  });
+
   const getWeekLabel = (offset: number): string => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + offset * 7);
@@ -224,7 +270,7 @@ export function AdminAddActivitiesTab() {
     selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 6);
     
     const formatDate = (date: Date) => {
-      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      return shortDateFormatter.format(date);
     };
     
     if (offset === 0) {
@@ -285,20 +331,26 @@ export function AdminAddActivitiesTab() {
     }
   };
 
+  const fullDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: PARIS_TIMEZONE,
+  });
+
+  const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: PARIS_TIMEZONE,
+  });
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return fullDateFormatter.format(new Date(dateString));
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return timeFormatter.format(new Date(dateString));
   };
 
   const getTargetWeekDate = (dateString: string) => {
@@ -321,13 +373,9 @@ export function AdminAddActivitiesTab() {
     const intervalMinutes = repeatInterval.trim() === "" ? durationMinutes : parseInt(repeatInterval) || durationMinutes;
     const times = parseInt(repeatTimes) || 1;
     
-    // Get the Monday of the selected week
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    // Get the Monday of the selected week in Paris timezone
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + manualWeekOffset * 7);

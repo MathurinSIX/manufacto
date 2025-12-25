@@ -31,6 +31,51 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+const PARIS_TIMEZONE = "Europe/Paris";
+
+// Helper function to get current date/time in Paris timezone
+function getNowInParis(): Date {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
+  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
+  const second = parseInt(parts.find(p => p.type === "second")!.value);
+  return new Date(year, month, day, hour, minute, second);
+}
+
+// Helper function to get Monday of a week in Paris timezone
+function getMondayInParis(date: Date): Date {
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const d = new Date(year, month, day);
+  const dayOfWeek = d.getDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  d.setDate(d.getDate() - daysFromMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 type User = {
   id: string;
   email: string;
@@ -80,14 +125,10 @@ interface WeekViewSessionsProps {
 function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSession, onDeleteSession }: WeekViewSessionsProps) {
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
-  // Calculate the Monday of the selected week
+  // Calculate the Monday of the selected week in Paris timezone
   const weekDays = useMemo(() => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
@@ -103,18 +144,24 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
     return date.toISOString().split('T')[0];
   };
 
+  const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    timeZone: PARIS_TIMEZONE,
+  });
+
+  const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: PARIS_TIMEZONE,
+  });
+
   const formatDayLabel = (date: Date) => {
-    return date.toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "short",
-    });
+    return dateFormatter.format(date);
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return timeFormatter.format(new Date(dateString));
   };
 
   const hasAnySessions = Array.from(sessionsByDate.values()).some(sessions => sessions.length > 0);
@@ -126,7 +173,7 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
           const day = weekDays[index];
           const dateKey = formatDateKey(day);
           const daySessions = sessionsByDate.get(dateKey) || [];
-          const isToday = formatDateKey(new Date()) === dateKey;
+          const isToday = formatDateKey(getNowInParis()) === dateKey;
 
           return (
             <div
@@ -219,7 +266,7 @@ export function AdminActivitiesTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => getNowInParis());
   const [selectedSession, setSelectedSession] = useState<SessionWithUsers | null>(null);
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -317,12 +364,8 @@ export function AdminActivitiesTab() {
 
   // Get all sessions for the selected week
   const sessionsForWeek = useMemo(() => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
@@ -529,20 +572,32 @@ export function AdminActivitiesTab() {
     }
   };
 
+  const fullDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: PARIS_TIMEZONE,
+  });
+
+  const shortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    timeZone: PARIS_TIMEZONE,
+  });
+
+  const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: PARIS_TIMEZONE,
+  });
+
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return timeFormatter.format(new Date(dateString));
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return fullDateFormatter.format(date);
   };
 
   const navigateDay = (direction: 'prev' | 'next') => {
@@ -556,17 +611,13 @@ export function AdminActivitiesTab() {
   };
 
   const goToToday = () => {
-    setSelectedDate(new Date());
+    setSelectedDate(getNowInParis());
     setWeekOffset(0);
   };
 
   const getWeekLabel = (offset: number): string => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() - daysFromMonday);
-    currentMonday.setHours(0, 0, 0, 0);
+    const now = getNowInParis();
+    const currentMonday = getMondayInParis(now);
     
     const selectedWeekMonday = new Date(currentMonday);
     selectedWeekMonday.setDate(currentMonday.getDate() + offset * 7);
@@ -575,7 +626,7 @@ export function AdminActivitiesTab() {
     selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 6);
     
     const formatDate = (date: Date) => {
-      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      return shortDateFormatter.format(date);
     };
     
     if (offset === 0) {
@@ -908,10 +959,7 @@ export function AdminActivitiesTab() {
                         const durationMinutes = parseInt(editDuration) || 60;
                         const endDateTime = new Date(startDateTime);
                         endDateTime.setMinutes(endDateTime.getMinutes() + durationMinutes);
-                        return endDateTime.toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        });
+                        return timeFormatter.format(endDateTime);
                       } catch {
                         return "-";
                       }

@@ -24,6 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const PARIS_TIMEZONE = "Europe/Paris";
+
+const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: PARIS_TIMEZONE,
+});
+
 type User = {
   id: string;
   email: string;
@@ -276,7 +282,7 @@ export function AdminUsersTab() {
                         )}
                       </td>
                       <td className="p-4">
-                        {new Date(user.created_at).toLocaleDateString("fr-FR")}
+                        {dateFormatter.format(new Date(user.created_at))}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">

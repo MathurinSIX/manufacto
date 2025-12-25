@@ -53,6 +53,29 @@ const dayKeyFormatter = new Intl.DateTimeFormat("fr-CA", {
   timeZone: PARIS_TIMEZONE,
 });
 
+// Helper function to get current date/time in Paris timezone
+function getNowInParis(): Date {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PARIS_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parseInt(parts.find(p => p.type === "year")!.value);
+  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value);
+  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
+  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
+  const second = parseInt(parts.find(p => p.type === "second")!.value);
+  return new Date(year, month, day, hour, minute, second);
+}
+
 const startOfMonth = (date: Date) =>
   new Date(date.getFullYear(), date.getMonth(), 1);
 
@@ -94,7 +117,7 @@ function SimpleCalendar({
     () => buildCalendarGrid(visibleMonth),
     [visibleMonth],
   );
-  const todayKey = toDayKey(new Date());
+  const todayKey = toDayKey(getNowInParis());
 
   return (
     <div className="p-4">
@@ -196,7 +219,7 @@ export function ActivitySessionPicker({
     null,
   );
   const [visibleMonth, setVisibleMonth] = useState<Date>(
-    () => startOfMonth(new Date()),
+    () => startOfMonth(getNowInParis()),
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
