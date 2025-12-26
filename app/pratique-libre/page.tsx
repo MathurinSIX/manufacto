@@ -22,7 +22,7 @@ async function PratiqueLibreContent() {
   const { data, error } = await supabase
     .from("activity")
     .select("id, name, description, image_url, nb_credits, price")
-    .eq("type", "autonomie");
+    .in("type", ["autonomie", "autonomie_encadree", "accompagnement"]);
 
   if (error) {
     console.error("Error fetching activities", error);

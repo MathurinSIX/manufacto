@@ -2,8 +2,6 @@ import Image from "next/image";
 
 import { createClient } from "@/lib/supabase/server";
 import { Navigation } from "@/components/navigation";
-import { unstable_noStore } from "next/cache";
-import { Suspense } from "react";
 import {
   Card,
   CardContent,
@@ -33,8 +31,7 @@ const activityContent = {
   { title: string; description: string; image: string }
 >;
 
-async function ActivitiesContent() {
-  unstable_noStore();
+export default async function ActivitiesPage() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -57,7 +54,9 @@ async function ActivitiesContent() {
   );
 
   return (
-    <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
+    <main className="min-h-screen flex flex-col items-center">
+      <Navigation />
+      <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
       <div className="w-full max-w-6xl space-y-10">
         <div className="text-center space-y-3">
           <p className="text-sm uppercase tracking-wide text-muted-foreground">
@@ -116,16 +115,6 @@ async function ActivitiesContent() {
         </div>
         </div>
       </div>
-  );
-}
-
-export default function ActivitiesPage() {
-  return (
-    <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
-      <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
-        <ActivitiesContent />
-      </Suspense>
     </main>
   );
 }

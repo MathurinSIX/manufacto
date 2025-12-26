@@ -22,7 +22,7 @@ async function CoursContent() {
   const { data, error } = await supabase
     .from("activity")
     .select("id, name, description, image_url, nb_credits, price")
-    .eq("type", "cours");
+    .eq("type", "atelier");
 
   if (error) {
     console.error("Error fetching activities", error);
@@ -57,12 +57,10 @@ async function CoursContent() {
                   Cours Manufacto
                 </p>
                 <h1 className="text-4xl md:text-5xl font-bold text-foreground">
-                  Nos cours de couture
+                  Nos cours
                 </h1>
                 <p className="text-lg text-foreground/90 max-w-3xl mx-auto">
-                  Découvrez nos cours structurés pour apprendre la couture étape par
-                  étape. Chaque cours dispose d&apos;un nombre de crédits requis qui se
-                  met à jour automatiquement depuis Supabase.
+                  Découvrez nos cours structurés pour apprendre différentes techniques artisanales : menuiserie, couture, céramique, électronique et plus encore. Chaque cours dispose d&apos;un nombre de crédits requis et d&apos;un prix.
                 </p>
               </div>
             </div>
