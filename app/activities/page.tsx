@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { Suspense } from "react";
+import { unstable_noStore } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { Navigation } from "@/components/navigation";
@@ -15,7 +17,7 @@ const activityContent = {
   couture_autonomie: {
     title: "Couture en Autonomie",
     description:
-      "Accédez à l’atelier en libre-service pour travailler sur vos projets personnels avec l’assistance de notre équipe si nécessaire.",
+      "Accédez à l'atelier en libre-service pour travailler sur vos projets personnels avec l'assistance de notre équipe si nécessaire.",
     image:
       "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
   },
@@ -31,7 +33,8 @@ const activityContent = {
   { title: string; description: string; image: string }
 >;
 
-export default async function ActivitiesPage() {
+async function ActivitiesList() {
+  unstable_noStore();
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -54,6 +57,52 @@ export default async function ActivitiesPage() {
   );
 
   return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {entries.map((activity) => (
+        <Card key={activity.id} className="overflow-hidden">
+          <div className="relative h-56 w-full">
+            <Image
+              src={activity.image}
+              alt={activity.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          </div>
+          <CardHeader>
+            <CardTitle>{activity.title}</CardTitle>
+            <CardDescription>{activity.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Crédits requis</p>
+            <p className="text-2xl font-semibold">
+              {activity.credits !== null ? (
+                <span>{activity.credits}</span>
+              ) : (
+                <span className="text-base text-muted-foreground">
+                  À définir
+                </span>
+              )}
+            </p>
+            <ActivitySessionPicker
+              activityId={
+                activity.id &&
+                typeof activity.id === "string" &&
+                activity.id.length === 36
+                  ? activity.id
+                  : undefined
+              }
+              activityTitle={activity.title}
+            />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default async function ActivitiesPage() {
+  return (
     <main className="min-h-screen flex flex-col items-center">
       <Navigation />
       <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
@@ -66,53 +115,15 @@ export default async function ActivitiesPage() {
             Découvrez nos ateliers couture
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Chaque activité dispose d’un nombre de crédits requis qui se met à
+            Chaque activité dispose d'un nombre de crédits requis qui se met à
             jour automatiquement depuis Supabase. Choisissez celle qui
             correspond le mieux à vos envies créatives.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {entries.map((activity) => (
-            <Card key={activity.id} className="overflow-hidden">
-              <div className="relative h-56 w-full">
-                <Image
-                  src={activity.image}
-                  alt={activity.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-              </div>
-              <CardHeader>
-                <CardTitle>{activity.title}</CardTitle>
-                <CardDescription>{activity.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Crédits requis</p>
-                <p className="text-2xl font-semibold">
-                  {activity.credits !== null ? (
-                    <span>{activity.credits}</span>
-                  ) : (
-                    <span className="text-base text-muted-foreground">
-                      À définir
-                    </span>
-                  )}
-                </p>
-                <ActivitySessionPicker
-                  activityId={
-                    activity.id &&
-                    typeof activity.id === "string" &&
-                    activity.id.length === 36
-                      ? activity.id
-                      : undefined
-                  }
-                  activityTitle={activity.title}
-                />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Suspense fallback={<div className="text-center py-8">Chargement des activités...</div>}>
+          <ActivitiesList />
+        </Suspense>
         </div>
       </div>
     </main>
