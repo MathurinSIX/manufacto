@@ -146,13 +146,17 @@ export default function Home() {
               <div className="space-y-4">
                 <h2 className="text-2xl md:text-3xl font-bold">Des Manufactures</h2>
                 <p className="text-base text-muted-foreground">
-                  textetextetextetexte
+                  Vous cherchez un espace pour travailler sur vos projets personnels en ayant accès 
+                  à des machines professionnelles ?
                 </p>
                 <p className="text-base text-muted-foreground">
-                  textetextetextetexte
+                  Les Manufactures vous offrent un accès libre aux ateliers de menuiserie, couture, 
+                  céramique et électronique. Travaillez en autonomie ou avec encadrement, selon votre 
+                  niveau et vos besoins.
                 </p>
                 <p className="text-base text-muted-foreground">
-                  textetextetextetexte
+                  Réalisez vos projets à votre rythme avec l&apos;assistance de l&apos;équipe si nécessaire. 
+                  Un système de crédits simple et flexible pour accéder aux équipements.
                 </p>
                 <Link href="/manufactures">
                   <Button variant="outline" className="mt-4">
