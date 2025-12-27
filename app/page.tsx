@@ -2,8 +2,18 @@ import { Navigation } from "@/components/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+interface HomeProps {
+  searchParams: Promise<{ code?: string }>;
+}
+
+export default async function Home({ searchParams }: HomeProps) {
+  // Handle legacy magic links that redirect to root with code parameter
+  const params = await searchParams;
+  if (params?.code) {
+    redirect(`/auth/confirm?code=${encodeURIComponent(params.code)}`);
+  }
   return (
     <main className="min-h-screen flex flex-col items-center">
       <div className="flex-1 w-full flex flex-col items-center">
