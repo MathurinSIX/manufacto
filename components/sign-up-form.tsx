@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,27 +38,29 @@ export function SignUpForm({
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-          },
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          email,
+          password,
+          firstName,
+          lastName,
+        }),
       });
-      if (error) throw error;
-      
-      // Explicitly sign out to ensure user is not logged in until email is confirmed
-      await supabase.auth.signOut();
-      
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Une erreur s'est produite");
+      }
+
       // Show success message - user needs to validate email before logging in
       setSuccess(true);
       
@@ -77,19 +78,7 @@ export function SignUpForm({
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
-        // Check if the error indicates the account already exists
-        const errorMessage = error.message.toLowerCase();
-        if (
-          errorMessage.includes("user already registered") ||
-          errorMessage.includes("email already registered") ||
-          errorMessage.includes("already exists") ||
-          errorMessage.includes("already registered") ||
-          errorMessage.includes("user already exists")
-        ) {
-          setError("Un compte avec cet e-mail existe déjà. Veuillez vous connecter ou réinitialiser votre mot de passe.");
-        } else {
-          setError(error.message);
-        }
+        setError(error.message);
       } else {
         setError("Une erreur s'est produite");
       }
