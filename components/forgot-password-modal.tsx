@@ -31,8 +31,7 @@ export function ForgotPasswordModal({
         </DialogHeader>
         <div className="py-4">
           <ForgotPasswordForm 
-            showCard={false} 
-            onBackToLogin={onBackToLogin || (() => onOpenChange(false))} 
+            onSwitchToLogin={onBackToLogin || (() => onOpenChange(false))} 
           />
         </div>
       </DialogContent>

@@ -3,18 +3,26 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 interface HomeProps {
   searchParams: Promise<{ code?: string }>;
 }
 
-export default async function Home({ searchParams }: HomeProps) {
-  // Handle legacy magic links that redirect to root with code parameter
+async function HandleSearchParams({ searchParams }: HomeProps) {
   const params = await searchParams;
   if (params?.code) {
     redirect(`/auth/confirm?code=${encodeURIComponent(params.code)}`);
   }
+  return null;
+}
+
+export default async function Home({ searchParams }: HomeProps) {
   return (
+    <>
+      <Suspense fallback={null}>
+        <HandleSearchParams searchParams={searchParams} />
+      </Suspense>
     <main className="min-h-screen flex flex-col items-center">
       <div className="flex-1 w-full flex flex-col items-center">
         <Navigation />
@@ -203,5 +211,6 @@ export default async function Home({ searchParams }: HomeProps) {
 
       </div>
     </main>
+    </>
   );
 }

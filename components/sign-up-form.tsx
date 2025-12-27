@@ -62,7 +62,23 @@ export function SignUpForm({
         router.push("/auth/sign-up-success");
       }
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Une erreur s'est produite");
+      if (error instanceof Error) {
+        // Check if the error indicates the account already exists
+        const errorMessage = error.message.toLowerCase();
+        if (
+          errorMessage.includes("user already registered") ||
+          errorMessage.includes("email already registered") ||
+          errorMessage.includes("already exists") ||
+          errorMessage.includes("already registered") ||
+          errorMessage.includes("user already exists")
+        ) {
+          setError("Un compte avec cet e-mail existe déjà. Veuillez vous connecter ou réinitialiser votre mot de passe.");
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setError("Une erreur s'est produite");
+      }
     } finally {
       setIsLoading(false);
     }
