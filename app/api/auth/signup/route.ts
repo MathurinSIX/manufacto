@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -12,6 +13,38 @@ export async function POST(request: Request) {
         { error: "Tous les champs sont requis" },
         { status: 400 }
       );
+    }
+
+    // Check if user already exists using Admin API
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (supabaseUrl && supabaseServiceKey) {
+      const adminClient = createAdminClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      });
+
+      // Check if a user with this email already exists
+      const { data: existingUsers, error: listError } = await adminClient.auth.admin.listUsers();
+      
+      if (!listError && existingUsers && existingUsers.users) {
+        const userExists = existingUsers.users.some(
+          (user) => {
+            const userEmail = (user as { email?: string }).email;
+            return userEmail && userEmail.toLowerCase() === email.toLowerCase();
+          }
+        );
+
+        if (userExists) {
+          return NextResponse.json(
+            { error: "Un compte avec cet e-mail existe déjà. Veuillez vous connecter ou réinitialiser votre mot de passe." },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     const supabase = await createClient();
@@ -61,7 +94,7 @@ export async function POST(request: Request) {
       { message: "Compte créé avec succès. Veuillez vérifier votre e-mail pour confirmer votre compte." },
       { status: 201 }
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Une erreur s'est produite lors de la création du compte" },
       { status: 500 }
