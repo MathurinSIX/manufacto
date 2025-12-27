@@ -30,6 +30,7 @@ export function SignUpForm({
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
   const firstNameId = useId();
   const lastNameId = useId();
@@ -47,7 +48,7 @@ export function SignUpForm({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -55,11 +56,24 @@ export function SignUpForm({
         },
       });
       if (error) throw error;
-      // Call onSuccess callback if provided, otherwise redirect
+      
+      // Explicitly sign out to ensure user is not logged in until email is confirmed
+      await supabase.auth.signOut();
+      
+      // Show success message - user needs to validate email before logging in
+      setSuccess(true);
+      
+      // Call onSuccess callback if provided, otherwise redirect after a delay
       if (onSuccess) {
-        onSuccess();
+        // Small delay to show success message
+        setTimeout(() => {
+          onSuccess();
+        }, 2000);
       } else {
-        router.push("/auth/sign-up-success");
+        // Small delay to show success message before redirect
+        setTimeout(() => {
+          router.push("/auth/sign-up-success");
+        }, 2000);
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -136,8 +150,18 @@ export function SignUpForm({
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Création du compte..." : "S'inscrire"}
+              {success && (
+                <div className="rounded-md bg-green-50 p-4 border border-green-200">
+                  <p className="text-sm text-green-800 font-medium">
+                    Compte créé avec succès !
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Veuillez vérifier votre e-mail pour confirmer votre compte avant de vous connecter.
+                  </p>
+                </div>
+              )}
+              <Button type="submit" className="w-full" disabled={isLoading || success}>
+                {isLoading ? "Création du compte..." : success ? "Compte créé" : "S'inscrire"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">
