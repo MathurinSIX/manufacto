@@ -6,18 +6,16 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useId } from "react";
 
 interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToSignUp?: () => void;
+  onSwitchToForgotPassword?: () => void;
   onSuccess?: () => void;
   redirectTo?: string;
 }
@@ -25,6 +23,7 @@ interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
 export function LoginForm({
   className,
   onSwitchToSignUp,
+  onSwitchToForgotPassword,
   onSuccess,
   redirectTo,
   ...props
@@ -33,7 +32,11 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const router = useRouter();
+  const emailId = useId();
+  const passwordId = useId();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,22 +65,42 @@ export function LoginForm({
     }
   };
 
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Veuillez entrer votre adresse e-mail");
+      return;
+    }
+    const supabase = createClient();
+    setIsMagicLinkLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) throw error;
+      setMagicLinkSent(true);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Une erreur s'est produite");
+    } finally {
+      setIsMagicLinkLoading(false);
+    }
+  };
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="border-0 shadow-none">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="text-2xl">Connexion</CardTitle>
-          <CardDescription>
-            Entrez votre email ci-dessous pour vous connecter à votre compte
-          </CardDescription>
-        </CardHeader>
         <CardContent className="px-0">
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor={emailId}>E-mail</Label>
                 <Input
-                  id="email"
+                  id={emailId}
                   type="email"
                   placeholder="m@example.com"
                   required
@@ -87,16 +110,26 @@ export function LoginForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Mot de passe</Label>
-                  <Link
-                    href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Mot de passe oublié ?
-                  </Link>
+                  <Label htmlFor={passwordId}>Mot de passe</Label>
+                  {onSwitchToForgotPassword ? (
+                    <button
+                      type="button"
+                      onClick={onSwitchToForgotPassword}
+                      className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                    >
+                      Mot de passe oublié ?
+                    </button>
+                  ) : (
+                    <Link
+                      href="/auth/forgot-password"
+                      className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  )}
                 </div>
                 <Input
-                  id="password"
+                  id={passwordId}
                   type="password"
                   required
                   value={password}
@@ -104,8 +137,30 @@ export function LoginForm({
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
+              {magicLinkSent && (
+                <p className="text-sm text-green-600">
+                  Un lien de connexion a été envoyé à votre adresse e-mail. Vérifiez votre boîte de réception.
+                </p>
+              )}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Connexion..." : "Se connecter"}
+              </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Ou</span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={isMagicLinkLoading || !email}
+                onClick={handleMagicLink}
+              >
+                {isMagicLinkLoading ? "Envoi..." : "Se connecter avec un lien magique"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">

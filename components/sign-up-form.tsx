@@ -6,9 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,10 +68,6 @@ export function SignUpForm({
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="border-0 shadow-none">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="text-2xl">Inscription</CardTitle>
-          <CardDescription>Créer un nouveau compte</CardDescription>
-        </CardHeader>
         <CardContent className="px-0">
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
@@ -115,7 +108,7 @@ export function SignUpForm({
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Création du compte..." : "S&apos;inscrire"}
+                {isLoading ? "Création du compte..." : "S'inscrire"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">

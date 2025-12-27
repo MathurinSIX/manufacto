@@ -15,10 +15,15 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useState } from "react";
 
+interface ForgotPasswordFormProps extends React.ComponentPropsWithoutRef<"div"> {
+  onSwitchToLogin?: () => void;
+}
+
 export function ForgotPasswordForm({
   className,
+  onSwitchToLogin,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: ForgotPasswordFormProps) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -47,28 +52,32 @@ export function ForgotPasswordForm({
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       {success ? (
-        <Card>
-          <CardHeader>
+        <Card className="border-0 shadow-none">
+          <CardHeader className="px-0 pt-0">
             <CardTitle className="text-2xl">Vérifiez Votre E-mail</CardTitle>
             <CardDescription>Instructions de réinitialisation du mot de passe envoyées</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-0">
             <p className="text-sm text-muted-foreground">
               Si vous vous êtes inscrit en utilisant votre e-mail et votre mot de passe, vous recevrez
               un e-mail de réinitialisation du mot de passe.
             </p>
+            {onSwitchToLogin && (
+              <div className="mt-4 text-center text-sm">
+                <button
+                  type="button"
+                  onClick={onSwitchToLogin}
+                  className="underline underline-offset-4 hover:text-primary"
+                >
+                  Retour à la connexion
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">Réinitialiser Votre Mot de Passe</CardTitle>
-            <CardDescription>
-              Entrez votre e-mail et nous vous enverrons un lien pour réinitialiser votre
-              mot de passe
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Card className="border-0 shadow-none">
+          <CardContent className="px-0">
             <form onSubmit={handleForgotPassword}>
               <div className="flex flex-col gap-6">
                 <div className="grid gap-2">
@@ -89,12 +98,22 @@ export function ForgotPasswordForm({
               </div>
               <div className="mt-4 text-center text-sm">
                 Vous avez déjà un compte ?{" "}
-                <Link
-                  href="/auth/login"
-                  className="underline underline-offset-4"
-                >
-                  Se connecter
-                </Link>
+                {onSwitchToLogin ? (
+                  <button
+                    type="button"
+                    onClick={onSwitchToLogin}
+                    className="underline underline-offset-4 hover:text-primary"
+                  >
+                    Se connecter
+                  </button>
+                ) : (
+                  <Link
+                    href="/auth/login"
+                    className="underline underline-offset-4"
+                  >
+                    Se connecter
+                  </Link>
+                )}
               </div>
             </form>
           </CardContent>
