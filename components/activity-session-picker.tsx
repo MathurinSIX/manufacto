@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { cancelRegistration } from "@/app/account/actions";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -223,11 +224,14 @@ export function ActivitySessionPicker({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userCredits, setUserCredits] = useState<number>(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
   const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
+  // Map of session_id -> registration_id for user's active registrations
+  const [userRegistrations, setUserRegistrations] = useState<Record<string, string>>({});
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -304,7 +308,7 @@ export function ActivitySessionPicker({
         const sessionIds = data.map(s => s.id);
         const { data: registrations } = await supabase
           .from("registration")
-          .select("id, session_id")
+          .select("id, session_id, user_id")
           .in("session_id", sessionIds);
         
         // Get active registrations (not cancelled)
@@ -336,6 +340,22 @@ export function ActivitySessionPicker({
           }
         }
         
+        // Fetch user's registrations if logged in
+        const userRegMap: Record<string, string> = {};
+        if (userId && registrations) {
+          const userRegs = registrations.filter(
+            reg => reg.user_id === userId && activeRegistrationIds.has(reg.id)
+          );
+          userRegs.forEach(reg => {
+            if (reg.session_id) {
+              userRegMap[reg.session_id] = reg.id;
+            }
+          });
+        }
+        if (!ignore) {
+          setUserRegistrations(userRegMap);
+        }
+        
         // Count registrations per session
         const registrationCounts: Record<string, number> = {};
         registrations?.forEach(reg => {
@@ -359,6 +379,9 @@ export function ActivitySessionPicker({
         setSessions(sessionsWithCounts);
       } else {
         setSessions([]);
+        if (!ignore) {
+          setUserRegistrations({});
+        }
       }
       
       setIsLoading(false);
@@ -367,7 +390,7 @@ export function ActivitySessionPicker({
     return () => {
       ignore = true;
     };
-  }, [open, activityId, supabase]);
+  }, [open, activityId, supabase, userId]);
 
   useEffect(() => {
     if (!sessions.length) {
@@ -398,7 +421,7 @@ export function ActivitySessionPicker({
     setSelectedDate(new Date(matchedSession.start_ts));
     setSelectedSessionId(matchedSession.id);
     setOpen(true);
-  }, [sessions, searchParams, hasAppliedQuerySession]);
+  }, [sessions, searchParams, hasAppliedQuerySession, setOpen]);
 
   useEffect(() => {
     if (hasAttemptedQueryOpen || !activityId) return;
@@ -406,7 +429,7 @@ export function ActivitySessionPicker({
     if (!sessionFromQuery) return;
     setHasAttemptedQueryOpen(true);
     setOpen(true);
-  }, [activityId, searchParams, hasAttemptedQueryOpen]);
+  }, [activityId, searchParams, hasAttemptedQueryOpen, setOpen]);
 
   const availableDays = useMemo(() => {
     if (!sessions.length) return new Set<string>();
@@ -434,7 +457,7 @@ export function ActivitySessionPicker({
     setErrorMessage(null);
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (paymentType: "credits" | "stripe") => {
     if (!selectedSessionId) return;
     if (!userId) {
       const params = new URLSearchParams();
@@ -442,19 +465,70 @@ export function ActivitySessionPicker({
       router.push(`/auth/login?${params.toString()}`);
       return;
     }
+    
+    // Prevent double registration
+    if (userRegistrations[selectedSessionId]) {
+      setErrorMessage("Vous êtes déjà inscrit à cette session.");
+      return;
+    }
+    
     setIsRegistering(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    const { error } = await supabase
-      .from("registrations")
-      .insert({ session_id: selectedSessionId });
+    const { data, error } = await supabase
+      .from("registration")
+      .insert({ session_id: selectedSessionId, user_id: userId, payment_type: paymentType })
+      .select("id")
+      .single();
     setIsRegistering(false);
     if (error) {
       console.error(error);
       setErrorMessage("Votre inscription n'a pas pu être enregistrée.");
       return;
     }
+    
+    // Update user registrations state
+    if (data?.id) {
+      setUserRegistrations(prev => ({
+        ...prev,
+        [selectedSessionId]: data.id,
+      }));
+    }
+    
     setSuccessMessage("Inscription confirmée ! Nous vous attendons à l'atelier.");
+    router.refresh();
+  };
+
+  const handleCancel = async () => {
+    if (!selectedSessionId) return;
+    const registrationId = userRegistrations[selectedSessionId];
+    if (!registrationId) return;
+    
+    if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
+      return;
+    }
+    
+    setIsCancelling(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    
+    const result = await cancelRegistration(registrationId);
+    
+    if (result.error) {
+      setErrorMessage(result.error);
+      setIsCancelling(false);
+      return;
+    }
+    
+    // Update user registrations state
+    setUserRegistrations(prev => {
+      const updated = { ...prev };
+      delete updated[selectedSessionId];
+      return updated;
+    });
+    
+    setIsCancelling(false);
+    setSuccessMessage("Inscription annulée avec succès.");
     router.refresh();
   };
 
@@ -518,47 +592,95 @@ export function ActivitySessionPicker({
                       ? session.max_registrations - registeredCount 
                       : null;
                     const isFull = session.max_registrations !== null && registeredCount >= session.max_registrations;
+                    const isUserRegistered = !!userRegistrations[session.id];
+                    const registrationId = userRegistrations[session.id];
+                    
+                    const handleCancelThisSession = async (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      if (!registrationId) return;
+                      
+                      if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
+                        return;
+                      }
+                      
+                      setIsCancelling(true);
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                      
+                      const result = await cancelRegistration(registrationId);
+                      
+                      if (result.error) {
+                        setErrorMessage(result.error);
+                        setIsCancelling(false);
+                        return;
+                      }
+                      
+                      // Update user registrations state
+                      setUserRegistrations(prev => {
+                        const updated = { ...prev };
+                        delete updated[session.id];
+                        return updated;
+                      });
+                      
+                      setIsCancelling(false);
+                      setSuccessMessage("Inscription annulée avec succès.");
+                      router.refresh();
+                    };
                     
                     return (
-                      <button
-                        key={session.id}
-                        type="button"
-                        disabled={isFull}
-                        onClick={() => !isFull && handleSelectSession(session.id)}
-                        className={cn(
-                          "w-full rounded-lg border p-4 text-left transition-colors",
-                          isFull && "opacity-60 cursor-not-allowed",
-                          isSelected && !isFull
-                            ? "border-primary bg-primary/5"
-                            : !isFull && "hover:bg-muted",
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">
-                              {timeFormatter.format(start)} –{" "}
-                              {timeFormatter.format(end)}
-                            </p>
-                            <p className="text-sm text-muted-foreground capitalize">
-                              {dateFormatter.format(start)}
-                            </p>
-                          </div>
-                          {isSelected && !isFull && (
-                            <CheckCircle2 className="h-5 w-5 text-primary" />
+                      <div key={session.id} className="rounded-lg border p-4">
+                        <button
+                          type="button"
+                          disabled={isFull || isUserRegistered}
+                          onClick={() => !isFull && !isUserRegistered && handleSelectSession(session.id)}
+                          className={cn(
+                            "w-full text-left transition-colors",
+                            (isFull || isUserRegistered) && "opacity-60 cursor-not-allowed",
+                            isSelected && !isFull && !isUserRegistered
+                              ? "border-primary bg-primary/5"
+                              : !isFull && !isUserRegistered && "hover:bg-muted",
                           )}
-                        </div>
-                        {session.max_registrations !== null && (
-                          <p className={cn(
-                            "mt-2 text-xs",
-                            isFull ? "text-destructive font-medium" : "text-muted-foreground"
-                          )}>
-                            {isFull 
-                              ? "Complet" 
-                              : `${available} place${available !== null && available > 1 ? "s" : ""} disponible${available !== null && available > 1 ? "s" : ""}`
-                            }
-                          </p>
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">
+                                {timeFormatter.format(start)} –{" "}
+                                {timeFormatter.format(end)}
+                              </p>
+                              <p className="text-sm text-muted-foreground capitalize">
+                                {dateFormatter.format(start)}
+                              </p>
+                            </div>
+                            {isSelected && !isFull && !isUserRegistered && (
+                              <CheckCircle2 className="h-5 w-5 text-primary" />
+                            )}
+                          </div>
+                          {session.max_registrations !== null && (
+                            <p className={cn(
+                              "mt-2 text-xs",
+                              isFull ? "text-destructive font-medium" : "text-muted-foreground"
+                            )}>
+                              {isFull 
+                                ? "Complet" 
+                                : `${available} place${available !== null && available > 1 ? "s" : ""} disponible${available !== null && available > 1 ? "s" : ""}`
+                              }
+                            </p>
+                          )}
+                        </button>
+                        {isUserRegistered && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-xs font-medium text-primary">Inscrit</span>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={isCancelling}
+                              onClick={handleCancelThisSession}
+                            >
+                              {isCancelling ? "Annulation..." : "Annuler"}
+                            </Button>
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -580,41 +702,56 @@ export function ActivitySessionPicker({
 
         <DialogFooter className="flex-col gap-3 sm:flex-row">
           {isLoggedIn && selectedSessionId && (
-            <div className="flex flex-col gap-2 w-full sm:w-auto">
-              {credits !== null && (
-                <>
-                  <Button
-                    variant="default"
-                    className="w-full sm:w-auto"
-                    disabled={isRegistering || userCredits < credits}
-                    onClick={handleRegister}
-                  >
-                    {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
-                  </Button>
-                  {userCredits < credits && (
-                    <p className="text-xs text-destructive">
-                      Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {credits}.
-                    </p>
-                  )}
-                </>
-              )}
-              {price !== null && (
+            <>
+              {userRegistrations[selectedSessionId] ? (
+                // User is already registered - show cancel button
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   className="w-full sm:w-auto"
-                  disabled={isRegistering}
-                  onClick={handleRegister}
+                  disabled={isCancelling}
+                  onClick={handleCancel}
                 >
-                  {isRegistering ? "Inscription..." : `Réserver pour ${price.toFixed(2)}€`}
+                  {isCancelling ? "Annulation..." : "Annuler l'inscription"}
                 </Button>
+              ) : (
+                // User is not registered - show register buttons
+                <div className="flex flex-col gap-2 w-full sm:w-auto">
+                  {credits !== null && (
+                    <>
+                      <Button
+                        variant="default"
+                        className="w-full sm:w-auto"
+                        disabled={isRegistering || userCredits < credits}
+                        onClick={() => handleRegister("credits")}
+                      >
+                        {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
+                      </Button>
+                      {userCredits < credits && (
+                        <p className="text-xs text-destructive">
+                          Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {credits}.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {price !== null && (
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      disabled={isRegistering}
+                      onClick={() => handleRegister("stripe")}
+                    >
+                      {isRegistering ? "Inscription..." : `Réserver pour ${price.toFixed(2)}€`}
+                    </Button>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
-          {isLoggedIn && (!credits && !price) && selectedSessionId && (
+          {isLoggedIn && (!credits && !price) && selectedSessionId && !userRegistrations[selectedSessionId] && (
             <Button
               className="w-full sm:w-auto"
               disabled={isRegistering}
-              onClick={handleRegister}
+              onClick={() => handleRegister("stripe")}
             >
               {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
             </Button>

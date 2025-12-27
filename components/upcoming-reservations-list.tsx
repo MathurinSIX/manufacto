@@ -126,7 +126,8 @@ export function UpcomingReservationsList({
           const endDate = session.end_ts ? new Date(session.end_ts) : new Date();
 
           const latestStatus = registrationStatusMap[reg.id];
-          const isActive = !latestStatus || latestStatus.status === "ACTIVE";
+          const isCancelled = latestStatus && latestStatus.status === "CANCELLED";
+          const canCancel = !isCancelled; // Show cancel button if not cancelled
 
           return (
             <div
@@ -144,16 +145,16 @@ export function UpcomingReservationsList({
                 </p>
                 {reg.payment_type && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
+                    Paiement: {reg.payment_type === "credits" ? "Crédits" : reg.payment_type === "stripe" ? "Stripe" : reg.payment_type}
                   </p>
                 )}
-                {latestStatus && latestStatus.status === "CANCELLED" && (
+                {isCancelled && (
                   <p className="text-xs text-destructive mt-1 font-medium">
                     Annulée
                   </p>
                 )}
               </div>
-              {isActive && (
+              {canCancel && (
                 <CancelRegistrationButton registrationId={reg.id} />
               )}
             </div>
