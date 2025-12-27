@@ -224,6 +224,7 @@ export function ActivitySessionPicker({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userCredits, setUserCredits] = useState<number>(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
   const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
@@ -238,6 +239,38 @@ export function ActivitySessionPicker({
       const { data } = await supabase.auth.getUser();
       if (!active) return;
       setUserId(data.user?.id ?? null);
+      
+      // Fetch user credits if logged in
+      if (data.user?.id) {
+        const { data: creditsData, error } = await supabase
+          .from("credit")
+          .select("amount")
+          .eq("user_id", data.user.id);
+        
+        if (!active) return;
+        
+        if (error) {
+          console.error("Error fetching credits:", error);
+          setUserCredits(0);
+        } else if (creditsData && Array.isArray(creditsData)) {
+          const totalCredits = creditsData.reduce((sum, row) => {
+            let amount = 0;
+            if (row.amount != null) {
+              if (typeof row.amount === 'number') {
+                amount = row.amount;
+              } else if (typeof row.amount === 'string') {
+                amount = parseFloat(row.amount) || 0;
+              }
+            }
+            return sum + amount;
+          }, 0);
+          setUserCredits(totalCredits);
+        } else {
+          setUserCredits(0);
+        }
+      } else {
+        setUserCredits(0);
+      }
     };
     fetchUser();
     return () => {
@@ -549,14 +582,21 @@ export function ActivitySessionPicker({
           {isLoggedIn && selectedSessionId && (
             <div className="flex flex-col gap-2 w-full sm:w-auto">
               {credits !== null && (
-                <Button
-                  variant="default"
-                  className="w-full sm:w-auto"
-                  disabled={isRegistering}
-                  onClick={handleRegister}
-                >
-                  {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
-                </Button>
+                <>
+                  <Button
+                    variant="default"
+                    className="w-full sm:w-auto"
+                    disabled={isRegistering || userCredits < credits}
+                    onClick={handleRegister}
+                  >
+                    {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
+                  </Button>
+                  {userCredits < credits && (
+                    <p className="text-xs text-destructive">
+                      Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {credits}.
+                    </p>
+                  )}
+                </>
               )}
               {price !== null && (
                 <Button
@@ -570,10 +610,10 @@ export function ActivitySessionPicker({
               )}
             </div>
           )}
-          {(!isLoggedIn || (!credits && !price)) && (
+          {isLoggedIn && (!credits && !price) && selectedSessionId && (
             <Button
               className="w-full sm:w-auto"
-              disabled={!selectedSessionId || isRegistering}
+              disabled={isRegistering}
               onClick={handleRegister}
             >
               {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
