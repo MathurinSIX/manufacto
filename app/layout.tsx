@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Caveat } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { Footer } from "@/components/footer";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -11,11 +10,18 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Manufacto Marseille",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  description:
+    "Atelier partagé et multidisciplinaire au coeur de Marseille, ouvert à toutes celles et ceux qui veulent faire de leurs mains.",
 };
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
+  display: "swap",
+  subsets: ["latin"],
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
   display: "swap",
   subsets: ["latin"],
 });
@@ -26,18 +32,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased flex flex-col min-h-screen`}>
+    <html lang="fr" suppressHydrationWarning>
+      <body
+        className={`${geistSans.className} ${caveat.variable} antialiased flex flex-col min-h-screen`}
+      >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex-1 flex flex-col">
-            {children}
-          </div>
-          <Footer />
+          <div className="flex-1 flex flex-col">{children}</div>
         </ThemeProvider>
       </body>
     </html>

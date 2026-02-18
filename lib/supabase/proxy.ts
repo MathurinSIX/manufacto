@@ -3,6 +3,20 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
 export async function updateSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // TEMPORARY: Block all pages except landing and /home - redirect everything else to /
+  if (pathname !== "/" && pathname !== "/home") {
+    if (
+      !pathname.startsWith("/_next") &&
+      !pathname.startsWith("/api") &&
+      !pathname.startsWith("/assets") &&
+      !pathname.includes(".")
+    ) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
