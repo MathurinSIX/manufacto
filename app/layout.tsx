@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Caveat } from "next/font/google";
+import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
@@ -12,18 +12,16 @@ export const metadata: Metadata = {
   title: "Manufacto Marseille",
   description:
     "Atelier partagé et multidisciplinaire au coeur de Marseille, ouvert à toutes celles et ceux qui veulent faire de leurs mains.",
+  icons: {
+    icon: "/assets/favicon.png",
+  },
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const golosText = localFont({
+  src: "../public/assets/font/GolosText-VariableFont_wght.ttf",
+  variable: "--font-golos-text",
   display: "swap",
-  subsets: ["latin"],
-});
-
-const caveat = Caveat({
-  variable: "--font-caveat",
-  display: "swap",
-  subsets: ["latin"],
+  weight: "400 900",
 });
 
 export default function RootLayout({
@@ -32,9 +30,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning className={golosText.variable}>
       <body
-        className={`${geistSans.className} ${caveat.variable} antialiased flex flex-col min-h-screen`}
+        className={`${golosText.className} font-sans antialiased flex flex-col min-h-screen`}
       >
         <ThemeProvider
           attribute="class"

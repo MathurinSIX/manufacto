@@ -62,11 +62,10 @@
   * {
     @apply border-border;
   }
+  html {
+    font-family: var(--font-golos-text), "Golos Text", sans-serif;
+  }
   body {
     @apply bg-background text-foreground;
   }
-}
-
-.font-caveat {
-  font-family: var(--font-caveat), cursive;
 }
