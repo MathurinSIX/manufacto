@@ -160,8 +160,8 @@ export default function LandingPage() {
               <InstagramIcon className="w-6 h-6" />
             </Link>
           </div>
-          <div className="relative min-h-[320px] lg:min-h-full flex items-center justify-center overflow-visible bg-[#FBF8F2]">
-            <div className="relative w-full max-w-md lg:max-w-lg aspect-[4/3] mx-auto">
+          <div className="hidden lg:flex relative min-h-[320px] lg:min-h-full items-center justify-start overflow-visible bg-[#FBF8F2] pl-4 pr-20 pb-20 lg:pr-32 lg:pb-28">
+            <div className="relative w-full max-w-md lg:max-w-lg aspect-[4/3] ml-0 mr-auto overflow-visible">
               <Image
                 src={IMAGES.jackhammer}
                 alt="Travaux d'aménagement de l'atelier"
@@ -169,7 +169,7 @@ export default function LandingPage() {
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 32rem"
               />
-              <div className="absolute -right-8 md:-right-24 lg:-right-28 -bottom-16 md:-bottom-20 lg:-bottom-24 w-40 h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 drop-shadow-lg">
+              <div className="absolute -right-8 md:-right-16 lg:-right-28 -bottom-16 md:-bottom-20 lg:-bottom-24 w-40 h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 drop-shadow-lg">
                 <div className="relative w-full h-full">
                   <Image src={STAR_JAUNE} alt="" fill className="object-cover" sizes="(max-width: 768px) 160px, (max-width: 1024px) 176px, 192px" />
                 </div>
