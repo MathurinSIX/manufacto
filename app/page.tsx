@@ -129,8 +129,8 @@ export default function LandingPage() {
       </section>
 
       {/* Opening Announcement - jackhammer image with yellow star (flyer) */}
-      <section className="border-t border-[#e5e0d8]">
-        <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[420px] lg:min-h-[480px] max-w-6xl mx-auto">
+      <section className="border-t border-[#e5e0d8] overflow-visible">
+        <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[420px] lg:min-h-[480px] max-w-6xl mx-auto overflow-visible">
           <div className="flex flex-col justify-center px-8 py-14 lg:py-20 lg:px-12 bg-[#FBF8F2]">
             <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] font-bold text-[#2d2d2d] mb-5 leading-tight">
               Ouverture prévue courant{" "}
@@ -160,7 +160,7 @@ export default function LandingPage() {
               <InstagramIcon className="w-6 h-6" />
             </Link>
           </div>
-          <div className="relative min-h-[320px] lg:min-h-full flex items-center justify-center overflow-hidden bg-[#FBF8F2]">
+          <div className="relative min-h-[320px] lg:min-h-full flex items-center justify-center overflow-visible bg-[#FBF8F2]">
             <div className="relative w-full max-w-md lg:max-w-lg aspect-[4/3] mx-auto">
               <Image
                 src={IMAGES.jackhammer}
@@ -169,7 +169,7 @@ export default function LandingPage() {
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 32rem"
               />
-              <div className="absolute -right-12 -bottom-12 w-40 h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 drop-shadow-lg">
+              <div className="absolute -right-8 md:-right-24 lg:-right-28 -bottom-16 md:-bottom-20 lg:-bottom-24 w-40 h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 drop-shadow-lg">
                 <div className="relative w-full h-full">
                   <Image src={STAR_JAUNE} alt="" fill className="object-cover" sizes="(max-width: 768px) 160px, (max-width: 1024px) 176px, 192px" />
                 </div>

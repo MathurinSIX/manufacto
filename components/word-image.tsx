@@ -21,12 +21,12 @@ const WORD_LABELS: Record<CraftWordKey, string> = {
   ceramique: "céramique",
 };
 
-/** Couture is shorter, so use smaller height */
+/** Couture is shorter, so use smaller height. w-auto ensures width scales with height on small screens. */
 const WORD_SIZE: Record<CraftWordKey, string> = {
-  menuiserie: "h-8 sm:h-9 md:h-10 lg:h-11",
-  couture: "h-5 sm:h-6 md:h-7 lg:h-8",
-  electronique: "h-8 sm:h-9 md:h-10 lg:h-11",
-  ceramique: "h-8 sm:h-9 md:h-10 lg:h-11",
+  menuiserie: "h-5 sm:h-6 md:h-7 lg:h-8 xl:h-9 w-auto max-w-full",
+  couture: "h-4 sm:h-5 md:h-6 lg:h-7 xl:h-8 w-auto max-w-full",
+  electronique: "h-6 sm:h-8 md:h-9 lg:h-10 xl:h-11 w-auto max-w-full",
+  ceramique: "h-6 sm:h-8 md:h-9 lg:h-10 xl:h-11 w-auto max-w-full",
 };
 
 interface WordImageProps {
@@ -54,6 +54,7 @@ export function WordImage({ word, alt, className = "" }: WordImageProps) {
       width={180}
       height={60}
       className={`inline-block align-middle object-contain object-center ${WORD_SIZE[word]} ${className}`}
+      sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, (max-width: 1024px) 160px, 180px"
       onError={() => setError(true)}
     />
   );
