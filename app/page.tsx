@@ -25,8 +25,8 @@ export default function LandingPage() {
       <header className="w-full bg-[#FFF8F0]">
         <div className="max-w-6xl mx-auto px-4 pt-6 pb-8 md:px-8 md:pt-10 md:pb-12">
           <div className="max-w-6xl mx-auto">
-            {/* Top: Main text (left 2/3) + Sewing (right, small) */}
-            <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6 mb-6">
+            {/* Top: Main text (left 2/3) + Sewing (right, small) - same layout on all screens */}
+            <div className="flex flex-row items-start gap-4 md:gap-6 mb-6">
               <p className="text-xl md:text-2xl text-[#2d2d2d] leading-relaxed flex-1 md:max-w-[65%]">
                 <Logo className="inline-block align-bottom h-10 md:h-12 w-auto mr-2" />
                 c&apos;est un atelier partagé et multidisciplinaire au coeur de
@@ -55,7 +55,7 @@ export default function LandingPage() {
                   priority
                 />
               </div>
-              <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-6 -mt-0 md:-mt-32">
+              <div className="flex flex-row items-end gap-4 md:gap-6 -mt-0 md:-mt-32">
                 <p className="text-base md:text-lg text-[#2d2d2d] leading-[1.7] md:max-w-xl flex-1">
                   Un lieu pour avoir accès à l&apos;espace, aux{" "}
                   <strong className="font-semibold">machines</strong>, <strong className="font-semibold">outils</strong> et{" "}
