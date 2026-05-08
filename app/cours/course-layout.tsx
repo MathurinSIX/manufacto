@@ -42,7 +42,7 @@ export function CourseGrid({ courses }: { courses: Course[] }) {
 export function CourseFooter() {
   return (
     <footer className="mt-auto border-t border-black/10 bg-white">
-      <div className="mx-auto grid max-w-[1280px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_187px_187px_280px]">
+      <div className="mx-auto grid max-w-[1030px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_150px_150px_220px]">
         <div>
           <p className="mb-20 text-2xl leading-normal">Manufacto</p>
           <Link

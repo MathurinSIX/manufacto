@@ -58,11 +58,11 @@ export function LandingPage() {
     <main className="min-h-screen bg-white text-black">
       <header className="overflow-hidden border-y border-white bg-[#fff8f0]">
         <div className="mx-auto max-w-6xl px-4 pb-8 pt-6 md:px-8 md:pb-12 md:pt-10">
-          <div className="mx-auto max-w-6xl">
-            <div className="mb-6 flex flex-row items-start gap-4 md:gap-6">
-              <p className="flex-1 text-xl leading-relaxed text-[#2d2d2d] md:max-w-[65%] md:text-2xl">
+          <div className="mx-auto max-w-[1040px]">
+            <div className="mb-6 flex flex-col items-center justify-center gap-4 text-center md:flex-row md:items-start md:gap-6 md:text-left">
+              <p className="min-w-0 flex-1 text-xl leading-relaxed text-[#2d2d2d] md:max-w-[65%] md:text-2xl">
                 <Logo className="mr-2 inline-block h-10 w-auto align-bottom md:h-12" />
-                C&apos;est un atelier partagé et multidisciplinaire au coeur de
+                c&apos;est un atelier partagé et multidisciplinaire au coeur de
                 Marseille, ouvert à toutes celles et ceux qui veulent faire de leurs mains.
               </p>
               <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-xl shadow-md ring-1 ring-black/5 md:h-40 md:w-40">
@@ -77,8 +77,8 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="mb-0 flex flex-col gap-4 md:gap-6">
-              <div className="relative aspect-[16/10] max-w-xs overflow-hidden rounded-xl shadow-md ring-1 ring-black/5">
+            <div className="mb-0 flex flex-col items-center gap-4 md:gap-6">
+              <div className="relative aspect-[16/10] w-full max-w-xs overflow-hidden rounded-xl shadow-md ring-1 ring-black/5">
                 <Image
                   src={ASSETS.heroCouture}
                   alt="Mains travaillant le bois avec une règle et un crayon"
@@ -89,8 +89,8 @@ export function LandingPage() {
                 />
               </div>
 
-              <div className="-mt-0 flex flex-row items-end gap-4 md:-mt-32 md:gap-6">
-                <p className="flex-1 text-base leading-[1.7] text-[#2d2d2d] md:max-w-xl md:text-lg">
+              <div className="-mt-0 flex flex-col-reverse items-center justify-center gap-4 text-center md:-mt-32 md:flex-row md:items-end md:gap-6 md:text-left">
+                <p className="min-w-0 flex-1 text-base leading-[1.7] text-[#2d2d2d] md:max-w-xl md:text-lg">
                   Un lieu pour avoir accès à l&apos;<strong>espace</strong>, aux{" "}
                   <strong>machines</strong>, <strong>outils</strong> et{" "}
                   <strong>compétences</strong> pour faire soi-même, créer,
@@ -283,7 +283,7 @@ export function LandingPage() {
           href={INSTAGRAM_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[50px] font-bold leading-none tracking-[-1px] text-[#4a56dd]"
+          className="break-all text-[34px] font-bold leading-none tracking-[-1px] text-[#4a56dd] sm:text-[50px]"
         >
           manufacto.marseille
         </Link>
@@ -331,9 +331,6 @@ export function LandingPage() {
             <div className="space-y-6 text-[#454545]">
               <Link href="/contact" className="block hover:text-black">
                 Contact
-              </Link>
-              <Link href="/activities" className="block hover:text-black">
-                Calendrier
               </Link>
               <Link href="/account" className="block hover:text-black">
                 Mon compte
