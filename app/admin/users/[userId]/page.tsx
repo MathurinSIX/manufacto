@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { Navigation } from "@/components/navigation";
 import { redirect } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
@@ -395,9 +394,6 @@ export default async function UserAccountPage({
 }) {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Suspense fallback={<nav className="w-full h-16" />}>
-        <Navigation />
-      </Suspense>
       <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
         <UserAccountContent params={params} />
       </Suspense>

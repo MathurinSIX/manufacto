@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
+import { Navigation } from "@/components/navigation";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -40,6 +41,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Navigation />
           <div className="flex-1 flex flex-col">{children}</div>
         </ThemeProvider>
       </body>

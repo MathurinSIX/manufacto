@@ -1,30 +1,42 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
-import { NavLinks } from "@/components/nav-links";
-import { CreditsDisplay } from "@/components/credits-display";
-import { AdminButton } from "@/components/admin-button";
+import { NAV_LINKS } from "@/lib/nav-links";
+
+const ASSETS = {
+  logoMark: "/assets/figma-landing/logo-mark.png",
+  accountIcon: "/assets/figma-landing/account-icon.png",
+} as const;
 
 export function Navigation() {
   return (
-    <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-      <div className="w-full max-w-7xl flex items-center justify-between p-3 px-5 text-sm">
-        <Link
-          href={"/"}
-          className="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
-        >
-          Manufacto
+    <nav className="w-full bg-white">
+      <div className="mx-auto flex h-[105px] max-w-[1320px] items-center justify-between px-5 text-black md:px-10">
+        <Link href="/" className="relative h-[57px] w-[190px] shrink-0">
+          <Image
+            src={ASSETS.logoMark}
+            alt="Manufacto"
+            fill
+            className="object-contain object-left"
+            priority
+            sizes="190px"
+          />
         </Link>
-        <div className="absolute left-1/2 transform -translate-x-1/2">
-          <NavLinks />
+
+        <div className="hidden items-center gap-8 text-center text-base md:flex">
+          {NAV_LINKS.map((item) => (
+            <Link key={item.label} href={item.href} className="leading-normal hover:text-[#4a56dd]">
+              {item.label}
+            </Link>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Suspense>
-            <AdminButton />
-          </Suspense>
-          <Suspense>
-            <CreditsDisplay />
-          </Suspense>
-        </div>
+
+        <Link
+          href="/account"
+          className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
+        >
+          <span className="hidden sm:inline">Mon compte</span>
+          <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
+        </Link>
       </div>
     </nav>
   );

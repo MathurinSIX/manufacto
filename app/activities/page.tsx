@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { unstable_noStore } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { Navigation } from "@/components/navigation";
 import {
   Card,
   CardContent,
@@ -104,7 +103,6 @@ async function ActivitiesList() {
 export default async function ActivitiesPage() {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
       <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
       <div className="w-full max-w-6xl space-y-10">
         <div className="text-center space-y-3">

@@ -3,7 +3,13 @@ import Link from "next/link";
 import { unstable_noStore } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { CourseFooter, CourseGrid, CourseNav } from "../course-layout";
+import {
+  MARKETING_LINK_CLASS,
+  MarketingBody,
+  MarketingPageContainer,
+  MarketingSectionTitle,
+} from "@/components/marketing";
+import { CourseFooter } from "../course-layout";
 import { formatPrice, getCourseBySlug, getCoursesFromDb } from "../course-data";
 
 type CourseDetailPageProps = {
@@ -30,14 +36,10 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
   const { slug } = await params;
   const courses = await getCourses();
   const course = getCourseBySlug(slug, courses);
-  const relatedCourses = courses.filter((item) => item.slug !== course.slug);
-  const visibleRelated = relatedCourses.length >= 6 ? relatedCourses : courses;
 
   return (
     <main className="flex min-h-screen flex-col bg-white text-black">
-      <CourseNav />
-
-      <div className="mx-auto w-full max-w-[1280px] px-6 pb-[170px] pt-[78px] md:px-10">
+      <MarketingPageContainer className="pb-[170px]">
         <section className="grid gap-10 lg:grid-cols-[594px_1fr] lg:gap-[82px]">
           <div>
             <div className="relative h-[332px] w-full overflow-hidden rounded-[6px] bg-[#d9d9d9] md:h-[495px]">
@@ -52,19 +54,19 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
             </div>
 
             <div className="mt-14 max-w-[560px]">
-              <h2 className="text-[30px] font-bold leading-none tracking-[-0.04em] md:text-[36px]">
-                prochaines dates disponibles
-              </h2>
+              <MarketingSectionTitle>
+                Prochaines dates disponibles
+              </MarketingSectionTitle>
               <div className="mt-9 space-y-7">
                 {course.sessions.map((session, index) => (
                   <div
                     key={`${session}-${index}`}
-                    className="flex items-center justify-between gap-4 text-[13px] font-medium leading-none md:text-[14px]"
+                    className="flex items-center justify-between gap-4 text-xl leading-normal text-black/75"
                   >
                     <p>{session}</p>
                     <Link
                       href="/activities"
-                      className="text-[#4a56dd] underline underline-offset-2"
+                      className={MARKETING_LINK_CLASS}
                     >
                       réserver
                     </Link>
@@ -75,57 +77,50 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
           </div>
 
           <article className="max-w-[470px] pt-2">
-            <h1 className="text-[38px] font-bold leading-[0.98] tracking-[-0.04em] md:text-[55px]">
+            <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
               {course.title}
             </h1>
-            <p className="mt-8 text-[17px] font-bold leading-none">
+            <p className="mt-8 text-2xl font-bold leading-normal">
               {formatPrice(course.price)}
               <br />
-              {course.credits ?? 10} crédits*
+              / {course.credits ?? 10} crédits*
             </p>
-            <p className="mt-8 max-w-[404px] text-[13px] font-medium leading-[1.35] text-black/45">
+            <p className="mt-8 max-w-[404px] text-xl leading-normal text-black/75">
               *Si vous avez déjà un pass avec des crédits, vous pouvez choisir,
               au moment du règlement, de régler avec vos crédits directement.
             </p>
 
-            <div className="mt-9 space-y-7 text-[13px] leading-[1.35] text-black/50">
+            <MarketingBody className="mt-9 text-black/75">
               <section>
-                <h2 className="mb-4 font-medium text-[#4a56dd] underline underline-offset-2">
+                <h2 className={MARKETING_LINK_CLASS}>
                   En résumé
                 </h2>
-                <p className="text-black/70">{course.description}</p>
+                <p className="mt-7 text-black/70">{course.description}</p>
               </section>
 
               <section>
-                <h2 className="mb-4 font-medium text-[#4a56dd] underline underline-offset-2">
+                <h2 className={MARKETING_LINK_CLASS}>
                   Contenu &amp; Objectifs
                 </h2>
-                <div className="space-y-5">
+                <div className="mt-7 space-y-7">
                   <p>
-                    Subheading that sets up context, shares more info about the
-                    website, or generally gets people psyched to keep scrolling.
-                    Subheading that sets up context, shares more info about the
-                    website, or generally gets people psyched to keep scrolling.
+                    Cet atelier vous accompagne dans la découverte des gestes,
+                    des outils et des méthodes nécessaires pour progresser en
+                    sécurité. Vous repartez avec des repères concrets pour
+                    reproduire la technique et l&apos;adapter à vos projets.
                   </p>
                   <p>
-                    Subheading that sets up context, shares more info about the
-                    website, or generally gets people psyched to keep scrolling.
-                    Subheading that sets up context, shares more info about the
-                    website, or generally gets people psyched to keep scrolling.
+                    Le contenu alterne démonstrations, pratique guidée et temps
+                    d&apos;échange. L&apos;objectif est de comprendre les étapes clés,
+                    d&apos;identifier les bons gestes, et de gagner en autonomie dans
+                    l&apos;univers concerné.
                   </p>
                 </div>
               </section>
-            </div>
+            </MarketingBody>
           </article>
         </section>
-
-        <section className="mt-[118px]">
-          <h2 className="mb-9 text-[30px] font-bold leading-none tracking-[-0.04em] md:text-[36px]">
-            à découvrir autour du travail du bois
-          </h2>
-          <CourseGrid courses={visibleRelated.slice(0, 6)} />
-        </section>
-      </div>
+      </MarketingPageContainer>
 
       <CourseFooter />
     </main>

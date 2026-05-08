@@ -2,10 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { InstagramIcon } from "@/components/instagram-icon";
 import { Logo } from "@/components/logo";
+import { VisitAtelierCallout } from "@/components/marketing";
 
 const ASSETS = {
-  logoMark: "/assets/figma-landing/logo-mark.png",
-  accountIcon: "/assets/figma-landing/account-icon.png",
   heroWood: "/assets/pictures/c684ad317993704862dcfcc1d97400638b639f66.png",
   heroCouture: "/assets/pictures/63ae04e0666801e448100c2c15e0f3589d90e665.png",
   heroElec: "/assets/pictures/120e19b8f3497733331fe206ad3cebf6cc80d967.png",
@@ -18,13 +17,6 @@ const ASSETS = {
 } as const;
 
 const INSTAGRAM_URL = "https://www.instagram.com/manufacto.marseille/";
-
-const navItems = [
-  { href: "/atelier", label: "L'Atelier" },
-  { href: "/cours", label: "Cours" },
-  { href: "/pratique-libre", label: "Pratique libre" },
-  { href: "/contact", label: "Contact" },
-];
 
 const wordImages = [
   {
@@ -64,37 +56,6 @@ function Placeholder({ className = "" }: { className?: string }) {
 export function LandingPage() {
   return (
     <main className="min-h-screen bg-white text-black">
-      <nav className="w-full bg-white">
-        <div className="mx-auto flex h-[105px] max-w-[1320px] items-center justify-between px-5 md:px-10">
-          <Link href="/" className="relative h-[57px] w-[190px] shrink-0">
-            <Image
-              src={ASSETS.logoMark}
-              alt="Manufacto"
-              fill
-              className="object-contain object-left"
-              priority
-              sizes="190px"
-            />
-          </Link>
-
-          <div className="hidden items-center gap-8 text-center text-base md:flex">
-            {navItems.map((item) => (
-              <Link key={item.label} href={item.href} className="leading-normal hover:text-[#4a56dd]">
-                {item.label}
-              </Link>
-            ))}
-          </div>
-
-          <Link
-            href="/account"
-            className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
-          >
-            <span className="hidden sm:inline">Mon compte</span>
-            <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
-          </Link>
-        </div>
-      </nav>
-
       <header className="overflow-hidden border-y border-white bg-[#fff8f0]">
         <div className="mx-auto max-w-6xl px-4 pb-8 pt-6 md:px-8 md:pb-12 md:pt-10">
           <div className="mx-auto max-w-6xl">
@@ -240,27 +201,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-[#fff8f0]">
-        <div className="mx-auto grid max-w-[1274px] gap-6 px-5 py-9 md:grid-cols-[286px_1fr_161px] md:items-center">
-          <h2 className="text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
-            Venez découvrir <br />
-            l&apos;atelier
-          </h2>
-          <div className="text-xl leading-normal text-black/75">
-            <p>
-              Tous les mardi soir, de 18h30 à 19h, Martin, Nafissa, Cyprien et
-              Delphine vous présenteront le lieu et son fonctionnement
-            </p>
-            <p>C&apos;est gratuit, sur inscription.</p>
-          </div>
-          <Link
-            href="/activities"
-            className="text-2xl font-semibold text-[#4a56dd] underline underline-offset-2 md:text-right"
-          >
-            Réserver
-          </Link>
-        </div>
-      </section>
+      <VisitAtelierCallout />
 
       <section className="mx-auto max-w-[1274px] px-5 py-20">
         <h2 className="mb-8 text-[30px] font-semibold leading-tight text-black/80">

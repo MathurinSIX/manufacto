@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { Navigation } from "@/components/navigation";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { unstable_noStore } from "next/cache";
@@ -55,7 +54,6 @@ async function AdminContent() {
 export default function AdminPage() {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
       <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
         <AdminContent />
       </Suspense>
