@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/sheet";
 import { NAV_LINKS } from "@/lib/nav-links";
 
-export function MobileNavDrawer() {
+type MobileNavDrawerProps = {
+  showAdminLink?: boolean;
+};
+
+export function MobileNavDrawer({ showAdminLink = false }: MobileNavDrawerProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -35,6 +39,16 @@ export function MobileNavDrawer() {
                 </Link>
               </SheetClose>
             ))}
+            {showAdminLink ? (
+              <SheetClose asChild>
+                <Link
+                  href="/admin"
+                  className="block text-lg font-semibold text-[#4a56dd] transition-colors hover:text-[#3540bf]"
+                >
+                  Admin
+                </Link>
+              </SheetClose>
+            ) : null}
           </nav>
         </div>
       </SheetContent>

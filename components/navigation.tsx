@@ -2,13 +2,27 @@ import Image from "next/image";
 import Link from "next/link";
 import { NAV_LINKS } from "@/lib/nav-links";
 import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
+import { createClient } from "@/lib/supabase/server";
+import { unstable_noStore } from "next/cache";
 
 const ASSETS = {
   logoMark: "/assets/figma-landing/logo-mark.png",
   accountIcon: "/assets/figma-landing/account-icon.png",
 } as const;
 
-export function Navigation() {
+type ClaimsWithAppMetadata = {
+  app_metadata?: {
+    role?: string;
+  };
+};
+
+export async function Navigation() {
+  unstable_noStore();
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims as ClaimsWithAppMetadata | undefined;
+  const isAdmin = claims?.app_metadata?.role === "admin";
+
   return (
     <nav className="w-full bg-white">
       <div className="mx-auto flex h-[105px] max-w-[1320px] items-center justify-between px-5 text-black md:px-10">
@@ -29,10 +43,15 @@ export function Navigation() {
               {item.label}
             </Link>
           ))}
+          {isAdmin ? (
+            <Link href="/admin" className="leading-normal font-semibold text-[#4a56dd] hover:text-[#3540bf]">
+              Admin
+            </Link>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
-          <MobileNavDrawer />
+          <MobileNavDrawer showAdminLink={isAdmin} />
           <Link
             href="/account"
             className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
