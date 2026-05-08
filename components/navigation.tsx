@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { NAV_LINKS } from "@/lib/nav-links";
+import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
 
 const ASSETS = {
   logoMark: "/assets/figma-landing/logo-mark.png",
@@ -30,13 +31,16 @@ export function Navigation() {
           ))}
         </div>
 
-        <Link
-          href="/account"
-          className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
-        >
-          <span className="hidden sm:inline">Mon compte</span>
-          <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
-        </Link>
+        <div className="flex items-center gap-2">
+          <MobileNavDrawer />
+          <Link
+            href="/account"
+            className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
+          >
+            <span className="hidden sm:inline">Mon compte</span>
+            <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
+          </Link>
+        </div>
       </div>
     </nav>
   );
