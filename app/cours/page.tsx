@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { unstable_noStore } from "next/cache";
+import { Suspense } from "react";
 import {
   MARKETING_LINK_CLASS,
   MarketingPageContainer,
@@ -55,10 +56,12 @@ async function CoursContent() {
   );
 }
 
-export default async function CoursPage() {
+export default function CoursPage() {
   return (
     <main className="flex min-h-screen flex-col bg-white text-black">
-      <CoursContent />
+      <Suspense fallback={null}>
+        <CoursContent />
+      </Suspense>
       <CourseFooter />
     </main>
   );

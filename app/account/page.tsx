@@ -99,6 +99,16 @@ type CreditSessionRegistration = {
   session?: Session | Session[] | null;
 };
 
+function getSession(
+  session: Session | Session[] | null | undefined,
+): Session | null {
+  if (Array.isArray(session)) {
+    return session[0] ?? null;
+  }
+
+  return session ?? null;
+}
+
 async function AccountContent() {
   unstable_noStore();
   const supabase = await createClient();
@@ -208,13 +218,11 @@ async function AccountContent() {
   const upcomingRegistrations =
     sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
-      let session = Array.isArray(reg.session) 
-        ? reg.session[0] 
-        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      let session: Session | null = getSession(reg.session);
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
-        session = sessionsMap[reg.session_id];
+        session = sessionsMap[reg.session_id] ?? null;
       }
       
       if (!session || !session.start_ts) {
@@ -233,13 +241,11 @@ async function AccountContent() {
   const pastRegistrations =
     sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
-      let session = Array.isArray(reg.session) 
-        ? reg.session[0] 
-        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      let session: Session | null = getSession(reg.session);
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
-        session = sessionsMap[reg.session_id];
+        session = sessionsMap[reg.session_id] ?? null;
       }
       
       if (!session || !session.start_ts) {
