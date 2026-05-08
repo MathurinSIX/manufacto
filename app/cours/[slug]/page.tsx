@@ -10,7 +10,6 @@ import {
   MarketingPageContainer,
   MarketingSectionTitle,
 } from "@/components/marketing";
-import { CourseFooter } from "../course-layout";
 import { formatPrice, getCourseBySlug, getCoursesFromDb } from "../course-data";
 
 type CourseDetailPageProps = {
@@ -131,7 +130,6 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       <Suspense fallback={null}>
         <CourseDetailContent params={params} />
       </Suspense>
-      <CourseFooter />
     </main>
   );
 }

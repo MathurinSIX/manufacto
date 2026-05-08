@@ -7,7 +7,6 @@ import {
   MarketingPageHeader,
   VisitAtelierCallout,
 } from "@/components/marketing";
-import { CourseFooter } from "@/app/cours/course-layout";
 
 const ASSETS = {
   logoMark: "/assets/figma-landing/logo-mark.png",
@@ -68,8 +67,6 @@ export default function ContactPage() {
         </MarketingPageContainer>
 
         <VisitAtelierCallout />
-
-        <CourseFooter />
       </div>
     </main>
   );

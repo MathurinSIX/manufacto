@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { InstagramIcon } from "@/components/instagram-icon";
 import {
   MARKETING_LINK_CLASS,
   MarketingBody,
@@ -19,8 +18,6 @@ const ASSETS = {
   starBlue: "/assets/figma-landing/star-blue.png",
   starOrange: "/assets/figma-landing/star-orange.png",
 } as const;
-
-const INSTAGRAM_URL = "https://www.instagram.com/manufacto.marseille/";
 
 const universes = [
   {
@@ -582,61 +579,6 @@ export default function AtelierPage() {
             </div>
           </div>
         </section>
-
-        <footer className="mt-8 w-full border-t border-black/10 bg-white">
-          <div className="mx-auto grid max-w-[1030px] gap-10 px-5 py-12 md:grid-cols-[1fr_150px_150px_220px]">
-            <div>
-              <p className="mb-12 text-2xl leading-normal">Manufacto</p>
-              <Link
-                href={INSTAGRAM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-10 w-10 items-center justify-center rounded"
-                aria-label="Instagram"
-              >
-                <InstagramIcon className="h-6 w-6" />
-              </Link>
-            </div>
-
-            <div className="space-y-6 text-base font-medium leading-normal text-[#454545]">
-              <Link href="/atelier" className="block hover:text-black">
-                L&apos;Atelier
-              </Link>
-              <Link href="/cours" className="block hover:text-black">
-                Cours
-              </Link>
-              <Link href="/pratique-libre" className="block hover:text-black">
-                Pratique libre
-              </Link>
-            </div>
-
-            <div className="space-y-6 text-base font-medium leading-normal text-[#454545]">
-              <Link href="/contact" className="block hover:text-black">
-                Contact
-              </Link>
-              <Link href="/activities" className="block hover:text-black">
-                Calendrier
-              </Link>
-              <Link href="/account" className="block hover:text-black">
-                Mon compte
-              </Link>
-            </div>
-
-            <div className="space-y-3 text-base font-medium leading-normal">
-              <p>Contact</p>
-              <div className="space-y-1 text-[#454545]">
-                <a href="tel:+33607080910" className="block hover:text-black">
-                  06 07 08 09 10
-                </a>
-                <a href="mailto:contact@manufacto-marseille.com" className="block hover:text-black">
-                  contact@manufacto-marseille.com
-                </a>
-                <p>8 rue de Locarno</p>
-                <p>13005 Marseille</p>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
     </main>
   );

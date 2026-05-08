@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
+import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
 import { PwaRegistration } from "@/components/pwa-registration";
 import "./globals.css";
@@ -66,6 +67,7 @@ export default function RootLayout({
             <Navigation />
           </Suspense>
           <div className="flex-1 flex flex-col">{children}</div>
+          <Footer />
           <PwaRegistration />
         </ThemeProvider>
       </body>

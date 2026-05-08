@@ -5,7 +5,6 @@ import {
   MarketingSectionTitle,
 } from "@/components/marketing";
 import { OfferCardTabs } from "@/components/offer-card-tabs";
-import { CourseFooter } from "../cours/course-layout";
 
 const stepCards = [
   {
@@ -147,6 +146,27 @@ function Placeholder({ className = "" }: { className?: string }) {
   return <div className={`bg-[#d9d9d9] ${className}`} />;
 }
 
+function AccordionChevron({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex h-8 w-8 shrink-0 items-center justify-center text-black/55 ${className}`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-6 w-6 transition-transform group-open:rotate-180"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </span>
+  );
+}
+
 function PratiqueLibreContent() {
   return (
     <MarketingPageContainer className="pb-20 md:pb-[140px]">
@@ -171,14 +191,11 @@ function PratiqueLibreContent() {
           {disciplineRows.map(([label, color]) => (
             <details
               key={label}
-              name="practice-universe"
               className="group border-b border-black/45"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-[30px] font-bold leading-tight [&::-webkit-details-marker]:hidden">
                 <span className={color}>{label}</span>
-                <span className="text-3xl font-light leading-none text-black/55 transition group-open:rotate-180">
-                  ⌄
-                </span>
+                <AccordionChevron />
               </summary>
               {label === "menuiserie" ? (
                 <div className="pb-10 pt-8">
@@ -512,7 +529,6 @@ export default function PratiqueLibrePage() {
   return (
     <main className="flex min-h-screen flex-col bg-white text-black">
       <PratiqueLibreContent />
-      <CourseFooter />
     </main>
   );
 }

@@ -7,7 +7,7 @@ import {
   MarketingPageHeader,
   MarketingSectionTitle,
 } from "@/components/marketing";
-import { CourseFooter, CourseGrid } from "./course-layout";
+import { CourseGrid } from "./course-layout";
 import { getCoursesFromDb } from "./course-data";
 
 async function CoursContent() {
@@ -62,7 +62,6 @@ export default function CoursPage() {
       <Suspense fallback={null}>
         <CoursContent />
       </Suspense>
-      <CourseFooter />
     </main>
   );
 }

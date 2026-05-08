@@ -361,29 +361,29 @@ async function AccountContent() {
     <div className="flex-1 w-full bg-[#fff8f0] text-black">
       <div className="mx-auto w-full max-w-[1274px] px-5 pb-20 pt-16 md:pb-[140px] md:pt-[86px]">
         <div className="mb-10 grid gap-6 md:mb-14 md:grid-cols-[1fr_auto] md:items-end">
-          <div className="max-w-[760px]">
+          <div className="max-w-[860px]">
             <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#f56800]">
               Espace membre
             </p>
             <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
               Mon compte
             </h1>
-            <p className="mt-5 text-xl leading-normal text-black/75">
+            <p className="mt-5 text-xl leading-normal text-black/75 md:text-[22px]">
               Gérez vos réservations, suivez vos crédits et retrouvez votre
               historique d&apos;atelier.
             </p>
+            <div className="mt-6">
+              <LogoutButton className="shadow-sm" />
+            </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
-            <div className="rounded-[19px] bg-white px-6 py-4 shadow-sm ring-1 ring-black/10">
+            <div className="rounded-[19px] bg-white px-8 py-5 shadow-sm ring-1 ring-black/10">
               <span className="block text-sm font-medium uppercase tracking-[0.14em] text-black/55">
                 Crédits
               </span>
-              <span className="mt-1 block text-[30px] font-bold leading-none text-[#4a56dd]">
+              <span className="mt-2 block text-[38px] font-bold leading-none text-[#4a56dd]">
                 {Math.round(totalCredits)}
               </span>
-            </div>
-            <div className="flex items-end">
-              <LogoutButton className="h-full rounded-[19px] px-6 py-4 text-base font-semibold shadow-sm" />
             </div>
           </div>
         </div>
