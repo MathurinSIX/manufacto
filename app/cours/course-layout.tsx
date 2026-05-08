@@ -42,7 +42,7 @@ export function CourseGrid({ courses }: { courses: Course[] }) {
 export function CourseFooter() {
   return (
     <footer className="mt-auto border-t border-black/10 bg-white">
-      <div className="mx-auto grid max-w-[1280px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_187px_187px_187px]">
+      <div className="mx-auto grid max-w-[1280px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_187px_187px_280px]">
         <div>
           <p className="mb-20 text-2xl leading-normal">Manufacto</p>
           <Link
@@ -85,7 +85,6 @@ export function CourseFooter() {
         </div>
 
         <div className="space-y-3 font-medium leading-normal">
-          <p className="py-3">Contact</p>
           <div className="space-y-1 text-[#454545]">
             <a href="tel:+33607080910" className="block hover:text-black">
               06 07 08 09 10
