@@ -48,22 +48,42 @@ export function AdminTabsWrapper() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="users">Utilisateurs</TabsTrigger>
-        <TabsTrigger value="activities">Activités</TabsTrigger>
-        <TabsTrigger value="sessions">Sessions</TabsTrigger>
-        <TabsTrigger value="add-sessions">Ajouter des sessions</TabsTrigger>
+      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-4">
+        <TabsTrigger
+          value="users"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          Utilisateurs
+        </TabsTrigger>
+        <TabsTrigger
+          value="activities"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          Activités
+        </TabsTrigger>
+        <TabsTrigger
+          value="sessions"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          Sessions
+        </TabsTrigger>
+        <TabsTrigger
+          value="add-sessions"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          Ajouter des sessions
+        </TabsTrigger>
       </TabsList>
-      <TabsContent value="users" className="mt-4">
+      <TabsContent value="users" className="mt-6">
         <AdminUsersTab />
       </TabsContent>
-      <TabsContent value="activities" className="mt-4">
+      <TabsContent value="activities" className="mt-6">
         <AdminActivitiesManagementTab />
       </TabsContent>
-      <TabsContent value="sessions" className="mt-4">
+      <TabsContent value="sessions" className="mt-6">
         <AdminActivitiesTab />
       </TabsContent>
-      <TabsContent value="add-sessions" className="mt-4">
+      <TabsContent value="add-sessions" className="mt-6">
         <AdminAddActivitiesTab />
       </TabsContent>
     </Tabs>
