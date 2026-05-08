@@ -2,21 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
+type UserClaimsWithAppMetadata = {
+  app_metadata?: {
+    role?: string;
+  };
+};
+
 export async function updateSession(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // TEMPORARY: Block all pages except landing and /home - redirect everything else to /
-  if (pathname !== "/" && pathname !== "/home") {
-    if (
-      !pathname.startsWith("/_next") &&
-      !pathname.startsWith("/api") &&
-      !pathname.startsWith("/assets") &&
-      !pathname.includes(".")
-    ) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-  }
-
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -82,7 +74,7 @@ export async function updateSession(request: NextRequest) {
     }
     // Check if user is admin (app_metadata.role === 'admin')
     // Note: app_metadata is available in the JWT claims
-    const userRole = (user as any)?.app_metadata?.role;
+    const userRole = (user as UserClaimsWithAppMetadata)?.app_metadata?.role;
     if (userRole !== "admin") {
       // not an admin, redirect to account page
       const url = request.nextUrl.clone();
