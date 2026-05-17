@@ -36,6 +36,7 @@ type RegistrationStatus = {
 
 type CreditSessionRegistration = {
   id: string;
+  credit_id: string;
   session_id: string | null;
   payment_type: string | null;
   reserved_start_ts?: string | null;
@@ -320,6 +321,7 @@ async function UserAccountContent({
 
           creditSessionMap[regStatus.credit_id] = {
             ...registration,
+            credit_id: regStatus.credit_id,
             session: session,
             status: {
               status: regStatus.status,
