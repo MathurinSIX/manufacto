@@ -1,71 +1,87 @@
 import { createClient } from "@/lib/supabase/server";
-import { MonthlyCalendar } from "./monthly-calendar";
+import {
+  MonthlyCalendar,
+  type CalendarSessionItem,
+} from "./monthly-calendar";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
-// Helper function to get current date/time in Paris timezone
-function getNowInParis(): Date {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
+function parisYearMonthDay(d: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: PARIS_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(now);
-  const year = parseInt(parts.find(p => p.type === "year")!.value);
-  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
-  const day = parseInt(parts.find(p => p.type === "day")!.value);
-  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
-  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
-  const second = parseInt(parts.find(p => p.type === "second")!.value);
-  return new Date(Date.UTC(year, month, day, hour, minute, second));
+  }).formatToParts(d);
+  const year = Number(parts.find((p) => p.type === "year")!.value);
+  const month = Number(parts.find((p) => p.type === "month")!.value);
+  const day = Number(parts.find((p) => p.type === "day")!.value);
+  return { year, month, day };
 }
 
+/** Anchor for calendar month (UTC noon 1st) from Paris calendar year/month. */
+function parisMonthAnchorIso(year: number, month1Based: number) {
+  return new Date(
+    Date.UTC(year, month1Based - 1, 1, 12, 0, 0),
+  ).toISOString();
+}
+
+type SessionRow = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  activity_id: string;
+  activity:
+    | { id: string; name: string; type: string | null; deleted_at: string | null }
+    | { id: string; name: string; type: string | null; deleted_at: string | null }[]
+    | null;
+};
+
+function activityFromRow(row: SessionRow) {
+  const a = row.activity;
+  if (Array.isArray(a)) return a[0] ?? null;
+  return a;
+}
+
+/** Course sessions in a date range, grouped by Paris calendar day. */
 export async function MonthlyActivitiesCalendar() {
   const supabase = await createClient();
-  const now = getNowInParis();
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59));
+  const now = new Date();
+  const { year: py, month: pm } = parisYearMonthDay(now);
 
-  // Fetch all sessions for the current month
+  const rangeStart = new Date(Date.now() - 45 * 86400000);
+  const rangeEnd = new Date(Date.now() + 150 * 86400000);
+
   const { data: sessions, error: sessionsError } = await supabase
     .from("session")
-    .select("id, start_ts, end_ts, activity_id")
-    .gte("start_ts", startOfMonth.toISOString())
-    .lte("start_ts", endOfMonth.toISOString())
+    .select(
+      `
+      id,
+      start_ts,
+      end_ts,
+      activity_id,
+      activity:activity_id (
+        id,
+        name,
+        type,
+        deleted_at
+      )
+    `,
+    )
+    .gte("start_ts", rangeStart.toISOString())
+    .lte("start_ts", rangeEnd.toISOString())
     .order("start_ts", { ascending: true });
 
   if (sessionsError) {
     console.error("Error fetching sessions:", sessionsError);
   }
 
-  // Fetch activity names
-  const activityIds = sessions
-    ?.map((s) => s.activity_id)
-    .filter((id): id is string => id !== null) || [];
-  
-  let activities = null;
-  if (activityIds.length > 0) {
-    const { data } = await supabase
-      .from("activity")
-      .select("id, name")
-      .in("id", activityIds);
-    activities = data;
-  }
+  const rows = (sessions ?? []) as SessionRow[];
+  const courseSessions = rows.filter((row) => {
+    const act = activityFromRow(row);
+    return !act?.deleted_at && act?.type === "cours";
+  });
 
-  const activityMap = new Map<string, string>(
-    activities?.map((a) => [a.id, a.name] as [string, string]) || []
-  );
-
-  // Group sessions by date
-  const sessionsByDate = new Map<string, Array<{ id: string; start_ts: string; end_ts: string; activityName: string }>>();
-  
-  // Helper to format date key in Paris timezone
   const dayKeyFormatter = new Intl.DateTimeFormat("fr-CA", {
     year: "numeric",
     month: "2-digit",
@@ -73,22 +89,37 @@ export async function MonthlyActivitiesCalendar() {
     timeZone: PARIS_TIMEZONE,
   });
 
-  sessions?.forEach((session) => {
-    const date = new Date(session.start_ts);
-    const dateKey = dayKeyFormatter.format(date);
-    const activityName = activityMap.get(session.activity_id) || "Activité";
-    
-    if (!sessionsByDate.has(dateKey)) {
-      sessionsByDate.set(dateKey, []);
-    }
-    sessionsByDate.get(dateKey)!.push({
+  const sessionsByDate: Record<string, CalendarSessionItem[]> = {};
+
+  for (const session of courseSessions) {
+    const act = activityFromRow(session);
+    const dateKey = dayKeyFormatter.format(new Date(session.start_ts));
+    const activityName = act?.name ?? "Cours";
+    const item: CalendarSessionItem = {
       id: session.id,
+      activityId: session.activity_id,
       start_ts: session.start_ts,
       end_ts: session.end_ts,
       activityName,
-    });
-  });
+    };
+    if (!sessionsByDate[dateKey]) {
+      sessionsByDate[dateKey] = [];
+    }
+    sessionsByDate[dateKey].push(item);
+  }
 
-  return <MonthlyCalendar sessionsByDate={sessionsByDate} currentMonth={now} />;
+  for (const key of Object.keys(sessionsByDate)) {
+    sessionsByDate[key].sort((a, b) =>
+      a.start_ts.localeCompare(b.start_ts),
+    );
+  }
+
+  const currentMonthIso = parisMonthAnchorIso(py, pm);
+
+  return (
+    <MonthlyCalendar
+      sessionsByDate={sessionsByDate}
+      currentMonthIso={currentMonthIso}
+    />
+  );
 }
-

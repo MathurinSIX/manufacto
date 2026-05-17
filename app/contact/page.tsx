@@ -17,7 +17,7 @@ export default function ContactPage() {
     <main className="min-h-screen bg-white text-black">
       <div className="flex min-h-screen flex-col">
         <MarketingPageContainer className="pb-24 md:pb-[140px]">
-          <MarketingPageHeader title="Contactez-nous" className="max-w-[930px]">
+          <MarketingPageHeader title="contactez-nous" className="max-w-[930px]">
             <p>
               Vous souhaitez avoir plus d&apos;information ou vous avez une question ?<br />
               Nous sommes là pour vous répondre, n&apos;hésitez pas à passer nous voir,
@@ -57,9 +57,6 @@ export default function ContactPage() {
                   className="block hover:text-black"
                 >
                   contact@manufacto-marseille.com
-                </Link>
-                <Link href="tel:+33607080910" className="block hover:text-black">
-                  06 07 08 09 10
                 </Link>
               </MarketingBody>
             </address>

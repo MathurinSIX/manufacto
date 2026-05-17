@@ -13,10 +13,10 @@ import {
 import { NAV_LINKS } from "@/lib/nav-links";
 
 type MobileNavDrawerProps = {
-  showAdminLink?: boolean;
+  showadminLink?: boolean;
 };
 
-export function MobileNavDrawer({ showAdminLink = false }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ showadminLink = false }: MobileNavDrawerProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -27,25 +27,41 @@ export function MobileNavDrawer({ showAdminLink = false }: MobileNavDrawerProps)
       </SheetTrigger>
       <SheetContent side="right" className="w-72 max-w-[80vw] p-6">
         <div className="flex flex-col h-full">
-          <div className="mb-6 text-lg font-semibold">Menu</div>
+          <div className="mb-6 text-lg font-semibold">menu</div>
           <nav className="flex-1 space-y-4">
             {NAV_LINKS.map((link) => (
-              <SheetClose asChild key={link.href}>
-                <Link
-                  href={link.href}
-                  className="block text-lg font-medium text-foreground/80 transition-colors hover:text-foreground"
-                >
-                  {link.label}
-                </Link>
-              </SheetClose>
+              <div key={link.href}>
+                <SheetClose asChild>
+                  <Link
+                    href={link.href}
+                    className="block text-lg font-medium text-foreground/80 transition-colors hover:text-foreground"
+                  >
+                    {link.label}
+                  </Link>
+                </SheetClose>
+                {link.subLinks?.length ? (
+                  <div className="mt-2 space-y-2 pl-4">
+                    {link.subLinks.map((subLink) => (
+                      <SheetClose asChild key={subLink.href}>
+                        <Link
+                          href={subLink.href}
+                          className="block text-sm text-foreground/55 transition-colors hover:text-foreground"
+                        >
+                          {subLink.label}
+                        </Link>
+                      </SheetClose>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
-            {showAdminLink ? (
+            {showadminLink ? (
               <SheetClose asChild>
                 <Link
                   href="/admin"
                   className="block text-lg font-semibold text-[#4a56dd] transition-colors hover:text-[#3540bf]"
                 >
-                  Admin
+                  admin
                 </Link>
               </SheetClose>
             ) : null}

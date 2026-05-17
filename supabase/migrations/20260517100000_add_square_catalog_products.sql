@@ -1,0 +1,3 @@
+-- No-op kept for migration history compatibility.
+-- Internal Square products are defined in code in lib/square/products.ts.
+-- The database only stores key-value mappings in square_product_mapping.

@@ -21,57 +21,22 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  addParisCalendarDays,
+  formatParisDate,
+  formatParisTime,
+  getParisMondayDate,
+  getParisWeekdayIndex,
+  PARIS_TIMEZONE,
+  parseParisDateTime,
+} from "@/lib/paris-time";
 import { cn } from "@/lib/utils";
-
-const PARIS_TIMEZONE = "Europe/Paris";
-
-// Helper function to get current date/time in Paris timezone
-function getNowInParis(): Date {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: PARIS_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(now);
-  const year = parseInt(parts.find(p => p.type === "year")!.value);
-  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
-  const day = parseInt(parts.find(p => p.type === "day")!.value);
-  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
-  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
-  const second = parseInt(parts.find(p => p.type === "second")!.value);
-  return new Date(year, month, day, hour, minute, second);
-}
-
-// Helper function to get Monday of a week in Paris timezone
-function getMondayInParis(date: Date): Date {
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: PARIS_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(date);
-  const year = parseInt(parts.find(p => p.type === "year")!.value);
-  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
-  const day = parseInt(parts.find(p => p.type === "day")!.value);
-  const d = new Date(year, month, day);
-  const dayOfWeek = d.getDay();
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  d.setDate(d.getDate() - daysFromMonday);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 type Activity = {
   id: string;
   name: string;
   nb_credits: number | null;
+  type: string | null;
 };
 
 type PreviewSession = {
@@ -89,19 +54,11 @@ interface WeekCalendarPreviewProps {
 function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps) {
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
-  // Calculate the Monday of the selected week in Paris timezone
   const weekDays = useMemo(() => {
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
-    
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(selectedWeekMonday);
-      date.setDate(selectedWeekMonday.getDate() + i);
-      return date;
-    });
+    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
+    return Array.from({ length: 7 }, (_, index) =>
+      addParisCalendarDays(weekMonday, index),
+    );
   }, [weekOffset]);
 
   // Group sessions by date
@@ -117,28 +74,23 @@ function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps)
     return map;
   }, [sessions]);
 
-  const formatDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
-  };
-
   const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
     month: "short",
     timeZone: PARIS_TIMEZONE,
   });
 
-  const formatDayLabel = (date: Date) => {
-    return dateFormatter.format(date);
+  const formatDayLabel = (dateKey: string) => {
+    return dateFormatter.format(parseParisDateTime(dateKey, "12:00"));
   };
 
   return (
     <div className="border rounded-lg p-4 bg-background">
       <div className="grid grid-cols-7 gap-2 items-start">
         {WEEKDAY_LABELS.map((label, index) => {
-          const day = weekDays[index];
-          const dateKey = formatDateKey(day);
+          const dateKey = weekDays[index];
           const daySessions = sessionsByDate.get(dateKey) || [];
-          const isToday = formatDateKey(getNowInParis()) === dateKey;
+          const isToday = formatParisDate(new Date()) === dateKey;
 
           return (
             <div
@@ -155,7 +107,7 @@ function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps)
                   {label}
                 </p>
                 <p className="text-sm font-medium">
-                  {formatDayLabel(day)}
+                  {formatDayLabel(dateKey)}
                 </p>
               </div>
               <div className="space-y-1 w-full">
@@ -187,7 +139,15 @@ function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps)
   );
 }
 
-export function AdminAddActivitiesTab() {
+interface AdminAddActivitiesTabProps {
+  activityTypes?: string[];
+  allowManualRepeat?: boolean;
+}
+
+export function AdminAddActivitiesTab({
+  activityTypes,
+  allowManualRepeat = false,
+}: AdminAddActivitiesTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivityId, setSelectedActivityId] = useState<string>("");
   const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(-1);
@@ -216,13 +176,23 @@ export function AdminAddActivitiesTab() {
         const supabase = createClient();
         const { data, error } = await supabase
           .from("activity")
-          .select("id, name, nb_credits")
+          .select("id, name, nb_credits, type")
+          .is("deleted_at", null)
           .order("name");
 
         if (error) {
           setError(error.message);
         } else {
-          setActivities(data || []);
+          const filteredActivities = (data || []).filter((activity) => {
+            if (activity.type === "cours") {
+              return activityTypes?.includes("cours") ?? false;
+            }
+
+            return activityTypes?.length
+              ? activity.type ? activityTypes.includes(activity.type) : false
+              : true;
+          });
+          setActivities(filteredActivities);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -232,7 +202,7 @@ export function AdminAddActivitiesTab() {
     };
 
     loadActivities();
-  }, []);
+  }, [activityTypes]);
 
   // Sync repeat interval with duration when duration changes (if repeat interval is empty)
   useEffect(() => {
@@ -260,23 +230,16 @@ export function AdminAddActivitiesTab() {
   });
 
   const getWeekLabel = (offset: number): string => {
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + offset * 7);
-    
-    const selectedWeekSunday = new Date(selectedWeekMonday);
-    selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 6);
-    
-    const formatDate = (date: Date) => {
-      return shortDateFormatter.format(date);
-    };
+    const selectedWeekMonday = addParisCalendarDays(getParisMondayDate(), offset * 7);
+    const selectedWeekSunday = addParisCalendarDays(selectedWeekMonday, 6);
+
+    const formatDate = (dateKey: string) =>
+      shortDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
     
     if (offset === 0) {
       return `Cette semaine (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
     } else if (offset === -1) {
-      return `Semaine précédente (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
+      return `semaine précédente (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
     } else if (offset > 0) {
       return `Dans ${offset} semaine${offset > 1 ? "s" : ""} (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
     } else {
@@ -331,28 +294,6 @@ export function AdminAddActivitiesTab() {
     }
   };
 
-  const fullDateFormatter = new Intl.DateTimeFormat("fr-FR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: PARIS_TIMEZONE,
-  });
-
-  const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: PARIS_TIMEZONE,
-  });
-
-  const formatDate = (dateString: string) => {
-    return fullDateFormatter.format(new Date(dateString));
-  };
-
-  const formatTime = (dateString: string) => {
-    return timeFormatter.format(new Date(dateString));
-  };
-
   const getTargetWeekDate = (dateString: string) => {
     const date = new Date(dateString);
     // Calculate how many weeks ahead to create the new sessions
@@ -368,45 +309,38 @@ export function AdminAddActivitiesTab() {
     }
 
     const preview: Array<{date: string, start: string, end: string}> = [];
-    const [startHours, startMinutes] = manualStartTime.split(':').map(Number);
     const durationMinutes = parseInt(manualDuration) || 60;
-    const intervalMinutes = repeatInterval.trim() === "" ? durationMinutes : parseInt(repeatInterval) || durationMinutes;
-    const times = parseInt(repeatTimes) || 1;
-    
-    // Get the Monday of the selected week in Paris timezone
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + manualWeekOffset * 7);
-    
-    // Process each day of the selected week
+    const intervalMinutes = !allowManualRepeat
+      ? durationMinutes
+      : repeatInterval.trim() === ""
+        ? durationMinutes
+        : parseInt(repeatInterval) || durationMinutes;
+    const times = allowManualRepeat ? parseInt(repeatTimes) || 1 : 1;
+
+    const weekMonday = addParisCalendarDays(getParisMondayDate(), manualWeekOffset * 7);
+
     for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const currentDate = new Date(selectedWeekMonday);
-      currentDate.setDate(selectedWeekMonday.getDate() + dayOffset);
-      
-      const dayOfWeek = currentDate.getDay();
-      const normalizedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      
-      // Check if this day is selected
+      const dateStr = addParisCalendarDays(weekMonday, dayOffset);
+      const normalizedDay = getParisWeekdayIndex(parseParisDateTime(dateStr, "12:00"));
+
       if (selectedDays.includes(normalizedDay)) {
-        // Create sessions for this day
-        let currentTime = new Date(currentDate);
-        currentTime.setHours(startHours, startMinutes, 0, 0);
-        
+        let currentStart = parseParisDateTime(dateStr, manualStartTime);
+
         for (let i = 0; i < times; i++) {
-          const sessionStart = new Date(currentTime);
-          const sessionEnd = new Date(sessionStart);
-          sessionEnd.setMinutes(sessionEnd.getMinutes() + durationMinutes);
-          
+          const sessionStart = new Date(currentStart);
+          const sessionEnd = new Date(
+            sessionStart.getTime() + durationMinutes * 60 * 1000,
+          );
+
           preview.push({
-            date: sessionStart.toISOString().split('T')[0],
-            start: `${sessionStart.getHours().toString().padStart(2, '0')}:${sessionStart.getMinutes().toString().padStart(2, '0')}`,
-            end: `${sessionEnd.getHours().toString().padStart(2, '0')}:${sessionEnd.getMinutes().toString().padStart(2, '0')}`
+            date: dateStr,
+            start: formatParisTime(sessionStart),
+            end: formatParisTime(sessionEnd),
           });
-          
-          // Move to next session start time within the same day
-          currentTime.setMinutes(currentTime.getMinutes() + intervalMinutes);
+
+          currentStart = new Date(
+            sessionStart.getTime() + intervalMinutes * 60 * 1000,
+          );
         }
       }
     }
@@ -440,8 +374,8 @@ export function AdminAddActivitiesTab() {
       // Create all sessions
       const results = await Promise.all(
         manualPreview.map(session => {
-          const startDateTime = new Date(`${session.date}T${session.start}:00`);
-          const endDateTime = new Date(`${session.date}T${session.end}:00`);
+          const startDateTime = parseParisDateTime(session.date, session.start);
+          const endDateTime = parseParisDateTime(session.date, session.end);
           return createSession(
             manualActivityId,
             startDateTime.toISOString(),
@@ -484,9 +418,9 @@ export function AdminAddActivitiesTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">Ajouter des sessions</h3>
+        <h3 className="text-lg font-semibold mb-2">ajouter des sessions</h3>
         <p className="text-sm text-muted-foreground">
-          Créez des sessions manuellement ou par lot en copiant celles d'une semaine spécifique.
+          créez des sessions manuellement ou par lot en copiant celles d'une semaine spécifique.
         </p>
       </div>
 
@@ -528,7 +462,7 @@ export function AdminAddActivitiesTab() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="week">Semaine à copier</Label>
+            <Label htmlFor="week">semaine à copier</Label>
             <Select 
               value={selectedWeekOffset.toString()} 
               onValueChange={(value) => setSelectedWeekOffset(parseInt(value))}
@@ -545,12 +479,12 @@ export function AdminAddActivitiesTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Sélectionnez la semaine dont vous souhaitez copier les sessions
+              sélectionnez la semaine dont vous souhaitez copier les sessions
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="target-week">Semaine cible</Label>
+            <Label htmlFor="target-week">semaine cible</Label>
             <Select 
               value={targetWeekOffset.toString()} 
               onValueChange={(value) => setTargetWeekOffset(parseInt(value))}
@@ -567,7 +501,7 @@ export function AdminAddActivitiesTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Sélectionnez la semaine où créer les nouvelles sessions
+              sélectionnez la semaine où créer les nouvelles sessions
             </p>
           </div>
 
@@ -589,7 +523,7 @@ export function AdminAddActivitiesTab() {
                     Création...
                   </>
                 ) : (
-                  `Créer ${previewSessions.length} session${previewSessions.length > 1 ? "s" : ""}`
+                  `créer ${previewSessions.length} session${previewSessions.length > 1 ? "s" : ""}`
                 )}
               </Button>
             )}
@@ -605,14 +539,14 @@ export function AdminAddActivitiesTab() {
               </div>
             ) : previewSessions.length > 0 ? (
               <>
-                <h4 className="font-medium">Aperçu des sessions à créer :</h4>
+                <h4 className="font-medium">aperçu des sessions à créer :</h4>
                 <WeekCalendarPreview sessions={previewSessions.map((session) => {
                   const targetWeekStart = getTargetWeekDate(session.start_ts);
                   const targetWeekEnd = getTargetWeekDate(session.end_ts);
                   return {
-                    date: targetWeekStart.toISOString().split('T')[0],
-                    start: formatTime(targetWeekStart.toISOString()),
-                    end: formatTime(targetWeekEnd.toISOString()),
+                    date: formatParisDate(targetWeekStart),
+                    start: formatParisTime(targetWeekStart),
+                    end: formatParisTime(targetWeekEnd),
                     max_registrations: session.max_registrations,
                   };
                 })} weekOffset={targetWeekOffset} />
@@ -622,13 +556,13 @@ export function AdminAddActivitiesTab() {
         )}
 
             <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
-              <p className="font-medium mb-2">Comment ça fonctionne ?</p>
+              <p className="font-medium mb-2">comment ça fonctionne ?</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Sélectionnez une activité</li>
-                <li>Sélectionnez la semaine dont vous souhaitez copier les sessions</li>
-                <li>L'aperçu des sessions s'affiche automatiquement ci-dessous</li>
-                <li>Les nouvelles sessions seront créées pour la semaine cible sélectionnée</li>
-                <li>Cliquez sur "Créer" pour créer toutes les sessions en une fois</li>
+                <li>sélectionnez une activité</li>
+                <li>sélectionnez la semaine dont vous souhaitez copier les sessions</li>
+                <li>l'aperçu des sessions s'affiche automatiquement ci-dessous</li>
+                <li>les nouvelles sessions seront créées pour la semaine cible sélectionnée</li>
+                <li>cliquez sur "créer" pour créer toutes les sessions en une fois</li>
               </ul>
             </div>
           </div>
@@ -653,7 +587,7 @@ export function AdminAddActivitiesTab() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="manual-week">Semaine *</Label>
+              <Label htmlFor="manual-week">semaine *</Label>
               <Select 
                 value={manualWeekOffset.toString()} 
                 onValueChange={(value) => setManualWeekOffset(parseInt(value))}
@@ -670,7 +604,7 @@ export function AdminAddActivitiesTab() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Sélectionnez la semaine où créer les sessions
+                sélectionnez la semaine où créer les sessions
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -728,36 +662,38 @@ export function AdminAddActivitiesTab() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 items-start">
-              <div className="grid gap-2">
-                <Label htmlFor="repeat-interval">Répéter toutes les (minutes) *</Label>
-                <Input
-                  id="repeat-interval"
-                  type="number"
-                  min="0"
-                  step="15"
-                  value={repeatInterval}
-                  onChange={(e) => setRepeatInterval(e.target.value)}
-                  placeholder={manualDuration || "60"}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Laissez vide pour utiliser la durée de la session ({manualDuration || "60"} min)
-                </p>
+            {allowManualRepeat ? (
+              <div className="grid grid-cols-2 gap-4 items-start">
+                <div className="grid gap-2">
+                  <Label htmlFor="repeat-interval">Répéter toutes les (minutes) *</Label>
+                  <Input
+                    id="repeat-interval"
+                    type="number"
+                    min="0"
+                    step="15"
+                    value={repeatInterval}
+                    onChange={(e) => setRepeatInterval(e.target.value)}
+                    placeholder={manualDuration || "60"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Laissez vide pour utiliser la durée de la session ({manualDuration || "60"} min)
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="repeat-times">Pour (fois) *</Label>
+                  <Input
+                    id="repeat-times"
+                    type="number"
+                    min="1"
+                    value={repeatTimes}
+                    onChange={(e) => setRepeatTimes(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="repeat-times">Pour (fois) *</Label>
-                <Input
-                  id="repeat-times"
-                  type="number"
-                  min="1"
-                  value={repeatTimes}
-                  onChange={(e) => setRepeatTimes(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+            ) : null}
             <div className="grid gap-2">
-              <Label>Jours de la semaine *</Label>
+              <Label>jours de la semaine *</Label>
               <div className="grid grid-cols-7 gap-2">
                 {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day, index) => (
                   <div key={index} className="flex items-center space-x-2">
@@ -803,7 +739,7 @@ export function AdminAddActivitiesTab() {
                         Création...
                       </>
                     ) : (
-                      `Créer ${manualPreview.length} session${manualPreview.length > 1 ? "s" : ""}`
+                      `créer ${manualPreview.length} session${manualPreview.length > 1 ? "s" : ""}`
                     )}
                   </Button>
                 )}
@@ -814,7 +750,7 @@ export function AdminAddActivitiesTab() {
               <div className="mt-6 space-y-4">
                 {manualPreview.length > 0 ? (
                   <>
-                    <h4 className="font-medium">Aperçu des sessions à créer ({manualPreview.length} session{manualPreview.length > 1 ? "s" : ""}) :</h4>
+                    <h4 className="font-medium">aperçu des sessions à créer ({manualPreview.length} session{manualPreview.length > 1 ? "s" : ""}) :</h4>
                     <WeekCalendarPreview sessions={manualPreview.map(s => ({ ...s, max_registrations: null }))} weekOffset={manualWeekOffset} />
                   </>
                 ) : (

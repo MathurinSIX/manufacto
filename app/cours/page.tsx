@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 import {
-  MARKETING_LINK_CLASS,
   MarketingPageContainer,
   MarketingPageHeader,
   MarketingSectionTitle,
@@ -14,10 +13,26 @@ async function CoursContent() {
   unstable_noStore();
   const supabase = await createClient();
 
+  const { data: futureSessions, error: sessionsError } = await supabase
+    .from("session")
+    .select("activity_id")
+    .gte("start_ts", new Date().toISOString());
+
+  if (sessionsError) {
+    console.error("Error fetching future course sessions", sessionsError);
+  }
+
+  const activityIds = Array.from(
+    new Set(futureSessions?.map((session) => session.activity_id) ?? []),
+  );
+
   const { data, error } = await supabase
     .from("activity")
-    .select("id, name, description, image_url, nb_credits, price")
-    .eq("type", "atelier");
+    .select("id, name, description, image_url, nb_credits, price, square_product_id, created_at, level, audience, discipline")
+    .eq("type", "cours")
+    .is("deleted_at", null)
+    .in("id", activityIds.length ? activityIds : ["00000000-0000-0000-0000-000000000000"])
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Error fetching activities", error);
@@ -27,7 +42,7 @@ async function CoursContent() {
 
   return (
     <MarketingPageContainer className="pb-[360px] md:pb-[760px]">
-      <MarketingPageHeader title="Les cours">
+      <MarketingPageHeader title="les cours">
         <p>
           Chez nous, pas de cours à l&apos;année, mais des ateliers ponctuels de
           montée en compétences, à choisir selon vos envies, besoins et
@@ -38,17 +53,11 @@ async function CoursContent() {
         </p>
       </MarketingPageHeader>
 
-      <section className="mt-[92px]">
-        <div className="mb-9 flex items-end justify-between gap-4">
+      <section id="offres" className="mt-[92px] scroll-mt-28">
+        <div className="mb-9">
           <MarketingSectionTitle>
-            Découvrir nos offres
+            découvrir nos offres
           </MarketingSectionTitle>
-          <button
-            type="button"
-            className={MARKETING_LINK_CLASS}
-          >
-            filtrer
-          </button>
         </div>
         <CourseGrid courses={courses} />
       </section>

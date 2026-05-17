@@ -84,7 +84,7 @@ export function VisitAtelierCallout({
     <section className={cn("bg-[#fff8f0]", className)}>
       <div className="mx-auto grid max-w-[1274px] gap-6 px-5 py-9 md:grid-cols-[286px_1fr_161px] md:items-center">
         <h2 className="text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
-          Venez découvrir <br />
+          venez découvrir <br />
           l&apos;atelier
         </h2>
         <div className="text-xl leading-normal text-black/75">
@@ -94,8 +94,8 @@ export function VisitAtelierCallout({
           </p>
           <p>C&apos;est gratuit, sur inscription.</p>
         </div>
-        <MarketingLink href="/activities" className="md:text-right">
-          Réserver
+        <MarketingLink href="/reserver" className="md:text-right">
+          réserver
         </MarketingLink>
       </div>
     </section>

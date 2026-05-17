@@ -49,8 +49,10 @@ const golosText = localFont({
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
   return (
     <html lang="fr" suppressHydrationWarning className={golosText.variable}>
@@ -66,7 +68,10 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <Navigation />
           </Suspense>
-          <div className="flex-1 flex flex-col">{children}</div>
+          <div className="flex-1 flex flex-col">
+            {children}
+            {modal}
+          </div>
           <Footer />
           <PwaRegistration />
         </ThemeProvider>

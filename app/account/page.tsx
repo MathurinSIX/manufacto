@@ -14,29 +14,63 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
+import { SquareCheckoutButton } from "@/components/square-checkout-button";
+import { loadSquareProducts } from "@/lib/square/load-products";
+import { getSquareEnvironment } from "@/lib/square/environment";
+import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
+import { cn } from "@/lib/utils";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
 const panelClassName =
   "rounded-[19px] border border-black/10 bg-white shadow-sm ring-1 ring-black/5";
+const PARIS_TIMEZONE = "Europe/Paris";
+
+const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: PARIS_TIMEZONE,
+});
+
+const quickReservationWeekdayFormatter = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "short",
+  timeZone: "UTC",
+});
+
+const quickReservationDayFormatter = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+const quickReservationTimeFormatter = new Intl.DateTimeFormat("fr-FR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: PARIS_TIMEZONE,
+});
 
 const subscriptionPlans = [
   {
-    label: "Formule 01",
+    id: "formule-01",
+    label: "Abonnement 01",
     price: "90€",
     credits: "20 crédits / mois",
     description:
       "Idéal si vous utilisez l'espace couture ou électronique régulièrement.",
   },
   {
-    label: "Formule 02",
+    id: "formule-02",
+    label: "Abonnement 02",
     price: "170€",
     credits: "40 crédits / mois",
     description:
       "Pour une pratique intermédiaire dans plusieurs espaces de l'atelier.",
   },
   {
-    label: "Formule 03",
+    id: "formule-03",
+    label: "Abonnement 03",
     price: "240€",
     credits: "60 crédits / mois",
     description:
@@ -44,30 +78,92 @@ const subscriptionPlans = [
   },
 ] as const;
 
-const creditPacks = [
-  { price: "15€", credits: "2 crédits" },
-  { price: "36€", credits: "6 crédits" },
-  { price: "66€", credits: "12 crédits" },
-  { price: "100€", credits: "20 crédits" },
-  { price: "270€", credits: "60 crédits" },
-] as const;
+const creditPackPriceFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+});
 
-const discoveryPacks = [
-  {
-    price: "15€",
-    title: "2h de couture",
-    description: "en autonomie encadrée",
-  },
-  {
-    price: "30€",
-    title: "2h de menuiserie",
-    description: "en autonomie encadrée",
-  },
-] as const;
+const COURSE_ACTIVITY_TYPES = new Set(["cours"]);
+const PRACTICE_ACTIVITY_TYPES = new Set([
+  "autonomie",
+  "autonomie_encadree",
+  "accompagnement",
+  "cuisson",
+]);
+
+function subscriptionStatusLabel(status: string) {
+  switch (status) {
+    case "completed":
+      return {
+        label: "Confirmé",
+        className: "bg-emerald-100 text-emerald-900",
+      };
+    case "processing":
+      return { label: "Traitement", className: "bg-amber-100 text-amber-900" };
+    case "pending":
+      return { label: "En attente", className: "bg-zinc-200 text-zinc-800" };
+    case "failed":
+      return { label: "Échoué", className: "bg-red-100 text-red-800" };
+    case "cancelled":
+      return { label: "Résilié", className: "bg-zinc-200 text-zinc-800" };
+    default:
+      return { label: status, className: "bg-zinc-200 text-zinc-800" };
+  }
+}
 
 type Activity = {
   id: string;
   name: string;
+};
+
+type QuickReservationActivity = {
+  id: string;
+  name: string;
+  type: string | null;
+  nb_credits: number | null;
+};
+
+type QuickReservationSessionRow = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  activity:
+    | {
+        id: string;
+        name: string;
+        type: string | null;
+        nb_credits: number | null;
+        deleted_at: string | null;
+      }
+    | {
+        id: string;
+        name: string;
+        type: string | null;
+        nb_credits: number | null;
+        deleted_at: string | null;
+      }[]
+    | null;
+};
+
+type QuickCourseCalendarSession = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  activityId: string;
+  activityName: string;
+  credits: number | null;
+};
+
+type QuickCourseCalendarWeek = {
+  key: string;
+  label: string;
+  days: {
+    key: string;
+    label: string;
+    dayNumber: string;
+    sessions: QuickCourseCalendarSession[];
+  }[];
 };
 
 type Session = {
@@ -95,6 +191,8 @@ type CreditSessionRegistration = {
   credit_id: string;
   session_id: string | null;
   payment_type: string | null;
+  reserved_start_ts?: string | null;
+  reserved_end_ts?: string | null;
   status?: RegistrationStatus | null;
   session?: Session | Session[] | null;
 };
@@ -109,6 +207,137 @@ function getSession(
   return session ?? null;
 }
 
+function getQuickReservationActivity(
+  activity: QuickReservationSessionRow["activity"],
+) {
+  if (Array.isArray(activity)) {
+    return activity[0] ?? null;
+  }
+
+  return activity ?? null;
+}
+
+function splitActivityTitle(name: string | null) {
+  if (!name) return "Atelier";
+  const parts = name.split("/");
+  if (parts.length <= 1) return name.trim();
+  return parts.slice(1).join("/").trim() || name.trim();
+}
+
+function getParisDateParts(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = new Intl.DateTimeFormat("fr-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: PARIS_TIMEZONE,
+  }).formatToParts(date);
+
+  return {
+    year: Number(parts.find((part) => part.type === "year")?.value),
+    month: Number(parts.find((part) => part.type === "month")?.value),
+    day: Number(parts.find((part) => part.type === "day")?.value),
+  };
+}
+
+function getParisCalendarDate(value: string | Date) {
+  const { year, month, day } = getParisDateParts(value);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function startOfParisWeek(value: string | Date) {
+  const date = getParisCalendarDate(value);
+  const dayIndex = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayIndex);
+  return date;
+}
+
+function addUtcDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function calendarDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getQuickCourseSessions(rows?: QuickReservationSessionRow[] | null) {
+  return (
+    rows
+      ?.map((row) => {
+        const activity = getQuickReservationActivity(row.activity);
+        if (
+          !activity ||
+          activity.deleted_at ||
+          !activity.type ||
+          !COURSE_ACTIVITY_TYPES.has(activity.type)
+        ) {
+          return null;
+        }
+
+        return {
+          id: row.id,
+          start_ts: row.start_ts,
+          end_ts: row.end_ts,
+          activityId: activity.id,
+          activityName: activity.name,
+          credits: activity.nb_credits,
+        } satisfies QuickCourseCalendarSession;
+      })
+      .filter((session): session is QuickCourseCalendarSession => !!session) ??
+    []
+  );
+}
+
+function getQuickCourseCalendarWeeks(
+  sessions: QuickCourseCalendarSession[],
+): QuickCourseCalendarWeek[] {
+  const weeks = new Map<string, QuickCourseCalendarSession[]>();
+
+  sessions.forEach((session) => {
+    const weekStart = startOfParisWeek(session.start_ts);
+    const weekKey = calendarDateKey(weekStart);
+    weeks.set(weekKey, [...(weeks.get(weekKey) ?? []), session]);
+  });
+
+  return Array.from(weeks.entries())
+    .slice(0, 4)
+    .map(([weekKey, weekSessions]) => {
+      const weekStart = new Date(`${weekKey}T12:00:00.000Z`);
+      const days = Array.from({ length: 7 }, (_, index) => {
+        const day = addUtcDays(weekStart, index);
+        const dayKey = calendarDateKey(day);
+        return {
+          key: dayKey,
+          label: quickReservationWeekdayFormatter.format(day),
+          dayNumber: quickReservationDayFormatter.format(day),
+          sessions: weekSessions.filter(
+            (session) =>
+              calendarDateKey(getParisCalendarDate(session.start_ts)) === dayKey,
+          ),
+        };
+      });
+
+      return {
+        key: weekKey,
+        label: `Semaine du ${quickReservationDayFormatter.format(weekStart)}`,
+        days,
+      };
+    });
+}
+
+function getQuickCourseSessionHref(session: QuickCourseCalendarSession) {
+  return `/reserver?${new URLSearchParams({
+    activity: session.activityId,
+    session: session.id,
+  }).toString()}`;
+}
+
+function getPracticeReservationHref(activityId: string) {
+  return `/reserver?${new URLSearchParams({ activity: activityId }).toString()}`;
+}
+
 async function AccountContent() {
   unstable_noStore();
   const supabase = await createClient();
@@ -117,6 +346,15 @@ async function AccountContent() {
   if (!user) {
     redirect("/auth/login");
   }
+
+  const squareProducts = await loadSquareProducts(supabase);
+  const squareProductsById = new Map(
+    squareProducts.map((product) => [product.id, product]),
+  );
+  const creditPackProducts = squareProducts
+    .filter((product) => product.kind === "credit_pack")
+    .sort((a, b) => a.amountCents - b.amountCents);
+  const isSquareSandbox = getSquareEnvironment() === "sandbox";
 
   const now = new Date().toISOString();
 
@@ -127,6 +365,8 @@ async function AccountContent() {
       id,
       payment_type,
       session_id,
+      reserved_start_ts,
+      reserved_end_ts,
       session:session_id (
         id,
         start_ts,
@@ -235,7 +475,7 @@ async function AccountContent() {
         return false;
       }
       
-      return session.start_ts >= now;
+      return (reg.reserved_end_ts ?? session.end_ts) >= now;
     }) || [];
 
   const pastRegistrations =
@@ -258,7 +498,7 @@ async function AccountContent() {
         return false;
       }
       
-      return session.start_ts < now;
+      return (reg.reserved_end_ts ?? session.end_ts) < now;
     }) || [];
 
   const cancelledRegistrations =
@@ -267,10 +507,20 @@ async function AccountContent() {
       return latestStatus && latestStatus.status === "CANCELLED";
     }) || [];
 
+  const bookedSessionIds = new Set(
+    sortedRegistrations
+      .filter((reg) => {
+        const latestStatus = registrationStatusMap[reg.id];
+        return !latestStatus || latestStatus.status !== "CANCELLED";
+      })
+      .map((reg) => reg.session_id)
+      .filter((id): id is string => !!id),
+  );
+
   // Fetch credit history
   const { data: creditHistory, error: creditError } = await supabase
     .from("credit")
-    .select("id, amount, created_at")
+    .select("id, amount, payment_type, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -289,6 +539,8 @@ async function AccountContent() {
             id,
             session_id,
             payment_type,
+            reserved_start_ts,
+            reserved_end_ts,
             session:session_id (
               id,
               start_ts,
@@ -347,6 +599,65 @@ async function AccountContent() {
     console.error("Error fetching credit history:", creditError);
   }
 
+  const { data: subscriptionPurchases } = await supabase
+    .from("square_purchase")
+    .select(
+      "id, product_id, status, credits, fulfilled_at, created_at, amount_cents",
+    )
+    .eq("user_id", user.id)
+    .eq("product_kind", "subscription")
+    .neq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  const { data: quickReservationSessions, error: quickReservationError } =
+    await supabase
+      .from("session")
+      .select(
+        `
+        id,
+        start_ts,
+        end_ts,
+        activity:activity_id (
+          id,
+          name,
+          type,
+          nb_credits,
+          deleted_at
+        )
+      `,
+      )
+      .gte("start_ts", now)
+      .order("start_ts", { ascending: true });
+
+  const { data: practiceActivities, error: practiceActivitiesError } =
+    await supabase
+      .from("activity")
+      .select("id, name, type, nb_credits")
+      .in("type", Array.from(PRACTICE_ACTIVITY_TYPES))
+      .is("deleted_at", null)
+      .order("name", { ascending: true });
+
+  if (quickReservationError) {
+    console.error(
+      "Error fetching quick reservation sessions:",
+      quickReservationError,
+    );
+  }
+
+  if (practiceActivitiesError) {
+    console.error(
+      "Error fetching practice reservation activities:",
+      practiceActivitiesError,
+    );
+  }
+
+  const quickPracticeItems = (practiceActivities ?? []) as QuickReservationActivity[];
+  const quickCourseWeeks = getQuickCourseCalendarWeeks(
+    getQuickCourseSessions(
+      quickReservationSessions as QuickReservationSessionRow[] | null,
+    ),
+  );
+
   // Calculate total credits
   const totalCredits =
     creditHistory?.reduce((sum, credit) => {
@@ -362,18 +673,15 @@ async function AccountContent() {
       <div className="mx-auto w-full max-w-[1274px] px-5 pb-20 pt-16 md:pb-[140px] md:pt-[86px]">
         <div className="mb-10 grid gap-6 md:mb-14 md:grid-cols-[1fr_auto] md:items-end">
           <div className="max-w-[860px]">
-            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#f56800]">
-              Espace membre
-            </p>
             <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
-              Mon compte
+              mon compte
             </h1>
             <p className="mt-5 text-xl leading-normal text-black/75 md:text-[22px]">
               Gérez vos réservations, suivez vos crédits et retrouvez votre
               historique d&apos;atelier.
             </p>
             <div className="mt-6">
-              <LogoutButton className="shadow-sm" />
+              <LogoutButton />
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
@@ -393,7 +701,7 @@ async function AccountContent() {
           <Card className={panelClassName}>
             <CardHeader className="border-b border-black/10 p-6 md:p-8">
               <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                Mes réservations
+                mes réservations
               </CardTitle>
               <CardDescription className="mt-3 text-base leading-normal text-black/65">
                 Gérez vos réservations à venir, passées et annulées
@@ -451,7 +759,230 @@ async function AccountContent() {
           <Card className={panelClassName}>
             <CardHeader className="border-b border-black/10 p-6 md:p-8">
               <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                Mon abonnement
+                réservation rapide
+              </CardTitle>
+              <CardDescription className="mt-3 text-base leading-normal text-black/65">
+                Choisissez un cours ou un créneau de pratique libre disponible
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
+              <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#4a56dd]">
+                      Cours
+                    </p>
+                    <p className="mt-2 text-sm leading-normal text-black/60">
+                      Consultez les prochaines semaines.
+                    </p>
+                  </div>
+                  <Link
+                    href="/cours"
+                    className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+                  >
+                    tout voir
+                  </Link>
+                </div>
+                <div className="mt-5 space-y-5">
+                  {quickCourseWeeks.length ? (
+                    quickCourseWeeks.map((week) => (
+                      <div key={week.key}>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
+                          {week.label}
+                        </p>
+                        <div className="grid grid-cols-7 gap-1">
+                          {week.days.map((day) => (
+                            <div
+                              key={day.key}
+                              className="min-h-[118px] rounded-[10px] border border-black/10 bg-white p-2"
+                            >
+                              <div className="text-center">
+                                <p className="text-[11px] font-semibold uppercase text-black/45">
+                                  {day.label}
+                                </p>
+                                <p className="text-xs font-semibold text-black/70">
+                                  {day.dayNumber}
+                                </p>
+                              </div>
+                              <div className="mt-2 space-y-1">
+                                {day.sessions.map((session) => {
+                                  const isBooked = bookedSessionIds.has(
+                                    session.id,
+                                  );
+
+                                  return (
+                                    <Link
+                                      key={session.id}
+                                      href={getQuickCourseSessionHref(session)}
+                                      scroll={false}
+                                      className={cn(
+                                        "block rounded-[8px] p-2 text-left transition",
+                                        isBooked
+                                          ? "border border-[#20b75a]/40 bg-[#20b75a]/10 hover:bg-[#20b75a]/20"
+                                          : "bg-[#4a56dd]/10 hover:bg-[#4a56dd]/20",
+                                      )}
+                                    >
+                                      <span
+                                        className={cn(
+                                          "block text-[11px] font-semibold leading-tight",
+                                          isBooked
+                                            ? "text-[#1a8f47]"
+                                            : "text-[#313aa6]",
+                                        )}
+                                      >
+                                        {quickReservationTimeFormatter.format(
+                                          new Date(session.start_ts),
+                                        )}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "mt-1 block line-clamp-2 text-[11px] font-medium leading-tight",
+                                          isBooked
+                                            ? "text-[#1a8f47]"
+                                            : "text-black",
+                                        )}
+                                      >
+                                        {splitActivityTitle(session.activityName)}
+                                      </span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-black/60">
+                      Aucun cours n&apos;est réservable pour le moment.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
+                      Pratique libre
+                    </p>
+                    <p className="mt-2 text-sm leading-normal text-black/60">
+                      Choisissez ensuite l&apos;heure d&apos;arrivée et la durée.
+                    </p>
+                  </div>
+                  <Link
+                    href="/pratique-libre"
+                    className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+                  >
+                    tout voir
+                  </Link>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {quickPracticeItems.length ? (
+                    quickPracticeItems.map((activity) => (
+                      <Link
+                        key={activity.id}
+                        href={getPracticeReservationHref(activity.id)}
+                        scroll={false}
+                        className="block rounded-[12px] border border-black/10 bg-white p-4 transition hover:border-[#f56800]/60 hover:bg-[#f56800]/5"
+                      >
+                        <span className="block font-semibold text-black">
+                          {splitActivityTitle(activity.name)}
+                        </span>
+                        <span className="mt-1 block text-sm text-black/60">
+                          {activity.nb_credits ?? 0} crédit
+                          {activity.nb_credits === 1 ? "" : "s"} / heure
+                        </span>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-black/60">
+                      Aucun créneau de pratique libre n&apos;est disponible pour
+                      le moment.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={panelClassName}>
+            <CardHeader className="border-b border-black/10 p-6 md:p-8">
+              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
+                mes formules
+              </CardTitle>
+              <CardDescription className="mt-3 text-base leading-normal text-black/65">
+                Souscriptions liées à votre compte
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 md:p-8">
+              {!subscriptionPurchases?.length ? (
+                <p className="text-base leading-normal text-black/60">
+                  Aucune formule Square enregistrée pour le moment. Les achats
+                  réalisés depuis cette page apparaîtront ici après paiement.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-[14px] border border-black/10">
+                  <table className="w-full min-w-[520px] text-left text-sm">
+                    <thead className="border-b border-black/10 bg-[#f2f2f2] text-black/70">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Formule</th>
+                        <th className="px-4 py-3 font-semibold">Crédits</th>
+                        <th className="px-4 py-3 font-semibold">Statut</th>
+                        <th className="px-4 py-3 font-semibold">Date</th>
+                        <th className="px-4 py-3 font-semibold">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black/10 bg-white">
+                      {subscriptionPurchases.map((row) => {
+                        const product = squareProductsById.get(row.product_id);
+                        const name =
+                          product?.name ?? row.product_id ?? "Formule inconnue";
+                        const status = subscriptionStatusLabel(row.status);
+                        const when = row.fulfilled_at ?? row.created_at;
+                        const whenDate = when ? new Date(when) : null;
+                        return (
+                          <tr key={row.id}>
+                            <td className="px-4 py-3 font-medium text-black">
+                              {name}
+                            </td>
+                            <td className="px-4 py-3 text-black/80">
+                              {Number(row.credits)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}
+                              >
+                                {status.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-black/70">
+                              {whenDate
+                                ? dateFormatter.format(whenDate)
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              {row.status === "completed" ? (
+                                <CancelSubscriptionButton purchaseId={row.id} />
+                              ) : (
+                                <span className="text-xs text-black/45">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className={panelClassName}>
+            <CardHeader className="border-b border-black/10 p-6 md:p-8">
+              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
+                mon abonnement
               </CardTitle>
               <CardDescription className="mt-3 text-base leading-normal text-black/65">
                 Retrouvez les formules mensuelles et les démarches pour gérer
@@ -459,157 +990,86 @@ async function AccountContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6 md:p-8">
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                <div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {subscriptionPlans.map((plan) => (
-                      <div
-                        key={plan.label}
-                        className="rounded-[14px] border border-[#f56800]/60 bg-[#fff8f0] p-5"
-                      >
-                        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#c97a25]">
-                          {plan.label}
-                        </p>
-                        <p className="mt-3 text-[34px] font-semibold leading-none text-black">
-                          {plan.price}
-                        </p>
-                        <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
-                          {plan.credits}
-                        </p>
-                        <p className="mt-4 text-sm leading-snug text-black/65">
-                          {plan.description}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-5 text-sm leading-normal text-black/60">
-                    Les abonnements ont une durée d&apos;engagement de 3 mois,
-                    puis peuvent être résiliés chaque mois. Les crédits non
-                    utilisés restent disponibles et se cumulent.
-                  </p>
-                </div>
-                <div className="rounded-[14px] bg-[#f2f2f2] p-6">
-                  <p className="text-xl font-semibold leading-tight text-black/80">
-                    Gestion de l&apos;abonnement
-                  </p>
-                  <p className="mt-4 text-base leading-normal text-black/65">
-                    L&apos;espace de gestion en ligne n&apos;est pas encore relié
-                    au paiement. Pour souscrire, modifier ou résilier une
-                    formule, contactez-nous.
-                  </p>
-                  <div className="mt-6 flex flex-col gap-3">
-                    <Link
-                      href="/atelier#tarifs"
-                      className="inline-flex justify-center rounded-[14px] bg-[#4a56dd] px-5 py-3 text-center text-base font-semibold text-white transition hover:bg-[#3844c8]"
+              <div className="grid gap-3 md:grid-cols-3">
+                {subscriptionPlans.map((plan) => (
+                  <div
+                    key={plan.label}
+                    className="flex h-full flex-col rounded-[14px] border border-[#f56800]/60 bg-[#fff8f0] p-5"
+                  >
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#c97a25]">
+                      {plan.label}
+                    </p>
+                    <p className="mt-3 text-[34px] font-semibold leading-none text-black">
+                      {plan.price}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
+                      {plan.credits}
+                    </p>
+                    <p className="mt-4 flex-1 text-sm leading-snug text-black/65">
+                      {plan.description}
+                    </p>
+                    <SquareCheckoutButton
+                      productId={plan.id}
+                      className="mt-5 inline-flex w-full shrink-0 justify-center rounded-[14px] bg-[#f56800] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Voir les tarifs
-                    </Link>
-                    <Link
-                      href="mailto:contact@manufacto-marseille.com?subject=Abonnement%20Manufacto"
-                      className="inline-flex justify-center rounded-[14px] border border-[#4a56dd] px-5 py-3 text-center text-base font-semibold text-[#4a56dd] transition hover:bg-[#4a56dd]/10"
-                    >
-                      Contacter l&apos;atelier
-                    </Link>
+                      Souscrire
+                    </SquareCheckoutButton>
                   </div>
-                </div>
+                ))}
               </div>
+              <p className="mt-5 text-sm leading-normal text-black/60">
+                Les abonnements ont une durée d&apos;engagement de 3 mois, puis
+                peuvent être résiliés chaque mois. Les crédits non utilisés
+                restent disponibles et se cumulent.
+              </p>
             </CardContent>
           </Card>
 
           <Card className={panelClassName}>
             <CardHeader className="border-b border-black/10 p-6 md:p-8">
               <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                Acheter des crédits
+                acheter des crédits
               </CardTitle>
               <CardDescription className="mt-3 text-base leading-normal text-black/65">
                 Rechargez votre compte pour réserver vos prochains créneaux
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6 md:p-8">
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                <div>
-                  <div>
-                    <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#4a56dd]">
-                      Packs découverte
+              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
+                Packs de crédits
+              </p>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                {creditPackProducts.map((pack) => (
+                  <div
+                    key={pack.id}
+                    className="flex min-h-[180px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-4 text-center"
+                  >
+                    <p className="text-[34px] font-semibold leading-none text-black">
+                      {creditPackPriceFormatter.format(pack.amountCents / 100)}
                     </p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {discoveryPacks.map((pack) => (
-                        <div
-                          key={`${pack.price}-${pack.title}`}
-                          className="rounded-[14px] border border-[#4a56dd]/70 bg-[#fff8f0] p-5"
-                        >
-                          <p className="text-[34px] font-semibold leading-none text-black">
-                            {pack.price}
-                          </p>
-                          <p className="mt-3 text-lg font-semibold leading-tight text-black/80">
-                            {pack.title}
-                          </p>
-                          <p className="text-base leading-tight text-black/65">
-                            {pack.description}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-3 text-sm leading-normal text-black/60">
-                      Offre limitée à un achat par personne, pour tester et
-                      découvrir l&apos;atelier sans engagement.
+                    <p className="mt-2 text-lg font-semibold leading-tight text-black/75">
+                      {pack.credits} crédit{pack.credits > 1 ? "s" : ""}
                     </p>
-                  </div>
-
-                  <div className="mt-8">
-                    <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
-                      Packs de crédits
-                    </p>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                    {creditPacks.map((pack) => (
-                      <div
-                        key={pack.price}
-                        className="flex min-h-[132px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-4 text-center"
+                    {pack.catalogObjectId ? (
+                      <SquareCheckoutButton
+                        productId={pack.id}
+                        className="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <p className="text-[34px] font-semibold leading-none text-black">
-                          {pack.price}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold leading-tight text-black/75">
-                          {pack.credits}
-                        </p>
-                      </div>
-                    ))}
+                        Acheter
+                      </SquareCheckoutButton>
+                    ) : (
+                      <p className="mt-4 text-xs leading-snug text-black/50">
+                        Paiement indisponible
+                      </p>
+                    )}
                   </div>
-                  </div>
-                  <p className="mt-5 text-sm leading-normal text-black/60">
-                    Les crédits sont valables un an à partir de leur date
-                    d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur
-                    votre compte.
-                  </p>
-                </div>
-                <div className="rounded-[14px] bg-[#f2f2f2] p-6">
-                  <p className="text-xl font-semibold leading-tight text-black/80">
-                    Votre solde actuel
-                  </p>
-                  <p className="mt-3 text-[46px] font-bold leading-none text-[#4a56dd]">
-                    {Math.round(totalCredits)}
-                  </p>
-                  <p className="mt-4 text-base leading-normal text-black/65">
-                    Le paiement en ligne n&apos;est pas encore branché ici. Pour
-                    acheter un pack de crédits, contactez-nous en indiquant le
-                    pack souhaité.
-                  </p>
-                  <div className="mt-6 flex flex-col gap-3">
-                    <Link
-                      href="/atelier#tarifs"
-                      className="inline-flex justify-center rounded-[14px] bg-[#4a56dd] px-5 py-3 text-center text-base font-semibold text-white transition hover:bg-[#3844c8]"
-                    >
-                      Voir les packs
-                    </Link>
-                    <Link
-                      href="mailto:contact@manufacto-marseille.com?subject=Achat%20de%20cr%C3%A9dits%20Manufacto"
-                      className="inline-flex justify-center rounded-[14px] border border-[#4a56dd] px-5 py-3 text-center text-base font-semibold text-[#4a56dd] transition hover:bg-[#4a56dd]/10"
-                    >
-                      Acheter par contact
-                    </Link>
-                  </div>
-                </div>
+                ))}
               </div>
+              <p className="mt-5 text-sm leading-normal text-black/60">
+                Les crédits sont valables un an à partir de leur date
+                d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur votre
+                compte.
+              </p>
             </CardContent>
           </Card>
 
@@ -617,7 +1077,7 @@ async function AccountContent() {
           <Card className={panelClassName}>
             <CardHeader className="border-b border-black/10 p-6 md:p-8">
               <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                Historique des crédits
+                historique des crédits
               </CardTitle>
               <CardDescription className="mt-3 text-base leading-normal text-black/65">
                 Détail de vos crédits ajoutés

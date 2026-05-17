@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Logo } from "@/components/logo";
 import { VisitAtelierCallout } from "@/components/marketing";
+import { MonthlyActivitiesCalendar } from "@/components/monthly-activities-calendar";
 
 const ASSETS = {
   heroWood: "/assets/pictures/c684ad317993704862dcfcc1d97400638b639f66.png",
@@ -13,6 +15,13 @@ const ASSETS = {
   wordCeramique: "/assets/words/rose/ceramique.png",
   starBlue: "/assets/figma-landing/star-blue.png",
   starOrange: "/assets/figma-landing/star-orange.png",
+  pratiqueLibre: "/assets/homepage/Frame 42.jpg",
+  cours: "/assets/homepage/Frame 43.jpg",
+  atelier: "/assets/homepage/Vector.jpg",
+  instagramOne: "/assets/instagram/655781979_17860317159690779_7751715208418556990_n.jpg",
+  instagramTwo: "/assets/instagram/660284162_17853781842690779_931413534108163183_n.jpeg",
+  instagramThree: "/assets/instagram/670453179_17860602957690779_9102878959608060197_n.jpg",
+  instagramFour: "/assets/instagram/669432384_17855364162690779_7614125889124842469_n.jpg",
 } as const;
 
 const INSTAGRAM_URL = "https://www.instagram.com/manufacto.marseille/";
@@ -23,33 +32,61 @@ const wordImages = [
     alt: "menuiserie",
     width: 496,
     height: 90,
-    className: "h-5 w-auto max-w-[38vw] sm:h-6 md:h-8 lg:h-10",
+    className: "h-6 w-auto max-w-[40vw] sm:h-7 md:h-9 lg:h-11",
   },
   {
     src: ASSETS.wordCouture,
     alt: "couture",
     width: 279,
     height: 63,
-    className: "h-5 w-auto max-w-[30vw] sm:h-6 md:h-8 lg:h-10",
+    className: "h-6 w-auto max-w-[40vw] sm:h-7 md:h-9 lg:h-11",
   },
   {
     src: ASSETS.wordElectronique,
     alt: "électronique",
     width: 466,
     height: 124,
-    className: "h-6 w-auto max-w-[40vw] sm:h-7 md:h-9 lg:h-11",
+    className: "h-9 w-auto max-w-[40vw] sm:h-10 md:h-12 lg:h-16",
   },
   {
     src: ASSETS.wordCeramique,
     alt: "céramique",
     width: 428,
     height: 130,
-    className: "h-6 w-auto max-w-[40vw] sm:h-7 md:h-9 lg:h-11",
+    className: "h-9 w-auto max-w-[40vw] sm:h-10 md:h-12 lg:h-16",
   },
 ];
 
-function Placeholder({ className = "" }: { className?: string }) {
-  return <div className={`rounded-[19px] bg-[#d9d9d9] ${className}`} />;
+function ImageTile({
+  src,
+  alt,
+  className = "",
+  children,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-[19px] bg-[#d9d9d9] ${className}`}>
+      <Image src={src} alt={alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 640px" />
+      {children ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20 px-6 text-center text-[30px] font-semibold leading-tight text-white transition group-hover:bg-black/30">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CalendrierAteliersFallback() {
+  return (
+    <div
+      className="min-h-[380px] rounded-[19px] border border-black/10 bg-[#f2f2f2] md:min-h-[520px]"
+      aria-hidden
+    />
+  );
 }
 
 export function LandingPage() {
@@ -134,7 +171,7 @@ export function LandingPage() {
         </p>
 
         <div className="grid gap-16 md:grid-cols-2 md:gap-[86px]">
-          <article className="relative">
+          <article className="relative flex flex-col">
             <Image
               src={ASSETS.starBlue}
               alt=""
@@ -144,9 +181,9 @@ export function LandingPage() {
               aria-hidden
             />
             <h2 className="relative z-10 mb-6 pl-20 text-[30px] font-semibold leading-tight text-black/80">
-              Faire
+              faire
             </h2>
-            <div className="relative z-10 min-h-[210px] space-y-5 text-xl leading-normal text-black/75">
+            <div className="relative z-10 min-h-[210px] flex-1 space-y-5 text-xl leading-normal text-black/75">
               <p>
                 Vous cherchez un lieu où <strong>fabriquer, réparer, transformer,
                 rénover, bricoler</strong> ou donner vie à vos projets en ayant
@@ -160,13 +197,17 @@ export function LandingPage() {
               </p>
             </div>
             <Link href="/pratique-libre" className="mt-8 block">
-              <div className="flex h-[337px] items-center justify-center rounded-[19px] bg-[#d9d9d9] px-6 text-center text-[30px] font-semibold leading-tight text-black/80 transition hover:bg-[#cfcfcf]">
-                Découvrez la pratique libre
-              </div>
+              <ImageTile
+                src={ASSETS.pratiqueLibre}
+                alt="Projet de menuiserie en pratique libre"
+                className="group h-[337px]"
+              >
+                découvrez la pratique libre
+              </ImageTile>
             </Link>
           </article>
 
-          <article className="relative">
+          <article className="relative flex flex-col">
             <Image
               src={ASSETS.starOrange}
               alt=""
@@ -176,9 +217,9 @@ export function LandingPage() {
               aria-hidden
             />
             <h2 className="relative z-10 mb-6 pl-16 text-[30px] font-semibold leading-tight text-black/80">
-              Apprendre
+              apprendre
             </h2>
-            <div className="relative z-10 min-h-[210px] space-y-5 text-xl leading-normal text-black/75">
+            <div className="relative z-10 min-h-[210px] flex-1 space-y-5 text-xl leading-normal text-black/75">
               <p>
                 Vous voulez apprendre à utiliser une machine à coudre, une
                 raboteuse, un fer à souder ? À rénover un meuble, à faire une
@@ -192,9 +233,13 @@ export function LandingPage() {
               </p>
             </div>
             <Link href="/cours" className="mt-8 block">
-              <div className="flex h-[337px] items-center justify-center rounded-[19px] bg-[#d9d9d9] px-6 text-center text-[30px] font-semibold leading-tight text-black/80 transition hover:bg-[#cfcfcf]">
-                Découvrez nos cours ponctuels
-              </div>
+              <ImageTile
+                src={ASSETS.cours}
+                alt="Tabourets en bois fabriqués en cours"
+                className="group h-[337px]"
+              >
+                découvrez nos cours ponctuels
+              </ImageTile>
             </Link>
           </article>
         </div>
@@ -202,9 +247,9 @@ export function LandingPage() {
 
       <VisitAtelierCallout />
 
-      <section className="mx-auto max-w-[1274px] px-5 py-20">
+      <section id="calendrier" className="mx-auto max-w-[1274px] px-5 py-20">
         <h2 className="mb-8 text-[30px] font-semibold leading-tight text-black/80">
-          Calendrier du mois
+          calendrier du mois
         </h2>
         <div className="mb-8 max-w-[1196px] text-xl leading-normal text-black/75">
           <p>Retrouvez notre proposition de cours pour ce mois-ci.</p>
@@ -216,13 +261,17 @@ export function LandingPage() {
             </Link>
           </p>
         </div>
-        <Placeholder className="h-[380px] md:h-[779px]" />
+        <Suspense fallback={<CalendrierAteliersFallback />}>
+          <div className="rounded-[19px] border border-black/10 bg-white p-4 shadow-sm ring-1 ring-black/5 md:p-8">
+            <MonthlyActivitiesCalendar />
+          </div>
+        </Suspense>
       </section>
 
       <section className="bg-[#fff8f0]">
         <div className="mx-auto grid max-w-[1274px] gap-6 px-5 py-[50px] md:grid-cols-[298px_1fr_auto] md:items-start">
           <h2 className="text-[30px] font-bold leading-none tracking-[-0.6px]">
-            Newsletter
+            newsletter
           </h2>
           <div className="max-w-[783px] text-xl leading-normal text-black/75">
             <p>
@@ -236,10 +285,10 @@ export function LandingPage() {
             </p>
           </div>
           <Link
-            href="/activities"
+            href="/newsletter"
             className="text-2xl font-semibold text-[#4a56dd] underline underline-offset-2 md:pt-12"
           >
-            S&apos;inscrire
+            s&apos;inscrire
           </Link>
         </div>
       </section>
@@ -247,7 +296,7 @@ export function LandingPage() {
       <section className="mx-auto max-w-[1274px] px-5 py-[60px] text-center">
         <div className="mx-auto max-w-[1071px] text-xl leading-normal text-black/75">
           <h2 className="mb-5 text-[30px] font-semibold leading-tight text-[#4a56dd]">
-            Pourquoi manufacto?
+            pourquoi manufacto?
           </h2>
           <p>
             Parce que nous sommes nombreux et nombreuses à aimer fabriquer,
@@ -264,7 +313,11 @@ export function LandingPage() {
           </p>
         </div>
 
-        <Placeholder className="mt-16 h-[260px] md:h-[438px]" />
+        <ImageTile
+          src={ASSETS.atelier}
+          alt="Personnes travaillant dans l'atelier de menuiserie"
+          className="mt-16 h-[260px] md:h-[438px]"
+        />
 
         <p className="mx-auto mt-16 max-w-[1072px] text-xl leading-normal text-black/75">
           Plus besoin de faire de la poussière dans votre salon, de trouver
@@ -287,10 +340,10 @@ export function LandingPage() {
           manufacto.marseille
         </Link>
         <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Placeholder className="h-[220px] md:h-[361px]" />
-          <Placeholder className="h-[220px] md:h-[361px]" />
-          <Placeholder className="h-[220px] md:h-[361px]" />
-          <Placeholder className="h-[220px] md:h-[361px]" />
+          <ImageTile src={ASSETS.instagramOne} alt="Espace menuiserie" className="h-[220px] md:h-[361px]" />
+          <ImageTile src={ASSETS.instagramTwo} alt="Assemblage bois en cours" className="h-[220px] md:h-[361px]" />
+          <ImageTile src={ASSETS.instagramThree} alt="Outils sur établi" className="h-[220px] md:h-[361px]" />
+          <ImageTile src={ASSETS.instagramFour} alt="Atelier textile collectif" className="h-[220px] md:h-[361px]" />
         </div>
         <p className="mt-8 text-xl leading-normal text-black/75">
           Suivez-nous sur instagram pour suivre nos actualités !

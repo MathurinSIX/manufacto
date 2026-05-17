@@ -17,6 +17,10 @@ const ASSETS = {
   pictoVectoriel: "/assets/picto/picto_vectoriel.svg",
   starBlue: "/assets/figma-landing/star-blue.png",
   starOrange: "/assets/figma-landing/star-orange.png",
+  heroAtelier: "/assets/l_atelier/Frame 44.jpg",
+  universAtelier: "/assets/l_atelier/Vector.jpg",
+  creditSystem: "/assets/l_atelier/Frame 1321317462.jpg",
+  tarifs: "/assets/l_atelier/WhatsApp Image 2026-05-11 at 17.40.04 1.jpg",
 } as const;
 
 const universes = [
@@ -49,39 +53,58 @@ const universes = [
 const courseCards = [
   {
     number: "1.",
-    title: "Achetez un pass manufacto,",
+    title: "achetez un pass manufacto,",
     color: "text-[#f56800]",
     copy: " que vous chargez avec le nombre de crédits de votre choix.",
   },
   {
     number: "2.",
-    title: "Avant votre première venue, nous vous enverrons un lien pour vous inscrire à une visite détaillée",
+    title: "avant votre première venue, nous vous enverrons un lien pour vous inscrire à une visite détaillée",
     color: "text-[#f56800]",
     copy: " de l’atelier. Elle sera l’occasion de se rencontrer, de vous faire faire le tour des lieux et de vous expliquer comment l’atelier fonctionne.",
   },
   {
     number: "3.",
-    title: "Réservez vos prochains créneaux / cours.",
+    title: "réservez vos prochains créneaux / cours.",
     color: "text-[#f56800]",
     copy: " Vous serez débité du nombre de crédits correspondant, le solde reste disponible pour une prochaine fois, sur votre espace en ligne.",
   },
 ];
 
-function Placeholder({ className = "" }: { className?: string }) {
-  return <div className={`rounded-[6px] bg-[#d9d9d9] ${className}`} />;
+function ImageTile({
+  src,
+  alt,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-[6px] bg-[#d9d9d9] ${className}`}>
+      <Image src={src} alt={alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 520px" />
+    </div>
+  );
 }
 
 export default function AtelierPage() {
   return (
     <main className="min-h-screen bg-white text-black">
       <div className="flex min-h-screen w-full flex-col items-center">
-        <section className="w-full bg-[#d9d9d9]">
-          <div className="mx-auto h-[176px] max-w-[1100px] px-5 md:h-[300px]" />
+        <section className="relative h-[176px] w-full overflow-hidden bg-[#d9d9d9] md:h-[300px]">
+          <Image
+            src={ASSETS.heroAtelier}
+            alt="Manufacto, atelier partagé de menuiserie"
+            fill
+            className="object-cover"
+            priority
+            sizes="100vw"
+          />
         </section>
 
-        <section className="mx-auto w-full max-w-[990px] px-5 pb-10 pt-8 text-center">
+        <section id="concept" className="mx-auto w-full max-w-[990px] scroll-mt-28 px-5 pb-10 pt-8 text-center">
           <p className="mx-auto max-w-[520px] text-[19px] font-semibold leading-tight text-[#4a56dd] underline decoration-1 underline-offset-2 md:text-[24px]">
-            Qu&apos;est-ce que manufacto?
+            qu&apos;est-ce que manufacto?
           </p>
           <div className="mx-auto mt-5 max-w-[620px] space-y-12 text-xl leading-normal text-black/75">
             <p>
@@ -102,12 +125,12 @@ export default function AtelierPage() {
 
         <section className="mx-auto w-full max-w-[1030px] px-5 pb-12">
           <h1 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
-            Un atelier, quatre univers
+            un atelier, quatre univers
           </h1>
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-8">
             {universes.map((universe) => (
               <div key={universe.label} className="text-center">
-                <div className="flex h-[112px] items-center justify-center rounded-[6px] bg-[#fff8f0] p-4 md:h-[156px]">
+                <div className="flex h-[112px] items-center justify-center p-4 md:h-[156px]">
                   <Image
                     src={universe.image}
                     alt={universe.label}
@@ -116,16 +139,14 @@ export default function AtelierPage() {
                     className="max-h-full w-auto object-contain"
                   />
                 </div>
-                <p className="mt-3 text-base font-semibold uppercase tracking-[0.16em] text-black/60">
-                  {universe.label}
-                </p>
               </div>
             ))}
           </div>
         </section>
 
         <section className="mx-auto w-full max-w-[1030px] px-5 pb-16">
-          <div>
+          <div className="grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
+            <div>
             <MarketingBody className="max-w-[920px] space-y-8">
               <p>
                 Manufacto est organisé autour de quatre univers techniques et
@@ -157,22 +178,28 @@ export default function AtelierPage() {
                 href="/pratique-libre"
                 className={MARKETING_LINK_CLASS}
               >
-                Découvrez la pratique libre
+                découvrez la pratique libre
               </Link>
               <Link
                 href="/cours"
                 className="text-2xl font-semibold text-[#58a34d] underline underline-offset-2"
               >
-                Découvrez nos cours
+                découvrez nos cours
               </Link>
             </div>
+            </div>
+            <ImageTile
+              src={ASSETS.universAtelier}
+              alt="Chaise en bois en cours de fabrication"
+              className="h-[380px] rounded-[16px]"
+            />
           </div>
         </section>
 
-        <section className="w-full bg-[#fff8f0]">
+        <section id="fonctionnement" className="w-full scroll-mt-28 bg-[#fff8f0]">
           <div className="mx-auto max-w-[1030px] px-5 py-10 md:py-14">
             <MarketingSectionTitle className="mb-12 text-black">
-              Fonctionnement
+              fonctionnement
             </MarketingSectionTitle>
 
             <div className="mb-7 flex items-center gap-5">
@@ -185,7 +212,7 @@ export default function AtelierPage() {
                 aria-hidden
               />
               <p className="max-w-[760px] text-2xl font-bold leading-tight text-black/80">
-                Vous êtes intéressé par la{" "}
+                vous êtes intéressé par la{" "}
                 <span className="text-[#58a34d]">pratique libre</span>, <br />
                 et peut être{" "}
                 <span className="text-[#58a34d]">quelques cours</span> de temps
@@ -221,7 +248,7 @@ export default function AtelierPage() {
                   aria-hidden
                 />
                 <p className="max-w-[760px] text-2xl font-bold leading-tight text-black">
-                  Vous voulez{" "}
+                  vous voulez{" "}
                   <span className="text-[#f6c51d]">
                     simplement acheter un cours
                   </span>
@@ -241,7 +268,7 @@ export default function AtelierPage() {
           <div className="mt-4 bg-white/55">
             <div className="mx-auto grid max-w-[1030px] gap-6 px-5 py-8 md:grid-cols-[210px_1fr] md:items-center">
               <p className="text-2xl font-bold text-[#f56800]">
-                Besoin d&apos;aide ?
+                besoin d&apos;aide ?
               </p>
               <p className="text-lg leading-normal text-black/75">
                 <strong className="text-black/80">
@@ -255,9 +282,9 @@ export default function AtelierPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-[1030px] px-5 py-14">
+        <section id="horaires-et-tarifs" className="mx-auto w-full max-w-[1030px] scroll-mt-28 px-5 py-14">
           <MarketingSectionTitle className="text-black">
-            Horaires
+            horaires
           </MarketingSectionTitle>
 
           <div className="relative mx-auto mt-12 max-w-[610px] rounded-[18px] border border-[#f56800]/60 bg-[#fff8f0] px-8 py-10 text-center text-xl leading-normal text-black/75">
@@ -284,13 +311,13 @@ export default function AtelierPage() {
 
         <section id="tarifs" className="mx-auto w-full max-w-[1030px] px-5 pb-20">
           <MarketingSectionTitle className="text-black">
-            Tarifs
+            tarifs
           </MarketingSectionTitle>
 
           <div className="mt-16 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
             <div>
               <h3 className="text-[28px] font-bold leading-none text-black">
-                Manufacto fonctionne avec <br />
+                manufacto fonctionne avec <br />
                 un système de crédit
               </h3>
               <MarketingBody className="mt-14 text-lg">
@@ -325,15 +352,23 @@ export default function AtelierPage() {
                 </ul>
               </MarketingBody>
             </div>
-            <Placeholder className="h-[440px] rounded-[16px]" />
+            <ImageTile
+              src={ASSETS.creditSystem}
+              alt="Maillet et copeaux de bois"
+              className="h-[440px] rounded-[16px]"
+            />
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
-            <Placeholder className="h-[760px] rounded-[16px]" />
+            <ImageTile
+              src={ASSETS.tarifs}
+              alt="Outils de menuiserie sur un établi"
+              className="h-[760px] rounded-[16px]"
+            />
             <div className="space-y-8">
               <div>
                 <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f56800]">
-                  Menuiserie
+                  menuiserie
                 </h3>
                 <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
                   <div className="flex justify-between gap-6">
@@ -353,7 +388,7 @@ export default function AtelierPage() {
 
               <div>
                 <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#4a56dd]">
-                  Couture
+                  couture
                 </h3>
                 <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
                   <div className="flex justify-between gap-6">
@@ -369,7 +404,7 @@ export default function AtelierPage() {
 
               <div>
                 <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#d73459]">
-                  Céramique
+                  céramique
                 </h3>
                 <div className="mt-4 space-y-3 text-lg leading-tight text-black/75">
                   <div className="flex justify-between gap-6">
@@ -397,7 +432,7 @@ export default function AtelierPage() {
 
               <div>
                 <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#20b75a]">
-                  Électronique
+                  électronique
                 </h3>
                 <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
                   <div className="flex justify-between gap-6">
@@ -413,7 +448,7 @@ export default function AtelierPage() {
 
               <div>
                 <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f6c51d]">
-                  Cours
+                  cours
                 </h3>
                 <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
                   <div className="flex justify-between gap-6">
@@ -442,7 +477,7 @@ export default function AtelierPage() {
           <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-start">
             <div>
               <h3 className="text-[28px] font-bold leading-tight text-[#4a56dd]">
-                Les packs découverte*
+                les packs découverte*
               </h3>
               <p className="mt-7 text-lg leading-normal text-black/75">
                 Deux packs à choisir si vous voulez venir une première fois pour
@@ -483,7 +518,7 @@ export default function AtelierPage() {
           <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
             <div>
               <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
-                Les packs de crédits
+                les packs de crédits
               </h3>
               <p className="mt-6 text-lg leading-normal text-black/75">
                 Les crédits sont <strong>valables un an</strong> à partir de
@@ -517,7 +552,7 @@ export default function AtelierPage() {
           <div className="mt-20 grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
             <div>
               <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
-                Les abonnements
+                les abonnements
               </h3>
               <div className="mt-6 space-y-5 text-lg leading-normal text-black/75">
                 <p>
@@ -548,9 +583,9 @@ export default function AtelierPage() {
             <div>
               <div className="space-y-3">
                 {[
-                  ["Formule 01", "90€", "20 crédits", "L’abonnement idéal si vous voulez utiliser l’espace couture ou électronique de manière régulière."],
-                  ["Formule 02", "170€", "40 crédits", "L’abonnement idéal si vous avez une pratique intermédiaire, et que vous voulez utilisez nos différents espaces régulièrement."],
-                  ["Formule 03", "240€", "60 crédits", "L’abonnement idéal si vous avez une pratique intensive de la menuiserie ou de la céramique."],
+                  ["abonnement 01", "90€", "20 crédits", "L’abonnement idéal si vous voulez utiliser l’espace couture ou électronique de manière régulière."],
+                  ["abonnement 02", "170€", "40 crédits", "L’abonnement idéal si vous avez une pratique intermédiaire, et que vous voulez utilisez nos différents espaces régulièrement."],
+                  ["abonnement 03", "240€", "60 crédits", "L’abonnement idéal si vous avez une pratique intensive de la menuiserie ou de la céramique."],
                 ].map(([label, price, credits, copy]) => (
                   <div
                     key={label}
@@ -571,10 +606,10 @@ export default function AtelierPage() {
                 ))}
               </div>
               <Link
-                href="/activities"
+                href="/account"
                 className="mt-20 block text-right text-2xl font-bold text-[#20b75a] underline underline-offset-2"
               >
-                Acheter des crédits
+                acheter des crédits
               </Link>
             </div>
           </div>

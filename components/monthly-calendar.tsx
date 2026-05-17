@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -27,43 +28,58 @@ const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
   timeZone: PARIS_TIMEZONE,
 });
 
-const startOfMonth = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth(), 1);
+export type CalendarSessionItem = {
+  id: string;
+  activityId: string;
+  start_ts: string;
+  end_ts: string;
+  activityName: string;
+};
 
-const addMonths = (date: Date, delta: number) =>
-  new Date(date.getFullYear(), date.getMonth() + delta, 1);
+const startOfMonthUTC = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 12, 0, 0));
+
+const addMonthsUTC = (date: Date, delta: number) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1, 12, 0, 0));
 
 const toDayKey = (date: Date) => dayKeyFormatter.format(date);
 
 const buildCalendarGrid = (month: Date) => {
-  const firstOfMonth = startOfMonth(month);
-  const weekday = (firstOfMonth.getDay() + 6) % 7; // convert Sunday(0) -> 6
+  const firstOfMonth = new Date(
+    Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1, 12, 0, 0),
+  );
+  const weekday = (firstOfMonth.getUTCDay() + 6) % 7;
   const gridStart = new Date(firstOfMonth);
-  gridStart.setDate(firstOfMonth.getDate() - weekday);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() - weekday);
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
+    date.setUTCDate(gridStart.getUTCDate() + index);
     return date;
   });
 };
 
 interface MonthlyCalendarProps {
-  sessionsByDate: Map<string, Array<{ id: string; start_ts: string; end_ts: string; activityName: string }>>;
-  currentMonth: Date;
+  sessionsByDate: Record<string, CalendarSessionItem[]>;
+  currentMonthIso: string;
 }
 
-export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalendarProps) {
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(currentMonth));
+export function MonthlyCalendar({
+  sessionsByDate,
+  currentMonthIso,
+}: MonthlyCalendarProps) {
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    startOfMonthUTC(new Date(currentMonthIso)),
+  );
   const todayKey = toDayKey(new Date());
 
   const calendarDays = useMemo(
     () => buildCalendarGrid(visibleMonth),
-    [visibleMonth]
+    [visibleMonth],
   );
 
   const getSessionsForDay = (day: Date) => {
     const key = toDayKey(day);
-    return sessionsByDate.get(key) || [];
+    return sessionsByDate[key] ?? [];
   };
 
   return (
@@ -71,7 +87,7 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+          onClick={() => setVisibleMonth(addMonthsUTC(visibleMonth, -1))}
           className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-muted"
           aria-label="Mois précédent"
         >
@@ -82,7 +98,7 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
         </p>
         <button
           type="button"
-          onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+          onClick={() => setVisibleMonth(addMonthsUTC(visibleMonth, 1))}
           className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-muted"
           aria-label="Mois suivant"
         >
@@ -90,14 +106,16 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
         </button>
       </div>
       <div className="mb-2 grid grid-cols-7 text-center text-xs uppercase text-muted-foreground">
-        {WEEKDAY_LABELS.map((label) => (
-          <span key={label}>{label}</span>
+        {WEEKDAY_LABELS.map((label, i) => (
+          <span key={`${i}-${label}`}>{label}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day) => {
           const key = toDayKey(day);
-          const isCurrentMonth = day.getMonth() === visibleMonth.getMonth();
+          const isCurrentMonth =
+            day.getUTCMonth() === visibleMonth.getUTCMonth() &&
+            day.getUTCFullYear() === visibleMonth.getUTCFullYear();
           const isToday = key === todayKey;
           const sessions = getSessionsForDay(day);
           const hasSessions = sessions.length > 0;
@@ -106,29 +124,32 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
             <div
               key={key}
               className={cn(
-                "flex flex-col min-h-[80px] rounded-md border p-1 text-sm transition-colors",
+                "flex flex-col min-h-[80px] rounded-md border p-1 text-sm transition-colors md:min-h-[100px]",
                 !isCurrentMonth && "text-muted-foreground/40 border-muted/40",
                 isToday && "ring-2 ring-primary",
                 hasSessions && "bg-primary/5 border-primary/20"
               )}
             >
-              <span className="text-xs font-medium mb-1">{day.getDate()}</span>
+              <span className="text-xs font-medium mb-1">
+                {day.getUTCDate()}
+              </span>
               {hasSessions && (
-                <div className="flex-1 space-y-0.5 overflow-hidden">
-                  {sessions.slice(0, 2).map((session) => (
-                    <div
-                      key={session.id}
-                      className="text-[10px] bg-primary/10 text-primary rounded px-1 py-0.5 truncate"
-                      title={`${session.activityName} - ${timeFormatter.format(new Date(session.start_ts))}`}
-                    >
-                      {timeFormatter.format(new Date(session.start_ts))} {session.activityName}
-                    </div>
-                  ))}
-                  {sessions.length > 2 && (
-                    <div className="text-[10px] text-muted-foreground">
-                      +{sessions.length - 2}
-                    </div>
-                  )}
+                <div className="flex max-h-[132px] flex-1 flex-col gap-0.5 overflow-y-auto pr-0.5">
+                  {sessions.map((session) => {
+                    const href = `/reserver?activity=${encodeURIComponent(session.activityId)}&session=${encodeURIComponent(session.id)}`;
+                    const label = `${timeFormatter.format(new Date(session.start_ts))} ${session.activityName}`;
+                    return (
+                      <Link
+                        key={session.id}
+                        href={href}
+                        scroll={false}
+                        className="block truncate rounded bg-primary/10 px-1 py-0.5 text-[10px] font-medium text-primary underline-offset-2 transition hover:bg-primary/20 hover:underline"
+                        title={`Réserver — ${label}`}
+                      >
+                        {label}
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>

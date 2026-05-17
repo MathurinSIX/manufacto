@@ -1,7 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { InstagramIcon } from "@/components/instagram-icon";
 
+const LOGO_MARK = "/assets/figma-landing/logo-mark.png";
 const INSTAGRAM_URL = "https://www.instagram.com/manufacto.marseille/";
 
 export function Footer() {
@@ -9,7 +11,15 @@ export function Footer() {
     <footer className="mt-auto border-t border-black/10 bg-white">
       <div className="mx-auto grid max-w-[1030px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_150px_150px_220px]">
         <div>
-          <p className="mb-20 text-2xl leading-normal">Manufacto</p>
+          <Link href="/" className="relative mb-20 block h-[57px] w-[190px]">
+            <Image
+              src={LOGO_MARK}
+              alt="Manufacto"
+              fill
+              className="object-contain object-left"
+              sizes="190px"
+            />
+          </Link>
           <Link
             href={INSTAGRAM_URL}
             target="_blank"
@@ -40,7 +50,7 @@ export function Footer() {
             <Link href="/contact" className="block hover:text-black">
               Contact
             </Link>
-            <Link href="/activities" className="block hover:text-black">
+            <Link href="/#calendrier" className="block hover:text-black">
               Calendrier
             </Link>
             <Link href="/account" className="block hover:text-black">
@@ -51,9 +61,6 @@ export function Footer() {
 
         <div className="space-y-3 font-medium leading-normal">
           <div className="space-y-1 text-[#454545]">
-            <a href="tel:+33607080910" className="block hover:text-black">
-              06 07 08 09 10
-            </a>
             <a href="mailto:contact@manufacto-marseille.com" className="block hover:text-black">
               contact@manufacto-marseille.com
             </a>

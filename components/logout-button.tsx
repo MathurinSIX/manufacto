@@ -18,7 +18,7 @@ export function LogoutButton({ className }: { className?: string }) {
     <Button
       onClick={logout}
       className={cn(
-        "h-auto rounded-[14px] bg-[#4a56dd] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3844c8]",
+        "h-auto rounded-none bg-transparent px-0 py-0 text-base font-semibold text-[#4a56dd] underline underline-offset-2 shadow-none hover:bg-transparent hover:text-[#3844c8]",
         className,
       )}
     >

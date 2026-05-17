@@ -21,7 +21,7 @@ export async function Navigation() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims as ClaimsWithAppMetadata | undefined;
-  const isAdmin = claims?.app_metadata?.role === "admin";
+  const isadmin = claims?.app_metadata?.role === "admin";
 
   return (
     <nav className="w-full bg-white">
@@ -39,24 +39,35 @@ export async function Navigation() {
 
         <div className="hidden items-center gap-8 text-center text-base md:flex">
           {NAV_LINKS.map((item) => (
-            <Link key={item.label} href={item.href} className="leading-normal hover:text-[#4a56dd]">
-              {item.label}
-            </Link>
+            <div key={item.label} className="group relative flex min-w-[90px] flex-col items-center py-8">
+              <Link href={item.href} className="leading-normal hover:text-[#4a56dd]">
+                {item.label}
+              </Link>
+              {item.subLinks?.length ? (
+                <div className="invisible absolute left-1/2 top-full z-20 flex min-w-[150px] -translate-x-1/2 flex-col gap-1 rounded-xl bg-white px-4 py-3 text-sm leading-tight text-black/55 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                  {item.subLinks.map((subLink) => (
+                    <Link key={subLink.href} href={subLink.href} className="hover:text-[#4a56dd]">
+                      {subLink.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ))}
-          {isAdmin ? (
+          {isadmin ? (
             <Link href="/admin" className="leading-normal font-semibold text-[#4a56dd] hover:text-[#3540bf]">
-              Admin
+              admin
             </Link>
           ) : null}
         </div>
 
         <div className="flex items-center gap-2">
-          <MobileNavDrawer showAdminLink={isAdmin} />
+          <MobileNavDrawer showadminLink={isadmin} />
           <Link
             href="/account"
             className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
           >
-            <span className="hidden sm:inline">Mon compte</span>
+            <span className="hidden sm:inline">mon compte</span>
             <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
           </Link>
         </div>

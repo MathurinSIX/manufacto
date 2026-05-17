@@ -7,10 +7,12 @@ import { useRouter } from "next/navigation";
 
 interface CancelRegistrationButtonProps {
   registrationId: string;
+  onCancelled?: () => void;
 }
 
 export function CancelRegistrationButton({
   registrationId,
+  onCancelled,
 }: CancelRegistrationButtonProps) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function CancelRegistrationButton({
       setError(result.error);
       setIsCancelling(false);
     } else {
+      onCancelled?.();
       router.refresh();
     }
   };

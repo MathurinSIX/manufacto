@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
@@ -10,11 +11,49 @@ import {
   MarketingPageContainer,
   MarketingSectionTitle,
 } from "@/components/marketing";
-import { formatPrice, getCourseBySlug, getCoursesFromDb } from "../course-data";
+import { MarkdownContent } from "@/components/markdown-content";
+import {
+  formatCredits,
+  formatPrice,
+  getCourseBySlug,
+  getCoursesFromDb,
+} from "../course-data";
 
 type CourseDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
+
+type CourseSession = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+};
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const PARIS_TIMEZONE = "Europe/Paris";
+
+const sessionDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: PARIS_TIMEZONE,
+});
+
+const sessionTimeFormatter = new Intl.DateTimeFormat("fr-FR", {
+  hour: "numeric",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: PARIS_TIMEZONE,
+});
+
+function formatSession(session: CourseSession) {
+  const start = new Date(session.start_ts);
+  const end = new Date(session.end_ts);
+
+  return `${sessionDateFormatter.format(start)} - ${sessionTimeFormatter.format(start)} / ${sessionTimeFormatter.format(end)}`;
+}
 
 async function getCourses() {
   unstable_noStore();
@@ -22,8 +61,10 @@ async function getCourses() {
 
   const { data, error } = await supabase
     .from("activity")
-    .select("id, name, description, image_url, nb_credits, price")
-    .eq("type", "atelier");
+    .select("id, name, description, image_url, nb_credits, price, square_product_id, level, audience, discipline")
+    .eq("type", "cours")
+    .is("deleted_at", null)
+    .order("name");
 
   if (error) {
     console.error("Error fetching activities", error);
@@ -32,11 +73,39 @@ async function getCourses() {
   return getCoursesFromDb(data);
 }
 
+async function getUpcomingSessions(activityId: string): Promise<CourseSession[]> {
+  if (!UUID_RE.test(activityId)) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("session")
+    .select("id, start_ts, end_ts")
+    .eq("activity_id", activityId)
+    .gte("start_ts", new Date().toISOString())
+    .order("start_ts", { ascending: true })
+    .limit(3);
+
+  if (error) {
+    console.error("Error fetching course sessions", error);
+    return [];
+  }
+
+  return data ?? [];
+}
+
 async function CourseDetailContent({ params }: CourseDetailPageProps) {
   unstable_noStore();
   const { slug } = await params;
   const courses = await getCourses();
   const course = getCourseBySlug(slug, courses);
+  if (!course) {
+    notFound();
+  }
+  const sessions = await getUpcomingSessions(course.id);
+  const priceLabel = formatPrice(course.price);
+  const creditsLabel = formatCredits(course.credits);
 
   return (
     <MarketingPageContainer className="pb-[170px]">
@@ -58,20 +127,26 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
               Prochaines dates disponibles
             </MarketingSectionTitle>
             <div className="mt-9 space-y-7">
-              {course.sessions.map((session, index) => (
-                <div
-                  key={`${session}-${index}`}
-                  className="flex items-center justify-between gap-4 text-xl leading-normal text-black/75"
-                >
-                  <p>{session}</p>
-                  <Link
-                    href="/activities"
-                    className={MARKETING_LINK_CLASS}
+              {sessions.length ? (
+                sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between gap-4 text-xl leading-normal text-black/75"
                   >
-                    réserver
-                  </Link>
-                </div>
-              ))}
+                    <p className="capitalize">{formatSession(session)}</p>
+                    <Link
+                      href={`/reserver?activity=${encodeURIComponent(course.id)}&session=${encodeURIComponent(session.id)}`}
+                      className={MARKETING_LINK_CLASS}
+                    >
+                      réserver
+                    </Link>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xl leading-normal text-black/75">
+                  Aucune date n&apos;est disponible pour le moment.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -80,42 +155,53 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
           <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
             {course.title}
           </h1>
-          <p className="mt-8 text-2xl font-bold leading-normal">
-            {formatPrice(course.price)}
-            <br />
-            / {course.credits ?? 10} crédits*
-          </p>
-          <p className="mt-8 max-w-[404px] text-xl leading-normal text-black/75">
-            *Si vous avez déjà un pass avec des crédits, vous pouvez choisir,
-            au moment du règlement, de régler avec vos crédits directement.
-          </p>
+          {priceLabel || creditsLabel ? (
+            <p className="mt-8 text-2xl font-bold leading-normal">
+              {priceLabel ? (
+                <>
+                  {priceLabel}
+                  <br />
+                </>
+              ) : null}
+              {creditsLabel
+                ? priceLabel
+                  ? ` / ${creditsLabel}*`
+                  : `${creditsLabel}*`
+                : null}
+            </p>
+          ) : null}
+          {creditsLabel ? (
+            <p className="mt-8 max-w-[404px] text-xl leading-normal text-black/75">
+              *Si vous avez déjà un pass avec des crédits, vous pouvez choisir,
+              au moment du règlement, de régler avec vos crédits directement.
+            </p>
+          ) : null}
+          {(course.level || course.audience) && (
+            <dl className="mt-8 grid gap-4 text-xl leading-normal text-black/75 sm:grid-cols-2">
+              {course.level && (
+                <div>
+                  <dt className="font-bold text-black">Niveau</dt>
+                  <dd>{course.level}</dd>
+                </div>
+              )}
+              {course.audience && (
+                <div>
+                  <dt className="font-bold text-black">Public</dt>
+                  <dd>{course.audience}</dd>
+                </div>
+              )}
+            </dl>
+          )}
 
           <MarketingBody className="mt-9 text-black/75">
             <section>
               <h2 className={MARKETING_LINK_CLASS}>
                 En résumé
               </h2>
-              <p className="mt-7 text-black/70">{course.description}</p>
-            </section>
-
-            <section>
-              <h2 className={MARKETING_LINK_CLASS}>
-                Contenu &amp; Objectifs
-              </h2>
-              <div className="mt-7 space-y-7">
-                <p>
-                  Cet atelier vous accompagne dans la découverte des gestes,
-                  des outils et des méthodes nécessaires pour progresser en
-                  sécurité. Vous repartez avec des repères concrets pour
-                  reproduire la technique et l&apos;adapter à vos projets.
-                </p>
-                <p>
-                  Le contenu alterne démonstrations, pratique guidée et temps
-                  d&apos;échange. L&apos;objectif est de comprendre les étapes clés,
-                  d&apos;identifier les bons gestes, et de gagner en autonomie dans
-                  l&apos;univers concerné.
-                </p>
-              </div>
+              <MarkdownContent
+                content={course.description}
+                className="mt-7 space-y-4 text-black/70 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:font-bold [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5"
+              />
             </section>
           </MarketingBody>
         </article>

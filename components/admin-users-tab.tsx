@@ -157,18 +157,18 @@ export function AdminUsersTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Liste des utilisateurs</h3>
+        <h3 className="text-lg font-semibold">liste des utilisateurs</h3>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Ajouter un utilisateur
+              ajouter un utilisateur
             </Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
-                <DialogTitle>Nouvel utilisateur</DialogTitle>
+                <DialogTitle>nouvel utilisateur</DialogTitle>
                 <DialogDescription>
                   Créez un nouveau compte utilisateur. Un email d'invitation sera envoyé pour définir le mot de passe.
                 </DialogDescription>
@@ -215,7 +215,7 @@ export function AdminUsersTab() {
                       Création...
                     </>
                   ) : (
-                    "Créer"
+                    "créer"
                   )}
                 </Button>
               </DialogFooter>
@@ -365,7 +365,7 @@ export function AdminUsersTab() {
         <DialogContent>
           <form onSubmit={handleAddCredit}>
             <DialogHeader>
-              <DialogTitle>Ajouter des crédits</DialogTitle>
+              <DialogTitle>ajouter des crédits</DialogTitle>
               <DialogDescription>
                 Ajoutez des crédits à {selectedUser?.email}
               </DialogDescription>
@@ -426,7 +426,7 @@ export function AdminUsersTab() {
                     Ajout...
                   </>
                 ) : (
-                  "Ajouter"
+                  "ajouter"
                 )}
               </Button>
             </DialogFooter>

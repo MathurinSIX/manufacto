@@ -5,10 +5,16 @@ export type Course = {
   title: string;
   image: string;
   price: number | null;
+  squareProductId: string | null;
   credits: number | null;
+  duration: string;
+  level: string | null;
+  audience: string | null;
   description: string;
   sessions: string[];
 };
+
+import { formatCourseDiscipline } from "@/lib/course-disciplines";
 
 export type DbCourse = {
   id: string;
@@ -17,60 +23,17 @@ export type DbCourse = {
   image_url: string | null;
   nb_credits: number | null;
   price: number | null;
+  square_product_id: string | null;
+  created_at?: string | null;
+  level: string | null;
+  audience: string | null;
+  discipline: string | null;
 };
 
-const COURSE_IMAGE = "/assets/figma-landing/hero-wood.png";
-
-export const fallbackCourses: Course[] = [
-  {
-    id: "initiation-assemblages",
-    slug: "initiation-assemblages-traditionnels",
-    discipline: "Menuiserie",
-    title: "Initiation aux assemblages traditionnels",
-    image: COURSE_IMAGE,
-    price: 50,
-    credits: 10,
-    description:
-      "Découvrir les gestes de base du travail du bois et apprendre à préparer des assemblages simples à la main.",
-    sessions: [
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-    ],
-  },
-  {
-    id: "degauchisseuse-raboteuse",
-    slug: "degauchisseuse-raboteuse",
-    discipline: "Menuiserie",
-    title: "Formation dégauchisseuse / raboteuse",
-    image: COURSE_IMAGE,
-    price: 50,
-    credits: 10,
-    description:
-      "Prendre en main les machines de préparation du bois, comprendre les réglages et travailler en sécurité.",
-    sessions: [
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-    ],
-  },
-  {
-    id: "surjeteuse",
-    slug: "formation-surjeteuse",
-    discipline: "Couture",
-    title: "Formation surjeteuse",
-    image: COURSE_IMAGE,
-    price: 50,
-    credits: 10,
-    description:
-      "Apprendre à enfiler, régler et utiliser une surjeteuse pour réaliser des finitions propres et solides.",
-    sessions: [
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-      "Vendredi 25 avril - 14h / 17h",
-    ],
-  },
-];
+const DEFAULT_COURSE_IMAGE = "/assets/homepage/Frame 42.jpg";
+const DEFAULT_COURSE_DESCRIPTION =
+  "Les informations détaillées de ce cours seront bientôt disponibles.";
+const DEFAULT_COURSE_DISCIPLINE = "Menuiserie";
 
 function slugify(value: string) {
   return value
@@ -81,54 +44,79 @@ function slugify(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-function splitCourseName(name: string) {
+function splitCourseName(name: string, disciplineFromDb?: string | null) {
+  const fromDb = formatCourseDiscipline(disciplineFromDb);
+  if (fromDb) {
+    const titleFromPrefix = name.includes("/")
+      ? name.split("/").slice(1).join("/").trim()
+      : name.trim();
+    return {
+      discipline: fromDb,
+      title: titleFromPrefix || name.trim(),
+    };
+  }
+
   const [discipline, ...rest] = name.split("/");
+  const displayDiscipline =
+    formatCourseDiscipline(discipline.trim()) ?? DEFAULT_COURSE_DISCIPLINE;
 
   if (rest.length === 0) {
     return {
-      discipline: "Menuiserie",
+      discipline: displayDiscipline,
       title: name,
     };
   }
 
   return {
-    discipline: discipline.trim(),
+    discipline: displayDiscipline,
     title: rest.join("/").trim(),
   };
 }
 
 export function formatPrice(price: number | null) {
   if (price === null) {
-    return "50€";
+    return null;
   }
 
   return `${Number.isInteger(price) ? price : price.toFixed(2)}€`;
 }
 
-export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
-  if (!data?.length) {
-    return [...fallbackCourses, ...fallbackCourses];
+export function formatCredits(credits: number | null) {
+  if (credits === null) {
+    return null;
   }
 
-  return data.map((activity, index) => {
-    const name = activity.name || fallbackCourses[index % fallbackCourses.length].title;
-    const fallback = fallbackCourses[index % fallbackCourses.length];
-    const { discipline, title } = splitCourseName(name);
+  return `${credits} crédit${credits !== 1 ? "s" : ""}`;
+}
+
+export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
+  if (!data?.length) {
+    return [];
+  }
+
+  return data.map((activity) => {
+    const name = activity.name?.trim() || "Cours";
+    const { discipline, title } = splitCourseName(name, activity.discipline);
+    const displayTitle = title || name;
 
     return {
-      id: activity.id || fallback.id,
-      slug: slugify(title || name || fallback.title),
+      id: activity.id,
+      slug: slugify(displayTitle),
       discipline,
-      title: title || fallback.title,
-      image: activity.image_url || fallback.image,
-      price: activity.price ?? fallback.price,
-      credits: activity.nb_credits ?? fallback.credits,
-      description: activity.description || fallback.description,
-      sessions: fallback.sessions,
+      title: displayTitle,
+      image: activity.image_url || DEFAULT_COURSE_IMAGE,
+      price: activity.price,
+      squareProductId: activity.square_product_id,
+      credits: activity.nb_credits,
+      duration: "3h",
+      level: activity.level,
+      audience: activity.audience,
+      description: activity.description || DEFAULT_COURSE_DESCRIPTION,
+      sessions: [],
     };
   });
 }
 
 export function getCourseBySlug(slug: string, courses: Course[]) {
-  return courses.find((course) => course.slug === slug) || courses[0];
+  return courses.find((course) => course.slug === slug) || null;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
+import { formatPaymentTypeLabel } from "@/lib/format-payment-type";
 import { Pagination } from "@/components/ui/pagination";
 
 const PARIS_TIMEZONE = "Europe/Paris";
@@ -39,6 +40,8 @@ interface Registration {
   id: string;
   payment_type: string | null;
   session_id: string | null;
+  reserved_start_ts?: string | null;
+  reserved_end_ts?: string | null;
   session?: Session | Session[] | null;
 }
 
@@ -122,8 +125,12 @@ export function UpcomingReservationsList({
                 : (typeof session.activity === "object" ? session.activity : null))
             : null;
           const activityName = activity?.name || "Activité inconnue";
-          const startDate = session.start_ts ? new Date(session.start_ts) : new Date();
-          const endDate = session.end_ts ? new Date(session.end_ts) : new Date();
+          const startDate = reg.reserved_start_ts
+            ? new Date(reg.reserved_start_ts)
+            : session.start_ts ? new Date(session.start_ts) : new Date();
+          const endDate = reg.reserved_end_ts
+            ? new Date(reg.reserved_end_ts)
+            : session.end_ts ? new Date(session.end_ts) : new Date();
 
           const latestStatus = registrationStatusMap[reg.id];
           const isCancelled = latestStatus && latestStatus.status === "CANCELLED";
@@ -145,7 +152,7 @@ export function UpcomingReservationsList({
                 </p>
                 {reg.payment_type && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Paiement: {reg.payment_type === "credits" ? "Crédits" : reg.payment_type === "stripe" ? "Stripe" : reg.payment_type}
+                    Paiement: {formatPaymentTypeLabel(reg.payment_type)}
                   </p>
                 )}
                 {isCancelled && (
