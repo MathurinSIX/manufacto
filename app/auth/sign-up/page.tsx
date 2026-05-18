@@ -1,10 +1,31 @@
+import { Suspense } from "react";
+
 import { SignUpForm } from "@/components/sign-up-form";
 import {
   MarketingPageContainer,
   MarketingPageHeader,
 } from "@/components/marketing";
 
-export default function Page() {
+interface SignUpPageProps {
+  searchParams?: Promise<{ next?: string }>;
+}
+
+async function SignUpPanel({
+  searchParams,
+}: {
+  searchParams?: Promise<{ next?: string }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const redirectTo =
+    typeof resolvedSearchParams?.next === "string" &&
+    resolvedSearchParams.next.length > 0
+      ? resolvedSearchParams.next
+      : undefined;
+
+  return <SignUpForm redirectTo={redirectTo} />;
+}
+
+export default function Page({ searchParams }: SignUpPageProps) {
   return (
     <main className="min-h-screen bg-white text-black">
       <MarketingPageContainer className="pb-24 md:pb-[140px]">
@@ -17,7 +38,9 @@ export default function Page() {
           </MarketingPageHeader>
 
           <section className="rounded-[19px] bg-[#fff8f0] p-6 ring-1 ring-black/10 md:p-8">
-            <SignUpForm />
+            <Suspense fallback={null}>
+              <SignUpPanel searchParams={searchParams} />
+            </Suspense>
           </section>
         </div>
       </MarketingPageContainer>

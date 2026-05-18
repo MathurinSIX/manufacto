@@ -11,7 +11,7 @@ export function CourseCard({ course }: { course: Course }) {
   return (
     <Link href={`/cours/${course.slug}`} className="group block">
       <article>
-        <div className="relative h-[128px] w-full overflow-hidden bg-[#d9d9d9] md:h-[156px]">
+        <div className="relative h-[180px] w-full overflow-hidden bg-[#d9d9d9] md:h-[230px]">
           <Image
             src={course.image}
             alt={course.title}

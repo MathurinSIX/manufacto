@@ -34,6 +34,11 @@ type RegistrationRow = {
   reserved_end_ts: string | null;
 };
 
+import {
+  ACCOMPAGNEMENT_ACTIVITY_TYPE,
+  getMinPracticeReservationHours,
+} from "@/lib/practice-reservation";
+
 const PRACTICE_ACTIVITY_TYPES = new Set([
   "autonomie",
   "autonomie_encadree",
@@ -158,8 +163,25 @@ export async function registerForSession(
 
     const durationHours =
       (reservationEnd.getTime() - reservationStart.getTime()) / (60 * 60 * 1000);
-    if (!Number.isInteger(durationHours) || durationHours < 1) {
-      return { error: "Choisissez au moins une heure de réservation.", registrationId: null };
+    const minHours = getMinPracticeReservationHours(activity?.type);
+    if (!Number.isInteger(durationHours) || durationHours < minHours) {
+      return {
+        error:
+          minHours === 1
+            ? "Choisissez au moins une heure de réservation."
+            : `La réservation minimale est de ${minHours} heures consécutives.`,
+        registrationId: null,
+      };
+    }
+
+    if (
+      activity?.type === ACCOMPAGNEMENT_ACTIVITY_TYPE &&
+      durationHours !== 1
+    ) {
+      return {
+        error: "Les séances d'accompagnement se réservent heure par heure.",
+        registrationId: null,
+      };
     }
 
     if (reservationStart.getTime() <= Date.now()) {

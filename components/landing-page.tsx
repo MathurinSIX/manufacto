@@ -95,7 +95,7 @@ export function LandingPage() {
       <header className="overflow-hidden border-y border-white bg-[#fff8f0]">
         <div className="mx-auto max-w-6xl px-4 pb-8 pt-6 md:px-8 md:pb-12 md:pt-10">
           <div className="mx-auto max-w-[1040px]">
-            <div className="mb-6 flex flex-col items-center justify-center gap-4 text-center md:flex-row md:items-start md:gap-6 md:text-left">
+            <div className="mb-6 flex flex-col items-start gap-4 text-left md:flex-row md:gap-6">
               <p className="min-w-0 flex-1 text-xl leading-relaxed text-[#2d2d2d] md:max-w-[65%] md:text-2xl">
                 <Logo className="mr-2 inline-block h-10 w-auto align-bottom md:h-12" />
                 c&apos;est un atelier partagé et multidisciplinaire au coeur de
@@ -113,19 +113,19 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="mb-0 flex flex-col items-center gap-4 md:gap-6">
+            <div className="mb-0 flex flex-col items-start gap-4 md:gap-6">
               <div className="relative aspect-[16/10] w-full max-w-xs overflow-hidden rounded-xl shadow-md ring-1 ring-black/5">
                 <Image
                   src={ASSETS.heroCouture}
                   alt="Mains travaillant le bois avec une règle et un crayon"
                   fill
-                  className="object-cover"
+                  className="object-cover object-left"
                   sizes="(max-width: 768px) 100vw, 320px"
                   priority
                 />
               </div>
 
-              <div className="-mt-0 flex flex-col-reverse items-center justify-center gap-4 text-center md:-mt-32 md:flex-row md:items-end md:gap-6 md:text-left">
+              <div className="-mt-0 flex flex-col-reverse items-start gap-4 text-left md:-mt-32 md:flex-row md:items-end md:gap-6">
                 <p className="min-w-0 flex-1 text-base leading-[1.7] text-[#2d2d2d] md:max-w-xl md:text-lg">
                   Un lieu pour avoir accès à l&apos;<strong>espace</strong>, aux{" "}
                   <strong>machines</strong>, <strong>outils</strong> et{" "}

@@ -1,6 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  AtelierCreditPackGrid,
+  AtelierDiscoveryPackGrid,
+  AtelierSubscriptionList,
+} from "@/components/atelier-tarifs-purchases";
+import {
   MARKETING_LINK_CLASS,
   MarketingBody,
   MarketingSectionTitle,
@@ -53,7 +58,7 @@ const universes = [
 const courseCards = [
   {
     number: "1.",
-    title: "achetez un pass manufacto,",
+    title: "créez un compte et achetez un pass manufacto,",
     color: "text-[#f56800]",
     copy: " que vous chargez avec le nombre de crédits de votre choix.",
   },
@@ -103,9 +108,9 @@ export default function AtelierPage() {
         </section>
 
         <section id="concept" className="mx-auto w-full max-w-[990px] scroll-mt-28 px-5 pb-10 pt-8 text-center">
-          <p className="mx-auto max-w-[520px] text-[19px] font-semibold leading-tight text-[#4a56dd] underline decoration-1 underline-offset-2 md:text-[24px]">
+          <h2 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
             qu&apos;est-ce que manufacto?
-          </p>
+          </h2>
           <div className="mx-auto mt-5 max-w-[620px] space-y-12 text-xl leading-normal text-black/75">
             <p>
               Manufacto est né d&apos;une envie : proposer un{" "}
@@ -417,10 +422,6 @@ export default function AtelierPage() {
                       <span>· four entier</span>
                       <span>60 €</span>
                     </div>
-                    <div className="flex justify-between gap-6">
-                      <span>· 1/3 de four</span>
-                      <span>36 €</span>
-                    </div>
                     <p className="mt-2 max-w-[300px] text-xs leading-tight">
                       pour retrouver le détail des modalités de nos cuissons
                       (terres acceptées, taille du four etc), allez sur notre
@@ -498,21 +499,7 @@ export default function AtelierPage() {
                 *offre limitée à un achat / personne.
               </p>
             </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              {[
-                ["15€", "2h de couture en", "autonomie encadrée"],
-                ["30€", "2h de menuiserie en", "autonomie encadrée"],
-              ].map(([price, line1, line2]) => (
-                <div
-                  key={price}
-                  className="flex h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#4a56dd]/70 bg-[#fff8f0] text-center"
-                >
-                  <p className="text-[34px] leading-none">{price}</p>
-                  <p className="text-lg font-semibold leading-none">{line1}</p>
-                  <p className="text-lg leading-none">{line2}</p>
-                </div>
-              ))}
-            </div>
+            <AtelierDiscoveryPackGrid />
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
@@ -530,23 +517,7 @@ export default function AtelierPage() {
                 achat, ils s&apos;ajoutent à ceux que vous venez d&apos;acheter.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-              {[
-                ["15€", "2 crédits"],
-                ["36€", "6 crédits"],
-                ["66€", "12 crédits"],
-                ["100€", "20 crédits"],
-                ["270€", "60 crédits"],
-              ].map(([price, credits]) => (
-                <div
-                  key={price}
-                  className="flex h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] text-center"
-                >
-                  <p className="text-[34px] leading-none">{price}</p>
-                  <p className="text-lg leading-none">{credits}</p>
-                </div>
-              ))}
-            </div>
+            <AtelierCreditPackGrid />
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
@@ -580,38 +551,7 @@ export default function AtelierPage() {
                 freins à votre venue, venez nous rencontrer et discutons en.
               </p>
             </div>
-            <div>
-              <div className="space-y-3">
-                {[
-                  ["abonnement 01", "90€", "20 crédits", "L’abonnement idéal si vous voulez utiliser l’espace couture ou électronique de manière régulière."],
-                  ["abonnement 02", "170€", "40 crédits", "L’abonnement idéal si vous avez une pratique intermédiaire, et que vous voulez utilisez nos différents espaces régulièrement."],
-                  ["abonnement 03", "240€", "60 crédits", "L’abonnement idéal si vous avez une pratique intensive de la menuiserie ou de la céramique."],
-                ].map(([label, price, credits, copy]) => (
-                  <div
-                    key={label}
-                    className="grid gap-4 rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] px-6 py-5 text-left md:grid-cols-[160px_1fr] md:items-center"
-                  >
-                    <div className="text-center md:text-left">
-                      <p className="text-lg text-[#c97a25]">{label}</p>
-                      <p className="mt-2 text-[34px] leading-none">{price}</p>
-                      <p className="whitespace-nowrap text-xl leading-none">
-                        {credits}
-                        {" / mois"}
-                      </p>
-                    </div>
-                    <p className="text-sm leading-snug text-black/75">
-                      {copy}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <Link
-                href="/account"
-                className="mt-20 block text-right text-2xl font-bold text-[#20b75a] underline underline-offset-2"
-              >
-                acheter des crédits
-              </Link>
-            </div>
+            <AtelierSubscriptionList />
           </div>
         </section>
       </div>

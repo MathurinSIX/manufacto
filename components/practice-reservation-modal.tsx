@@ -14,6 +14,7 @@ type PracticeReservationModalProps = {
   onOpenChange: (open: boolean) => void;
   activityId: string;
   activityTitle: string;
+  activityType?: string | null;
   credits?: number | null;
   squareProductId?: string | null;
   fixedHourCount?: number;
@@ -26,6 +27,7 @@ export function PracticeReservationModal({
   onOpenChange,
   activityId,
   activityTitle,
+  activityType,
   credits,
   squareProductId,
   fixedHourCount,
@@ -48,6 +50,7 @@ export function PracticeReservationModal({
             <PracticeReservationPicker
               activityId={activityId}
               activityTitle={activityTitle}
+              activityType={activityType}
               credits={credits}
               squareProductId={squareProductId}
               fixedHourCount={fixedHourCount}

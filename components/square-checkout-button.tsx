@@ -1,8 +1,10 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { buildSignUpUrl } from "@/lib/auth-redirect";
 
 type SquareCheckoutButtonProps = {
   productId: string;
@@ -15,6 +17,8 @@ type SquareCheckoutButtonProps = {
   disabled?: boolean;
   variant?: ButtonProps["variant"] | "button";
   size?: ButtonProps["size"];
+  isLoggedIn?: boolean;
+  returnPath?: string;
 };
 
 export function SquareCheckoutButton({
@@ -28,12 +32,33 @@ export function SquareCheckoutButton({
   disabled = false,
   variant = "default",
   size,
+  isLoggedIn = true,
+  returnPath,
 }: SquareCheckoutButtonProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const buttonVariant = variant === "button" ? "default" : variant;
 
+  function getReturnPath() {
+    if (returnPath) {
+      return returnPath;
+    }
+
+    return pathname;
+  }
+
+  function redirectToSignUp() {
+    router.push(buildSignUpUrl(getReturnPath()));
+  }
+
   async function startCheckout() {
+    if (!isLoggedIn) {
+      redirectToSignUp();
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -55,6 +80,11 @@ export function SquareCheckoutButton({
         url?: string;
         error?: string;
       };
+
+      if (response.status === 401) {
+        redirectToSignUp();
+        return;
+      }
 
       if (!response.ok || !payload.url) {
         throw new Error(payload.error ?? "Paiement indisponible");

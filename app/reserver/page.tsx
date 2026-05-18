@@ -286,6 +286,7 @@ export async function ReserverPanel({
         <ActivitySessionPicker
           activityId={activity.id}
           activityTitle={activityTitle}
+          activityType={activity.type}
           initialSessionId={sessionId}
           defaultOpen
           backOnClose={pickerBackOnClose}
@@ -315,6 +316,7 @@ export async function ReserverPanel({
           <PracticeReservationPicker
             activityId={activity.id}
             activityTitle={activityTitle}
+            activityType={activity.type}
             credits={activity.nb_credits}
             isLoggedIn={!!user}
             inModal
@@ -357,6 +359,7 @@ export async function ReserverPanel({
             <PracticeReservationPicker
               activityId={activity.id}
               activityTitle={activityTitle}
+              activityType={activity.type}
               credits={activity.nb_credits}
               isLoggedIn={!!user}
             />
@@ -364,6 +367,7 @@ export async function ReserverPanel({
             <ActivitySessionPicker
               activityId={activity.id}
               activityTitle={activityTitle}
+              activityType={activity.type}
               initialSessionId={sessionId}
               defaultOpen
               backOnClose={pickerBackOnClose}

@@ -21,6 +21,10 @@ import {
   PARIS_TIMEZONE,
   toParisDayKey,
 } from "@/lib/paris-time";
+import {
+  ACCOMPAGNEMENT_ACTIVITY_TYPE,
+  getMinPracticeReservationHours,
+} from "@/lib/practice-reservation";
 import { cn } from "@/lib/utils";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -113,6 +117,7 @@ function isHourBookedByUser(
 interface PracticeReservationPickerProps {
   activityId: string;
   activityTitle: string;
+  activityType?: string | null;
   credits?: number | null;
   squareProductId?: string | null;
   fixedHourCount?: number;
@@ -150,6 +155,64 @@ function hourSlotKey(sessionId: string, hour: Date) {
   return `${sessionId}:${hourKey(hour)}`;
 }
 
+function getOrderedSelectedHourSlots(
+  selectedKeys: string[],
+  slots: HourSlotOption[],
+): HourSlotOption[] {
+  return selectedKeys
+    .map((key) => slots.find((slot) => slot.key === key))
+    .filter((slot): slot is HourSlotOption => Boolean(slot))
+    .sort((a, b) => new Date(a.iso).getTime() - new Date(b.iso).getTime());
+}
+
+function areHourSlotsConsecutive(slots: HourSlotOption[]): boolean {
+  if (slots.length <= 1) {
+    return slots.length === 1;
+  }
+
+  for (let index = 1; index < slots.length; index += 1) {
+    const previous = slots[index - 1];
+    const current = slots[index];
+    if (
+      new Date(current.iso).getTime() - new Date(previous.iso).getTime() !==
+      HOUR_MS
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function splitIntoSessionBlocks(slots: HourSlotOption[]) {
+  if (!slots.length) return [];
+
+  const blocks: { sessionId: string; startIso: string; endIso: string }[] = [];
+  let blockStart = 0;
+
+  for (let index = 1; index <= slots.length; index += 1) {
+    const previous = slots[index - 1];
+    const current = slots[index];
+    const breaksBlock =
+      !current ||
+      current.sessionId !== previous.sessionId ||
+      new Date(current.iso).getTime() - new Date(previous.iso).getTime() !== HOUR_MS;
+
+    if (!breaksBlock) continue;
+
+    const chunk = slots.slice(blockStart, index);
+    const last = chunk[chunk.length - 1];
+    blocks.push({
+      sessionId: chunk[0].sessionId,
+      startIso: chunk[0].iso,
+      endIso: new Date(new Date(last.iso).getTime() + HOUR_MS).toISOString(),
+    });
+    blockStart = index;
+  }
+
+  return blocks;
+}
+
 function countRegistrationsForHour(registrations: RegistrationRow[], hour: Date) {
   const start = hour.getTime();
   const end = start + HOUR_MS;
@@ -166,6 +229,7 @@ function countRegistrationsForHour(registrations: RegistrationRow[], hour: Date)
 export function PracticeReservationPicker({
   activityId,
   activityTitle,
+  activityType,
   credits,
   squareProductId,
   fixedHourCount,
@@ -446,7 +510,13 @@ export function PracticeReservationPicker({
   }, [sessionsForSelectedDay, registrations, myRegistrations, userId]);
 
   const isSquareReservation = Boolean(squareProductId);
-  const requiredHourCount = fixedHourCount ?? null;
+  const isAccompagnement = activityType === ACCOMPAGNEMENT_ACTIVITY_TYPE;
+  const requiresExactHourCount = Boolean(isSquareReservation && fixedHourCount != null);
+  const minHourCount = isAccompagnement
+    ? 1
+    : requiresExactHourCount
+      ? fixedHourCount!
+      : getMinPracticeReservationHours(activityType);
 
   useEffect(() => {
     const allowed = new Set(
@@ -457,84 +527,12 @@ export function PracticeReservationPicker({
     setSelectedHourKeys((current) => current.filter((key) => allowed.has(key)));
   }, [hourSlotOptions]);
 
-  const fixedSlotOptions = useMemo(() => {
-    if (!requiredHourCount || requiredHourCount <= 1) return [];
-
-    const options: {
-      key: string;
-      hourKeys: string[];
-      sessionId: string;
-      startIso: string;
-      endIso: string;
-      label: string;
-      disabled: boolean;
-      available: number | null;
-      bookedByMe: boolean;
-    }[] = [];
-
-    const slotsBySession = new Map<string, HourSlotOption[]>();
-    for (const slot of hourSlotOptions) {
-      slotsBySession.set(slot.sessionId, [
-        ...(slotsBySession.get(slot.sessionId) ?? []),
-        slot,
-      ]);
-    }
-
-    for (const [sessionId, sessionSlots] of slotsBySession) {
-      const orderedSlots = [...sessionSlots].sort(
-        (left, right) =>
-          new Date(left.iso).getTime() - new Date(right.iso).getTime(),
-      );
-
-      for (let index = 0; index <= orderedSlots.length - requiredHourCount; index += 1) {
-        const group = orderedSlots.slice(index, index + requiredHourCount);
-        const isContiguous = group.every((slot, groupIndex) => {
-          if (groupIndex === 0) return true;
-          const previous = group[groupIndex - 1];
-          return (
-            new Date(slot.iso).getTime() -
-              new Date(previous.iso).getTime() ===
-            HOUR_MS
-          );
-        });
-
-        if (!isContiguous) continue;
-
-        const firstSlot = group[0];
-        const lastSlot = group[group.length - 1];
-        const endDate = new Date(new Date(lastSlot.iso).getTime() + HOUR_MS);
-        const finiteAvailabilities = group
-          .map((slot) => slot.available)
-          .filter((available): available is number => available !== null);
-        const available = finiteAvailabilities.length
-          ? Math.min(...finiteAvailabilities)
-          : null;
-        const bookedByMe = group.some((slot) => slot.bookedByMe);
-        const disabled =
-          bookedByMe ||
-          group.some((slot) => slot.disabled) ||
-          (available !== null && available <= 0);
-
-        options.push({
-          key: group.map((slot) => slot.key).join("|"),
-          hourKeys: group.map((slot) => slot.key),
-          sessionId,
-          startIso: firstSlot.iso,
-          endIso: endDate.toISOString(),
-          label: `${timeFormatter.format(new Date(firstSlot.iso))} - ${timeFormatter.format(endDate)}`,
-          disabled,
-          available,
-          bookedByMe,
-        });
-      }
-    }
-
-    return options;
-  }, [hourSlotOptions, requiredHourCount]);
-
-  const selectedFixedSlot = fixedSlotOptions.find(
-    (option) => option.key === selectedHourKeys.join("|"),
+  const orderedSelectedSlots = useMemo(
+    () => getOrderedSelectedHourSlots(selectedHourKeys, hourSlotOptions),
+    [selectedHourKeys, hourSlotOptions],
   );
+
+  const hasConsecutiveSelection = areHourSlotsConsecutive(orderedSelectedSlots);
 
   const selectedHourChecks = useMemo(
     () =>
@@ -552,32 +550,25 @@ export function PracticeReservationPicker({
   const hasSelectableHours = hourSlotOptions.some(
     (option) => !option.disabled && !option.bookedByMe,
   );
-  const hasSelectableFixedSlots = fixedSlotOptions.some((option) => !option.disabled);
 
   const selectedHourCount = selectedHourKeys.length;
   const totalCredits = (credits ?? 0) * selectedHourCount;
   const hasFullHour = selectedHourChecks.some((check) => check.isFull);
   const hasEnoughCredits = totalCredits <= 0 || userCredits >= totalCredits;
-  const hasRequiredHourCount =
-    requiredHourCount === null || selectedHourCount === requiredHourCount;
-  const selectedFirstHour = selectedHourKeys.length
-    ? hourSlotOptions.find((slot) => slot.key === selectedHourKeys[0])
-    : null;
-  const selectedLastHour = selectedHourKeys.length
-    ? hourSlotOptions.find(
-        (slot) => slot.key === selectedHourKeys[selectedHourKeys.length - 1],
-      )
-    : null;
+  const hasRequiredHourCount = isAccompagnement
+    ? selectedHourCount >= 1
+    : requiresExactHourCount
+      ? selectedHourCount === minHourCount && hasConsecutiveSelection
+      : selectedHourCount >= minHourCount && hasConsecutiveSelection;
+  const selectedFirstHour = orderedSelectedSlots[0] ?? null;
+  const selectedLastHour =
+    orderedSelectedSlots[orderedSelectedSlots.length - 1] ?? null;
   const selectedReservationEnd = selectedLastHour
     ? new Date(new Date(selectedLastHour.iso).getTime() + HOUR_MS)
     : null;
-  const checkoutStartIso = selectedFixedSlot?.startIso ?? selectedFirstHour?.iso;
-  const checkoutEndIso =
-    selectedFixedSlot?.endIso ?? selectedReservationEnd?.toISOString();
-  const checkoutSessionId = selectedFixedSlot?.sessionId ?? selectedFirstHour?.sessionId;
-  const hasValidFixedSlotSelection = requiredHourCount
-    ? Boolean(selectedFixedSlot) && !selectedFixedSlot.disabled
-    : true;
+  const checkoutStartIso = selectedFirstHour?.iso;
+  const checkoutEndIso = selectedReservationEnd?.toISOString();
+  const checkoutSessionId = selectedFirstHour?.sessionId;
 
   const toggleHourSelection = (key: string) => {
     const option = hourSlotOptions.find((slot) => slot.key === key);
@@ -585,28 +576,54 @@ export function PracticeReservationPicker({
       return;
     }
 
-    setSelectedHourKeys((current) =>
-      current.includes(key)
-        ? current.filter((value) => value !== key)
-        : [...current, key]
-            .slice(-(requiredHourCount ?? Number.POSITIVE_INFINITY))
-            .sort((a, b) => {
-            const hourA = hourSlotOptions.find((slot) => slot.key === a)?.iso ?? a;
-            const hourB = hourSlotOptions.find((slot) => slot.key === b)?.iso ?? b;
-            return new Date(hourA).getTime() - new Date(hourB).getTime();
-          }),
-    );
-  };
+    setSelectedHourKeys((current) => {
+      if (current.includes(key)) {
+        return current.filter((value) => value !== key);
+      }
 
-  const toggleFixedSlotSelection = (key: string) => {
-    const option = fixedSlotOptions.find((slot) => slot.key === key);
-    if (!option || option.disabled) {
-      return;
-    }
+      if (isAccompagnement || requiresExactHourCount) {
+        return [...current, key].sort((a, b) => {
+          const hourA =
+            hourSlotOptions.find((slot) => slot.key === a)?.iso ?? a;
+          const hourB =
+            hourSlotOptions.find((slot) => slot.key === b)?.iso ?? b;
+          return new Date(hourA).getTime() - new Date(hourB).getTime();
+        });
+      }
 
-    setSelectedHourKeys((current) =>
-      current.join("|") === key ? [] : option.hourKeys,
-    );
+      const rangeSlots = getOrderedSelectedHourSlots(
+        [...current, key],
+        hourSlotOptions,
+      );
+      const rangeStart = new Date(rangeSlots[0].iso).getTime();
+      const rangeEnd = new Date(rangeSlots[rangeSlots.length - 1].iso).getTime();
+
+      const filledKeys = hourSlotOptions
+        .filter((slot) => {
+          const time = new Date(slot.iso).getTime();
+          return (
+            time >= rangeStart &&
+            time <= rangeEnd &&
+            !slot.disabled &&
+            !slot.bookedByMe
+          );
+        })
+        .map((slot) => slot.key);
+
+      const filledSlots = getOrderedSelectedHourSlots(filledKeys, hourSlotOptions);
+      if (
+        areHourSlotsConsecutive(filledSlots) &&
+        filledSlots.length >= minHourCount
+      ) {
+        return filledKeys;
+      }
+
+      return [...current, key].sort((a, b) => {
+        const hourA = hourSlotOptions.find((slot) => slot.key === a)?.iso ?? a;
+        const hourB = hourSlotOptions.find((slot) => slot.key === b)?.iso ?? b;
+        return new Date(hourA).getTime() - new Date(hourB).getTime();
+      });
+    });
   };
 
   const handleRegister = async () => {
@@ -629,41 +646,73 @@ export function PracticeReservationPicker({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!hasRequiredHourCount || !hasValidFixedSlotSelection) {
+    if (!hasRequiredHourCount) {
       setIsRegistering(false);
       setErrorMessage(
-        requiredHourCount
-          ? `Sélectionnez un créneau de ${requiredHourCount} heures consécutives.`
-          : "Sélectionnez au moins une heure.",
+        isAccompagnement
+          ? "Sélectionnez au moins une heure."
+          : requiresExactHourCount
+            ? `Sélectionnez ${minHourCount} heures consécutives.`
+            : `Sélectionnez au moins ${minHourCount} heures consécutives (ou plus).`,
       );
       return;
     }
 
-    for (const hourKeyValue of selectedHourKeys) {
-      const option = hourSlotOptions.find((slot) => slot.key === hourKeyValue);
-      if (!option) continue;
+    if (isAccompagnement) {
+      for (const option of orderedSelectedSlots) {
+        const hourStart = new Date(option.iso);
+        if (isHourBookedByUser(hourStart, option.sessionId, myRegistrations)) {
+          setIsRegistering(false);
+          setErrorMessage("Une des heures sélectionnées est déjà réservée.");
+          return;
+        }
 
-      const hourStart = new Date(option.iso);
-      if (isHourBookedByUser(hourStart, option.sessionId, myRegistrations)) {
+        const hourEnd = new Date(hourStart.getTime() + HOUR_MS);
+        const result = await registerForSession(option.sessionId, "credits", {
+          start: option.iso,
+          end: hourEnd.toISOString(),
+        });
+
+        if (result.error) {
+          setIsRegistering(false);
+          setErrorMessage(result.error);
+          return;
+        }
+      }
+    } else {
+      const blocks = splitIntoSessionBlocks(orderedSelectedSlots);
+      if (!blocks.length) {
+        setIsRegistering(false);
+        return;
+      }
+
+      if (
+        orderedSelectedSlots.some((slot) =>
+          isHourBookedByUser(new Date(slot.iso), slot.sessionId, myRegistrations),
+        )
+      ) {
         setIsRegistering(false);
         setErrorMessage("Une des heures sélectionnées est déjà réservée.");
         return;
       }
 
-      const hourEnd = new Date(hourStart.getTime() + HOUR_MS);
-      const result = await registerForSession(option.sessionId, "credits", {
-        start: option.iso,
-        end: hourEnd.toISOString(),
-      });
+      for (const block of blocks) {
+        const result = await registerForSession(block.sessionId, "credits", {
+          start: block.startIso,
+          end: block.endIso,
+        });
 
-      if (result.error) {
-        setIsRegistering(false);
-        setErrorMessage(result.error);
-        return;
+        if (result.error) {
+          setIsRegistering(false);
+          setErrorMessage(result.error);
+          return;
+        }
       }
     }
 
-    const bookedCount = selectedHourKeys.length;
+    const bookedCount = isAccompagnement
+      ? selectedHourKeys.length
+      : orderedSelectedSlots.length;
     setIsRegistering(false);
     setSelectedHourKeys([]);
     setSuccessMessage(
@@ -733,9 +782,9 @@ export function PracticeReservationPicker({
             Réserver en pratique libre
           </h2>
         <p className="mt-2 text-sm text-black/60">
-          Sélectionnez un ou plusieurs créneaux d&apos;une heure pour{" "}
-          {activityTitle}, consécutifs ou non. La capacité est vérifiée heure par
-          heure.
+          {isAccompagnement
+            ? `Sélectionnez une ou plusieurs heures pour ${activityTitle}.`
+            : `Sélectionnez au moins ${minHourCount} heures consécutives (ou plus) pour ${activityTitle}.`}
           </p>
         </div>
       ) : null}
@@ -851,30 +900,26 @@ export function PracticeReservationPicker({
           <div className="grid gap-3">
             <div>
               <p className="text-sm font-medium">
-                {requiredHourCount ? "Créneaux de 2 heures" : "Créneaux d'une heure"}
+                Créneaux d&apos;une heure
               </p>
               <p className="mt-1 text-xs text-black/60">
-                {requiredHourCount
-                  ? "Sélectionnez un créneau disponible."
-                  : "Sélectionnez une ou plusieurs heures disponibles, consécutives ou non."}
+                {isAccompagnement
+                  ? "Sélectionnez une ou plusieurs heures disponibles."
+                  : requiresExactHourCount
+                    ? `Sélectionnez ${minHourCount} heures consécutives.`
+                    : `Sélectionnez au moins ${minHourCount} heures consécutives (ou plus).`}
               </p>
             </div>
             <div className="grid gap-2">
-              {(requiredHourCount ? fixedSlotOptions : hourSlotOptions).map((option) => {
-                const isSelected = requiredHourCount
-                  ? selectedHourKeys.join("|") === option.key
-                  : selectedHourKeys.includes(option.key);
+              {hourSlotOptions.map((option) => {
+                const isSelected = selectedHourKeys.includes(option.key);
 
                 return (
                   <button
                     key={option.key}
                     type="button"
                     disabled={option.disabled}
-                    onClick={() =>
-                      requiredHourCount
-                        ? toggleFixedSlotSelection(option.key)
-                        : toggleHourSelection(option.key)
-                    }
+                    onClick={() => toggleHourSelection(option.key)}
                     className={cn(
                       "flex items-center justify-between rounded-lg border p-3 text-left transition",
                       option.bookedByMe
@@ -909,9 +954,9 @@ export function PracticeReservationPicker({
                   </button>
                 );
               })}
-              {requiredHourCount && fixedSlotOptions.length === 0 ? (
+              {hourSlotOptions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Aucun créneau de 2 heures n&apos;est disponible ce jour.
+                  Aucun créneau n&apos;est disponible ce jour.
                 </p>
               ) : null}
             </div>
@@ -957,9 +1002,9 @@ export function PracticeReservationPicker({
               </p>
             </div>
           ) : null}
-          {isSquareReservation && requiredHourCount ? (
+          {isSquareReservation && minHourCount ? (
             <p className="mt-3 font-medium text-black">
-              Pack découverte: {requiredHourCount} heures
+              Pack découverte: {minHourCount} heures
             </p>
           ) : null}
         </div>
@@ -988,11 +1033,10 @@ export function PracticeReservationPicker({
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
             disabled={
               isRegistering ||
-              !hasSelectableFixedSlots ||
+              !hasSelectableHours ||
               selectedHourCount === 0 ||
               hasFullHour ||
-              !hasRequiredHourCount ||
-              !hasValidFixedSlotSelection
+              !hasRequiredHourCount
             }
           >
             Payer et réserver le pack découverte
@@ -1011,6 +1055,7 @@ export function PracticeReservationPicker({
             !hasSelectableHours ||
             selectedHourCount === 0 ||
             hasFullHour ||
+            !hasRequiredHourCount ||
             (isLoggedIn && !hasEnoughCredits)
           }
           onClick={handleRegister}
@@ -1022,12 +1067,16 @@ export function PracticeReservationPicker({
           )}
           {userId
             ? selectedHourCount > 0
-              ? `Réserver ${selectedHourCount} créneau${selectedHourCount > 1 ? "x" : ""}${
+              ? `Réserver ${selectedHourCount} heure${selectedHourCount > 1 ? "s" : ""}${
                   totalCredits > 0
                     ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}`
                     : ""
                 }`
-              : "Choisir au moins un créneau"
+              : isAccompagnement
+                ? "Choisir au moins une heure"
+                : requiresExactHourCount
+                  ? `Choisir ${minHourCount} heures consécutives`
+                  : `Choisir au moins ${minHourCount} heures consécutives (ou plus)`
             : "Se connecter pour réserver"}
         </Button>
       )}

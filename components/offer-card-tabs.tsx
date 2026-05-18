@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { PracticeReservationModal } from "@/components/practice-reservation-modal";
+import { PRACTICE_SCHEDULE_MARKER } from "@/lib/format-practice-schedule";
+import { cn } from "@/lib/utils";
 
 type Offer = {
   title: string;
@@ -15,7 +16,19 @@ type Offer = {
   activityId?: string;
   activityCredits?: number | null;
   schedule?: string | null;
+  reservable?: boolean;
 };
+
+function parseScheduleBlock(schedule: string) {
+  if (!schedule.startsWith(PRACTICE_SCHEDULE_MARKER)) {
+    return { title: null as string | null, lines: schedule };
+  }
+
+  return {
+    title: PRACTICE_SCHEDULE_MARKER.replace(/:$/, "").trim(),
+    lines: schedule.slice(PRACTICE_SCHEDULE_MARKER.length).trim(),
+  };
+}
 
 export function OfferCardTabs({
   offers,
@@ -27,35 +40,25 @@ export function OfferCardTabs({
   isLoggedIn?: boolean;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [reservationOpen, setReservationOpen] = useState(false);
   const activeOffer = offers[activeIndex];
 
-  useEffect(() => {
-    setReservationOpen(false);
-  }, [activeIndex]);
   const body = activeOffer.detail ?? activeOffer.summary;
   const schedule = activeOffer.schedule ?? null;
+  const showReservation = activeOffer.reservable !== false;
   const reservationHref = activeOffer.activityId
     ? `/reserver?activity=${encodeURIComponent(activeOffer.activityId)}`
     : "/reserver";
 
-  const reserveButtonClass = schedule
-    ? "mt-1 shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
-    : "mt-8 inline-flex text-sm font-semibold text-[#4a56dd] underline underline-offset-2";
+  const reserveLinkClass = cn(
+    "shrink-0 text-base font-semibold text-[#4a56dd] underline underline-offset-4 transition hover:text-[#3540bf] md:text-lg",
+    !schedule && "mt-8 inline-flex",
+  );
 
-  const reserveControl = activeOffer.activityId ? (
-    <button
-      type="button"
-      onClick={() => setReservationOpen(true)}
-      className={reserveButtonClass}
-    >
-      réserver
-    </button>
-  ) : (
-    <Link href={reservationHref} className={reserveButtonClass}>
+  const reserveControl = showReservation ? (
+    <Link href={reservationHref} className={reserveLinkClass}>
       réserver
     </Link>
-  );
+  ) : null;
 
   return (
     <div>
@@ -103,11 +106,35 @@ export function OfferCardTabs({
             {body}
           </p>
           {schedule ? (
-            <div className="mt-8 flex items-start justify-between gap-6">
-              <p className="whitespace-pre-line text-sm leading-normal text-black/75">
-                {schedule}
-              </p>
-              {reserveControl}
+            <div className="mt-8 rounded-xl border-2 border-[#4a56dd]/35 bg-[#4a56dd]/10 p-5 md:p-6">
+              {(() => {
+                const { title, lines } = parseScheduleBlock(schedule);
+                return (
+                  <div
+                    className={cn(
+                      showReservation &&
+                        "flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      {title ? (
+                        <p className="text-lg font-bold text-[#4a56dd] md:text-xl">
+                          {title}
+                        </p>
+                      ) : null}
+                      <p
+                        className={cn(
+                          "whitespace-pre-line text-base font-medium leading-relaxed text-black/85 md:text-lg",
+                          title && "mt-2",
+                        )}
+                      >
+                        {lines}
+                      </p>
+                    </div>
+                    {reserveControl}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             reserveControl
@@ -127,16 +154,6 @@ export function OfferCardTabs({
         </div>
       </div>
 
-      {activeOffer.activityId ? (
-        <PracticeReservationModal
-          open={reservationOpen}
-          onOpenChange={setReservationOpen}
-          activityId={activeOffer.activityId}
-          activityTitle={activeOffer.title}
-          credits={activeOffer.activityCredits}
-          isLoggedIn={isLoggedIn}
-        />
-      ) : null}
     </div>
   );
 }

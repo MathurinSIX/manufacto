@@ -12,15 +12,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useId } from "react";
 
+import { buildLoginUrl } from "@/lib/auth-redirect";
+
 interface SignUpFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToLogin?: () => void;
   onSuccess?: () => void;
+  redirectTo?: string;
 }
 
 export function SignUpForm({
   className,
   onSwitchToLogin,
   onSuccess,
+  redirectTo,
   ...props
 }: SignUpFormProps) {
   const [email, setEmail] = useState("");
@@ -189,7 +193,12 @@ export function SignUpForm({
                   Se connecter
                 </button>
               ) : (
-                <Link href="/auth/login" className={linkClass}>
+                <Link
+                  href={
+                    redirectTo ? buildLoginUrl(redirectTo) : "/auth/login"
+                  }
+                  className={linkClass}
+                >
                   Se connecter
                 </Link>
               )}

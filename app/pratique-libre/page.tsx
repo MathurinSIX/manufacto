@@ -2,6 +2,10 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { unstable_noStore } from "next/cache";
 import {
+  AtelierCreditPackGrid,
+  AtelierSubscriptionList,
+} from "@/components/atelier-tarifs-purchases";
+import {
   MarketingPageContainer,
   MarketingPageHeader,
   MarketingSectionTitle,
@@ -35,12 +39,14 @@ type PracticeOfferInput = {
   detail?: string;
   image?: string;
   detailImage?: string;
+  /** When false, no online reservation link is shown (e.g. cuisson). */
+  reservable?: boolean;
 };
 
 const stepCards = [
   {
     number: "1.",
-    title: "Achetez un pass manufacto,",
+    title: "Créez un compte et achetez un pass manufacto,",
     text: " que vous chargez avec le nombre de crédits de votre choix.",
   },
   {
@@ -132,6 +138,7 @@ const ceramiqueOffers: PracticeOfferInput[] = [
   {
     title: "Cuisson",
     activityName: "Cuisson céramique",
+    reservable: false,
     summary:
       "Cuisez les pièces que vous avez réalisées hors de l’atelier. Elles sont incluses pour les pièces ayant été réalisées chez nous.",
     detail:
@@ -353,7 +360,11 @@ async function PratiqueLibreContent() {
           : offer.detail,
         activityId,
         activityCredits: activity?.nb_credits ?? null,
-        schedule: formatPracticeScheduleFromSessions(activitySessions),
+        reservable: offer.reservable !== false,
+        schedule:
+          offer.reservable === false
+            ? null
+            : formatPracticeScheduleFromSessions(activitySessions),
       };
     });
 
@@ -416,6 +427,7 @@ async function PratiqueLibreContent() {
                         activityTitle={pack.title}
                         productId={pack.productId}
                         isLoggedIn={!!user}
+                        returnPath="/pratique-libre"
                         className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
                       />
                     ) : (
@@ -662,6 +674,61 @@ async function PratiqueLibreContent() {
               </p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-20">
+        <div className="grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
+          <div>
+            <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
+              les packs de crédits
+            </h3>
+            <p className="mt-6 text-lg leading-normal text-black/75">
+              Les crédits sont <strong>valables un an</strong> à partir de leur
+              date d&apos;achat.
+            </p>
+            <p className="mt-6 text-lg leading-normal text-black/75">
+              Ces recharges sont créditées directement sur votre compte
+              personnel. S&apos;il vous reste des crédits au moment de votre
+              achat, ils s&apos;ajoutent à ceux que vous venez d&apos;acheter.
+            </p>
+          </div>
+          <AtelierCreditPackGrid returnPath="/pratique-libre" />
+        </div>
+      </section>
+
+      <section className="mt-20">
+        <div className="grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
+          <div>
+            <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
+              les abonnements
+            </h3>
+            <div className="mt-6 space-y-5 text-lg leading-normal text-black/75">
+              <p>
+                Les abonnements vous permettent d&apos;avoir un volume de crédit
+                mensuel à utiliser à l&apos;atelier, à tarif préférentiel.
+              </p>
+              <p>
+                Chaque mois, votre compte sera crédité du nombre de crédit
+                correspondant. Si vous n&apos;utilisez pas tout sur le mois, le
+                solde reste disponible et se cumule à celui du mois suivant.
+                Vous devrez par ailleurs{" "}
+                <strong>dans tous les cas réserver vos créneaux</strong> avant
+                de venir à l&apos;atelier.
+                <br />
+                <strong>La durée d&apos;engagement est de 3 mois</strong>, vous
+                pouvez ensuite résilier chaque mois. Après résiliation, vous
+                disposez de 3 mois pour utiliser votre solde de crédits.
+              </p>
+            </div>
+            <p className="mt-14 max-w-[390px] text-xs leading-tight text-black/75">
+              15% de réduction sur tous nos tarifs pour les personnes
+              étudiantes, au chômages, bénéficiaires du RSA. Et si vous ne
+              rentrez dans aucune de ces cases mais que nos tarifs sont à freins
+              à votre venue, venez nous rencontrer et discutons en.
+            </p>
+          </div>
+          <AtelierSubscriptionList returnPath="/pratique-libre" />
         </div>
       </section>
 

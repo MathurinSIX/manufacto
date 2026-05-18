@@ -122,6 +122,48 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
             />
           </div>
 
+          {priceLabel || creditsLabel || course.level || course.audience ? (
+            <aside className="mt-8 w-full max-w-[404px] shrink-0">
+              {priceLabel || creditsLabel ? (
+                <p className="text-2xl font-bold leading-normal">
+                  {priceLabel ? (
+                    <>
+                      {priceLabel}
+                      <br />
+                    </>
+                  ) : null}
+                  {creditsLabel
+                    ? priceLabel
+                      ? ` / ${creditsLabel}*`
+                      : `${creditsLabel}*`
+                    : null}
+                </p>
+              ) : null}
+              {creditsLabel ? (
+                <p className="mt-8 text-xl leading-normal text-black/75">
+                  *Si vous avez déjà un pass avec des crédits, vous pouvez choisir,
+                  au moment du règlement, de régler avec vos crédits directement.
+                </p>
+              ) : null}
+              {(course.level || course.audience) && (
+                <dl className="mt-8 grid gap-4 text-xl leading-normal text-black/75 sm:grid-cols-2 lg:grid-cols-1">
+                  {course.level && (
+                    <div>
+                      <dt className="font-bold text-black">Niveau</dt>
+                      <dd>{course.level}</dd>
+                    </div>
+                  )}
+                  {course.audience && (
+                    <div>
+                      <dt className="font-bold text-black">Public</dt>
+                      <dd>{course.audience}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+            </aside>
+          ) : null}
+
           <div className="mt-14 max-w-[560px]">
             <MarketingSectionTitle>
               Prochaines dates disponibles
@@ -151,59 +193,19 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
           </div>
         </div>
 
-        <article className="max-w-[470px] pt-2">
-          <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
-            {course.title}
-          </h1>
-          {priceLabel || creditsLabel ? (
-            <p className="mt-8 text-2xl font-bold leading-normal">
-              {priceLabel ? (
-                <>
-                  {priceLabel}
-                  <br />
-                </>
-              ) : null}
-              {creditsLabel
-                ? priceLabel
-                  ? ` / ${creditsLabel}*`
-                  : `${creditsLabel}*`
-                : null}
-            </p>
-          ) : null}
-          {creditsLabel ? (
-            <p className="mt-8 max-w-[404px] text-xl leading-normal text-black/75">
-              *Si vous avez déjà un pass avec des crédits, vous pouvez choisir,
-              au moment du règlement, de régler avec vos crédits directement.
-            </p>
-          ) : null}
-          {(course.level || course.audience) && (
-            <dl className="mt-8 grid gap-4 text-xl leading-normal text-black/75 sm:grid-cols-2">
-              {course.level && (
-                <div>
-                  <dt className="font-bold text-black">Niveau</dt>
-                  <dd>{course.level}</dd>
-                </div>
-              )}
-              {course.audience && (
-                <div>
-                  <dt className="font-bold text-black">Public</dt>
-                  <dd>{course.audience}</dd>
-                </div>
-              )}
-            </dl>
-          )}
+        <article className="w-full pt-2">
+          <div className="min-w-0 max-w-[470px]">
+            <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
+              {course.title}
+            </h1>
 
-          <MarketingBody className="mt-9 text-black/75">
-            <section>
-              <h2 className={MARKETING_LINK_CLASS}>
-                En résumé
-              </h2>
+            <MarketingBody className="mt-9 text-black/75">
               <MarkdownContent
                 content={course.description}
-                className="mt-7 space-y-4 text-black/70 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:font-bold [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5"
+                className="space-y-4 text-black/70 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:font-bold [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5"
               />
-            </section>
-          </MarketingBody>
+            </MarketingBody>
+          </div>
         </article>
       </section>
     </MarketingPageContainer>

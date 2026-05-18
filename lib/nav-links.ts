@@ -17,11 +17,7 @@ export const NAV_LINKS: NavLink[] = [
       { href: "/atelier#horaires-et-tarifs", label: "horaires & tarifs" },
     ],
   },
-  {
-    href: "/cours",
-    label: "cours",
-    subLinks: [{ href: "/cours#offres", label: "découvrir les offres" }],
-  },
+  { href: "/cours", label: "cours" },
   {
     href: "/pratique-libre",
     label: "pratique libre",
