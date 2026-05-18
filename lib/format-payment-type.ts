@@ -16,6 +16,9 @@ export function formatPaymentTypeLabel(paymentType: string): string {
   if (paymentType === "stripe") {
     return "Stripe";
   }
+  if (paymentType === "admin") {
+    return "Admin";
+  }
   if (paymentType === "square" || paymentType.startsWith("square:")) {
     return "Square";
   }

@@ -7,6 +7,7 @@ import {
 } from "@/lib/square/subscriptions";
 import { parseSquarePaymentId } from "@/lib/format-payment-type";
 import { getAdminClient, refundSquarePayment, retrieveSquarePayment } from "@/lib/square/server";
+import { getPracticeHourlyCounts } from "@/lib/practice-capacity";
 import { revalidatePath } from "next/cache";
 
 const UUID_RE =
@@ -59,51 +60,6 @@ function isWholeHour(date: Date) {
     date.getUTCSeconds() === 0 &&
     date.getUTCMilliseconds() === 0
   );
-}
-
-const HOUR_MS = 60 * 60 * 1000;
-
-function getHourKeys(start: Date, end: Date) {
-  const keys: number[] = [];
-  let cursor = start.getTime();
-  const endMs = end.getTime();
-
-  while (cursor < endMs) {
-    keys.push(cursor);
-    cursor += HOUR_MS;
-  }
-
-  return keys;
-}
-
-function countPracticeReservationsByHour(
-  registrations: RegistrationRow[],
-  start: Date,
-  end: Date,
-) {
-  const selectedHours = getHourKeys(start, end);
-  const counts = new Map<number, number>(
-    selectedHours.map((hour) => [hour, 0]),
-  );
-
-  registrations.forEach((registration) => {
-    if (!registration.reserved_start_ts || !registration.reserved_end_ts) {
-      return;
-    }
-    const reservationStart = new Date(registration.reserved_start_ts);
-    const reservationEnd = new Date(registration.reserved_end_ts);
-    selectedHours.forEach((hour) => {
-      const hourEnd = hour + 60 * 60 * 1000;
-      if (
-        reservationStart.getTime() < hourEnd &&
-        reservationEnd.getTime() > hour
-      ) {
-        counts.set(hour, (counts.get(hour) ?? 0) + 1);
-      }
-    });
-  });
-
-  return counts;
 }
 
 function getLatestActiveRegistrationIds(
@@ -270,10 +226,13 @@ export async function registerForSession(
     }
 
     if (session.max_registrations !== null) {
-      const counts = countPracticeReservationsByHour(
-        activeRegistrations,
+      const counts = getPracticeHourlyCounts(
         reservationStart!,
         reservationEnd!,
+        activeRegistrations.map((registration) => ({
+          reservedStartTs: registration.reserved_start_ts,
+          reservedEndTs: registration.reserved_end_ts,
+        })),
       );
       const isAnyHourFull = Array.from(counts.values()).some(
         (count) => count >= session.max_registrations!,

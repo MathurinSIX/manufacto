@@ -575,29 +575,9 @@ export function PracticeReservationPicker({
   const checkoutEndIso =
     selectedFixedSlot?.endIso ?? selectedReservationEnd?.toISOString();
   const checkoutSessionId = selectedFixedSlot?.sessionId ?? selectedFirstHour?.sessionId;
-  const hasSingleSessionSelection =
-    selectedHourKeys.length === 0 ||
-    new Set(
-      selectedHourKeys
-        .map((key) => hourSlotOptions.find((slot) => slot.key === key)?.sessionId)
-        .filter(Boolean),
-    ).size === 1;
-  const hasContiguousSelection =
-    selectedHourKeys.length <= 1 ||
-    selectedHourKeys.every((key, index) => {
-      if (index === 0) return true;
-      const previous = hourSlotOptions.find(
-        (slot) => slot.key === selectedHourKeys[index - 1],
-      );
-      const current = hourSlotOptions.find((slot) => slot.key === key);
-      return (
-        previous &&
-        current &&
-        new Date(current.iso).getTime() -
-          new Date(previous.iso).getTime() ===
-          HOUR_MS
-      );
-    });
+  const hasValidFixedSlotSelection = requiredHourCount
+    ? Boolean(selectedFixedSlot) && !selectedFixedSlot.disabled
+    : true;
 
   const toggleHourSelection = (key: string) => {
     const option = hourSlotOptions.find((slot) => slot.key === key);
@@ -649,12 +629,12 @@ export function PracticeReservationPicker({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!hasRequiredHourCount || !hasSingleSessionSelection || !hasContiguousSelection) {
+    if (!hasRequiredHourCount || !hasValidFixedSlotSelection) {
       setIsRegistering(false);
       setErrorMessage(
         requiredHourCount
-          ? `Sélectionnez ${requiredHourCount} heures consécutives.`
-          : "Sélectionnez des heures sur un même créneau.",
+          ? `Sélectionnez un créneau de ${requiredHourCount} heures consécutives.`
+          : "Sélectionnez au moins une heure.",
       );
       return;
     }
@@ -754,7 +734,8 @@ export function PracticeReservationPicker({
           </h2>
         <p className="mt-2 text-sm text-black/60">
           Sélectionnez un ou plusieurs créneaux d&apos;une heure pour{" "}
-          {activityTitle}. La capacité est vérifiée heure par heure.
+          {activityTitle}, consécutifs ou non. La capacité est vérifiée heure par
+          heure.
           </p>
         </div>
       ) : null}
@@ -875,7 +856,7 @@ export function PracticeReservationPicker({
               <p className="mt-1 text-xs text-black/60">
                 {requiredHourCount
                   ? "Sélectionnez un créneau disponible."
-                  : "Sélectionnez une ou plusieurs heures disponibles."}
+                  : "Sélectionnez une ou plusieurs heures disponibles, consécutives ou non."}
               </p>
             </div>
             <div className="grid gap-2">
@@ -1011,8 +992,7 @@ export function PracticeReservationPicker({
               selectedHourCount === 0 ||
               hasFullHour ||
               !hasRequiredHourCount ||
-              !hasSingleSessionSelection ||
-              !hasContiguousSelection
+              !hasValidFixedSlotSelection
             }
           >
             Payer et réserver le pack découverte

@@ -45,6 +45,11 @@ import {
   parseParisDateTime,
 } from "@/lib/paris-time";
 import { cn } from "@/lib/utils";
+import {
+  countRegistrationsOverlappingHour,
+  getPracticeCapacitySummary,
+  type PracticeReservationSlot,
+} from "@/lib/practice-capacity";
 
 const PRACTICE_ACTIVITY_FILTER_ALL = "__all__";
 
@@ -85,6 +90,24 @@ type SessionWithUsers = {
   activity_type: string | null;
 };
 
+function toPracticeReservationSlots(
+  users: RegisteredUser[],
+): PracticeReservationSlot[] {
+  return users.map((user) => ({
+    reservedStartTs: user.reservedStartTs,
+    reservedEndTs: user.reservedEndTs,
+  }));
+}
+
+function getPracticeSessionCapacity(session: SessionWithUsers) {
+  return getPracticeCapacitySummary(
+    new Date(session.start_ts),
+    new Date(session.end_ts),
+    toPracticeReservationSlots(session.registeredUsers ?? []),
+    session.max_registrations,
+  );
+}
+
 type Activity = {
   id: string;
   name: string;
@@ -101,12 +124,20 @@ type Activity = {
 interface WeekViewSessionsProps {
   sessionsByDate: Map<string, SessionWithUsers[]>;
   weekOffset: number;
+  isPracticeView: boolean;
   onSessionClick: (session: SessionWithUsers) => void;
   onEditSession: (session: SessionWithUsers) => void;
   onDeleteSession: (session: SessionWithUsers) => void;
 }
 
-function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSession, onDeleteSession }: WeekViewSessionsProps) {
+function WeekViewSessions({
+  sessionsByDate,
+  weekOffset,
+  isPracticeView,
+  onSessionClick,
+  onEditSession,
+  onDeleteSession,
+}: WeekViewSessionsProps) {
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
   const weekDays = useMemo(() => {
@@ -165,12 +196,23 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
               <div className="space-y-1 w-full">
                 {daySessions.length > 0 ? (
                   daySessions.map((session) => {
-                    const registeredCount =
-                      (session.registeredUsers?.length || 0) +
-                      (session.publicRegisteredUsers?.length || 0);
+                    const publicCount = session.publicRegisteredUsers?.length || 0;
                     const maxReg = session.max_registrations ?? null;
-                    const isFull = maxReg !== null && registeredCount >= maxReg;
-                    const available = maxReg !== null ? maxReg - registeredCount : null;
+                    const practiceCapacity = isPracticeView
+                      ? getPracticeSessionCapacity(session)
+                      : null;
+                    const registeredCount = isPracticeView
+                      ? (practiceCapacity?.peakHourCount ?? 0) + publicCount
+                      : (session.registeredUsers?.length || 0) + publicCount;
+                    const isFull = isPracticeView
+                      ? (practiceCapacity?.isAnyHourFull ?? false)
+                      : maxReg !== null && registeredCount >= maxReg;
+                    const available =
+                      maxReg !== null && !isPracticeView
+                        ? maxReg - registeredCount
+                        : maxReg !== null && practiceCapacity
+                          ? maxReg - practiceCapacity.peakHourCount
+                          : null;
 
                     return (
                       <div
@@ -188,8 +230,11 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
                           <div className="flex items-center gap-1 min-w-0 flex-1">
                             <Users className="h-4 w-4 flex-shrink-0" />
                             <span className={`text-sm font-bold truncate ${isFull ? 'text-red-300' : ''}`}>
-                              {registeredCount}{maxReg !== null && `/${maxReg}`}
-                              {available !== null && available > 0 && !isFull && <span className="text-green-300"> ({available})</span>}
+                              {registeredCount}
+                              {maxReg !== null && `/${maxReg}${isPracticeView ? "/h" : ""}`}
+                              {available !== null && available > 0 && !isFull && (
+                                <span className="text-green-300"> ({available})</span>
+                              )}
                             </span>
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -259,7 +304,6 @@ export function AdminActivitiesTab({
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
-  const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
   const [adding, setAdding] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -520,19 +564,18 @@ export function AdminActivitiesTab({
   };
 
   const handleAddUser = async () => {
-    if (!selectedSession || !selectedUserId || !selectedPaymentType) return;
+    if (!selectedSession || !selectedUserId) return;
 
     setAdding(true);
     setError(null);
 
     try {
-      const result = await addUserToSession(selectedSession.id, selectedUserId, selectedPaymentType);
+      const result = await addUserToSession(selectedSession.id, selectedUserId, "admin");
       if (result.error) {
         setError(result.error);
       } else {
         setAddUserDialogOpen(false);
         setSelectedUserId("");
-        setSelectedPaymentType("free");
         await loadData();
       }
     } catch (err) {
@@ -796,12 +839,24 @@ export function AdminActivitiesTab({
                       <div className="flex-1 grid gap-3">
                         {hourSessions.map((session) => {
                           if (!session) return null;
-                          const registeredCount =
-                            (session.registeredUsers?.length || 0) +
-                            (session.publicRegisteredUsers?.length || 0);
+                          const publicCount = session.publicRegisteredUsers?.length || 0;
                           const maxReg = session.max_registrations ?? null;
-                          const isFull = maxReg !== null && registeredCount >= maxReg;
-                          const available = maxReg !== null ? maxReg - registeredCount : null;
+                          const hourStart = parseParisDateTime(
+                            selectedDate,
+                            `${hour.toString().padStart(2, "0")}:00`,
+                          );
+                          const hourCount = isPracticeView
+                            ? countRegistrationsOverlappingHour(
+                                toPracticeReservationSlots(session.registeredUsers ?? []),
+                                hourStart.getTime(),
+                              )
+                            : (session.registeredUsers?.length || 0) + publicCount;
+                          const registeredCount = isPracticeView ? hourCount + publicCount : hourCount;
+                          const isFull = isPracticeView
+                            ? maxReg !== null && hourCount >= maxReg
+                            : maxReg !== null && registeredCount >= maxReg;
+                          const available =
+                            maxReg !== null ? maxReg - (isPracticeView ? hourCount : registeredCount) : null;
 
                           return (
                             <div
@@ -819,7 +874,8 @@ export function AdminActivitiesTab({
                                   <span className="flex items-center gap-1">
                                     <Users className="h-3 w-3" />
                                     {registeredCount} inscrit{registeredCount > 1 ? "s" : ""}
-                                    {maxReg !== null && ` / ${maxReg}`}
+                                    {maxReg !== null &&
+                                      ` / ${maxReg}${isPracticeView ? " max/h" : ""}`}
                                     {available !== null && available > 0 && (
                                       <span className="text-green-600">({available} disponible{available > 1 ? "s" : ""})</span>
                                     )}
@@ -872,6 +928,7 @@ export function AdminActivitiesTab({
         <WeekViewSessions 
           sessionsByDate={sessionsForWeek} 
           weekOffset={weekOffset}
+          isPracticeView={isPracticeView}
           onSessionClick={(session) => {
             setSelectedSession(session);
             setUsersDialogOpen(true);
@@ -1040,18 +1097,50 @@ export function AdminActivitiesTab({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {((selectedSession?.registeredUsers?.length || 0) +
-                  (selectedSession?.publicRegisteredUsers?.length || 0))} inscrit{selectedSession && ((selectedSession.registeredUsers?.length || 0) + (selectedSession.publicRegisteredUsers?.length || 0)) > 1 ? "s" : ""}
-                {selectedSession?.max_registrations !== null && selectedSession?.max_registrations !== undefined && ` / ${selectedSession.max_registrations} max${isPracticeView ? " par heure" : ""}`}
+                {(() => {
+                  const publicCount = selectedSession?.publicRegisteredUsers?.length || 0;
+                  const reservationCount = selectedSession?.registeredUsers?.length || 0;
+                  const totalCount = reservationCount + publicCount;
+                  const maxReg = selectedSession?.max_registrations;
+
+                  if (isPracticeView && selectedSession) {
+                    const practiceStats = getPracticeSessionCapacity(selectedSession);
+                    return (
+                      <>
+                        {totalCount} réservation{totalCount > 1 ? "s" : ""}
+                        {maxReg != null &&
+                          ` · pic ${practiceStats.peakHourCount}/${maxReg} par heure`}
+                      </>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {totalCount} inscrit{totalCount > 1 ? "s" : ""}
+                      {maxReg != null && ` / ${maxReg} max`}
+                    </>
+                  );
+                })()}
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setSelectedPaymentType("free");
-                  setAddUserDialogOpen(true);
-                }}
-                disabled={selectedSession?.max_registrations !== null && selectedSession?.max_registrations !== undefined && ((selectedSession?.registeredUsers?.length || 0) + (selectedSession?.publicRegisteredUsers?.length || 0)) >= (selectedSession.max_registrations || 0)}
+                onClick={() => setAddUserDialogOpen(true)}
+                disabled={(() => {
+                  if (!selectedSession || selectedSession.max_registrations == null) {
+                    return false;
+                  }
+
+                  const publicCount = selectedSession.publicRegisteredUsers?.length || 0;
+                  const totalCount =
+                    (selectedSession.registeredUsers?.length || 0) + publicCount;
+
+                  if (isPracticeView) {
+                    return getPracticeSessionCapacity(selectedSession).areAllHoursFull;
+                  }
+
+                  return totalCount >= selectedSession.max_registrations;
+                })()}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 ajouter un utilisateur
@@ -1157,20 +1246,6 @@ export function AdminActivitiesTab({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="paymentType">Type de paiement *</Label>
-              <Select value={selectedPaymentType} onValueChange={setSelectedPaymentType} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un type de paiement" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="free">Gratuit</SelectItem>
-                  <SelectItem value="credit">Crédits</SelectItem>
-                  <SelectItem value="stripe">Stripe</SelectItem>
-                  <SelectItem value="cash">Espèces</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           {error && (
             <div className="text-sm text-destructive mb-4">{error}</div>
@@ -1182,12 +1257,11 @@ export function AdminActivitiesTab({
                 onClick={() => {
                   setAddUserDialogOpen(false);
                   setSelectedUserId("");
-                  setSelectedPaymentType("free");
                 }}
               >
               Annuler
             </Button>
-            <Button onClick={handleAddUser} disabled={adding || !selectedUserId || !selectedPaymentType}>
+            <Button onClick={handleAddUser} disabled={adding || !selectedUserId}>
               {adding ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -30,6 +30,7 @@ import {
 } from "@/app/admin/actions";
 import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import Image from "next/image";
+import { DEFAULT_COURSE_IMAGE } from "@/app/cours/course-data";
 import {
   COURSE_DISCIPLINE_OPTIONS,
   formatCourseDiscipline,
@@ -215,12 +216,6 @@ export function AdminActivitiesManagementTab({
       const squareProductId = activitySquareProductId.trim() === "" ? null : activitySquareProductId.trim();
       const level = activityLevel.trim() === "" ? null : activityLevel.trim();
       const audience = activityAudience.trim() === "" ? null : activityAudience.trim();
-
-      if (!imageUrl) {
-        setError("Une image est requise");
-        setSaving(false);
-        return;
-      }
 
       let result;
       if (editingActivity) {
@@ -457,22 +452,16 @@ export function AdminActivitiesManagementTab({
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="image">Image *</Label>
-                  {activityImageUrl ? (
-                    <div className="relative h-32 overflow-hidden rounded-md border bg-muted">
-                      <Image
-                        src={activityImageUrl}
-                        alt="Aperçu de l'activité"
-                        fill
-                        sizes="(max-width: 768px) 100vw, 640px"
-                        className="object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-32 items-center justify-center rounded-md border bg-muted text-sm text-muted-foreground">
-                      Aucune image sélectionnée
-                    </div>
-                  )}
+                  <Label htmlFor="image">Image</Label>
+                  <div className="relative h-32 overflow-hidden rounded-md border bg-muted">
+                    <Image
+                      src={activityImageUrl || DEFAULT_COURSE_IMAGE}
+                      alt="Aperçu de l'activité"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 640px"
+                      className="object-cover"
+                    />
+                  </div>
                   <Input
                     id="image"
                     type="file"
@@ -484,7 +473,7 @@ export function AdminActivitiesManagementTab({
                     disabled={uploadingImage}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Téléversez l&apos;image de l&apos;activité.
+                    Optionnel. Sans image, l&apos;image par défaut de la page cours sera utilisée.
                   </p>
                   {uploadingImage && (
                     <p className="flex items-center gap-2 text-xs text-muted-foreground">

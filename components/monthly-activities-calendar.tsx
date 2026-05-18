@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { inferPracticeDiscipline } from "@/lib/course-disciplines";
 import {
   MonthlyCalendar,
   type CalendarSessionItem,
@@ -26,15 +27,20 @@ function parisMonthAnchorIso(year: number, month1Based: number) {
   ).toISOString();
 }
 
+type ActivityRow = {
+  id: string;
+  name: string;
+  type: string | null;
+  deleted_at: string | null;
+  discipline: string | null;
+};
+
 type SessionRow = {
   id: string;
   start_ts: string;
   end_ts: string;
   activity_id: string;
-  activity:
-    | { id: string; name: string; type: string | null; deleted_at: string | null }
-    | { id: string; name: string; type: string | null; deleted_at: string | null }[]
-    | null;
+  activity: ActivityRow | ActivityRow[] | null;
 };
 
 function activityFromRow(row: SessionRow) {
@@ -64,7 +70,8 @@ export async function MonthlyActivitiesCalendar() {
         id,
         name,
         type,
-        deleted_at
+        deleted_at,
+        discipline
       )
     `,
     )
@@ -95,12 +102,14 @@ export async function MonthlyActivitiesCalendar() {
     const act = activityFromRow(session);
     const dateKey = dayKeyFormatter.format(new Date(session.start_ts));
     const activityName = act?.name ?? "Cours";
+    const discipline = inferPracticeDiscipline(activityName, act?.discipline);
     const item: CalendarSessionItem = {
       id: session.id,
       activityId: session.activity_id,
       start_ts: session.start_ts,
       end_ts: session.end_ts,
       activityName,
+      discipline,
     };
     if (!sessionsByDate[dateKey]) {
       sessionsByDate[dateKey] = [];

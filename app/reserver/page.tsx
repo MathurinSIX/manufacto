@@ -5,6 +5,7 @@ import { unstable_noStore } from "next/cache";
 
 import { ActivitySessionPicker } from "@/components/activity-session-picker";
 import { PracticeReservationPicker } from "@/components/practice-reservation-picker";
+import { VisitSessionList } from "@/components/visit-session-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,34 +153,20 @@ async function SimpleReservationPanel({
           </h2>
           <div className="mt-5 space-y-3">
             {sessions.length ? (
-              sessions.map((session) => {
-                const activity = activityFromRow(session);
-                const start = new Date(session.start_ts);
-                const end = new Date(session.end_ts);
-                const isSelected = session.id === selectedSession?.id;
+              <VisitSessionList
+                sessions={sessions.map((session) => {
+                  const activity = activityFromRow(session);
+                  const start = new Date(session.start_ts);
+                  const end = new Date(session.end_ts);
 
-                return (
-                  <Link
-                    key={session.id}
-                    href={`/reserver?session=${encodeURIComponent(session.id)}`}
-                    scroll={false}
-                    className={`block rounded-[14px] border p-4 transition ${
-                      isSelected
-                        ? "border-[#4a56dd] bg-[#4a56dd]/5"
-                        : "border-black/10 hover:border-[#4a56dd]/50"
-                    }`}
-                  >
-                    <p className="font-semibold text-black">
-                      {activity?.name ?? "Visite de l'atelier"}
-                    </p>
-                    <p className="mt-1 text-sm capitalize text-black/65">
-                      {dateFormatter.format(start)} ·{" "}
-                      {timeFormatter.format(start)} -{" "}
-                      {timeFormatter.format(end)}
-                    </p>
-                  </Link>
-                );
-              })
+                  return {
+                    id: session.id,
+                    title: activity?.name ?? "Visite de l'atelier",
+                    scheduleLabel: `${dateFormatter.format(start)} · ${timeFormatter.format(start)} - ${timeFormatter.format(end)}`,
+                  };
+                })}
+                selectedSessionId={selectedSession?.id}
+              />
             ) : (
               <p className="text-sm text-black/60">
                 Aucun créneau n&apos;est disponible pour le moment.

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { mkdir, readdir, writeFile } from "fs/promises";
+import { readdir } from "fs/promises";
 import path from "path";
 import { listSquareCatalogVariations } from "@/lib/square/catalog-api";
 import {
@@ -237,6 +237,8 @@ export async function getFrontendAssetImages() {
   return { error: null, images };
 }
 
+const ACTIVITY_IMAGES_BUCKET = "activity-images";
+
 export async function uploadActivityImage(formData: FormData) {
   await checkAdmin();
 
@@ -263,16 +265,39 @@ export async function uploadActivityImage(formData: FormData) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") || "activity";
   const filename = `${Date.now()}-${safeBaseName}${extension}`;
-  const uploadDirectory = path.join(process.cwd(), "public", "assets", "activities");
-  const uploadPath = path.join(uploadDirectory, filename);
+  const storagePath = `activities/${filename}`;
 
-  await mkdir(uploadDirectory, { recursive: true });
-  await writeFile(uploadPath, Buffer.from(await file.arrayBuffer()));
+  try {
+    const adminClient = getAdminClient();
+    const { error: uploadError } = await adminClient.storage
+      .from(ACTIVITY_IMAGES_BUCKET)
+      .upload(storagePath, Buffer.from(await file.arrayBuffer()), {
+        contentType: file.type,
+        upsert: false,
+      });
 
-  return {
-    error: null,
-    path: `/assets/activities/${filename}`,
-  };
+    if (uploadError) {
+      return { error: uploadError.message, path: null };
+    }
+
+    const {
+      data: { publicUrl },
+    } = adminClient.storage.from(ACTIVITY_IMAGES_BUCKET).getPublicUrl(storagePath);
+
+    return {
+      error: null,
+      path: publicUrl,
+    };
+  } catch (err) {
+    console.error("Error uploading activity image:", err);
+    return {
+      error:
+        err instanceof Error
+          ? err.message
+          : "L'image n'a pas pu être téléversée",
+      path: null,
+    };
+  }
 }
 
 export async function unsubscribeNewsletterSubscription(subscriptionId: string) {
@@ -863,7 +888,7 @@ export async function createActivity(
     return { error: "Le type est requis", activity: null };
   }
 
-  if (!imageUrl) {
+  if (!imageUrl && type !== "visite" && type !== "cours") {
     return { error: "Une image est requise", activity: null };
   }
   

@@ -30,7 +30,7 @@ export type DbCourse = {
   discipline: string | null;
 };
 
-const DEFAULT_COURSE_IMAGE = "/assets/homepage/Frame 42.jpg";
+export const DEFAULT_COURSE_IMAGE = "/assets/homepage/Vector.jpg";
 const DEFAULT_COURSE_DESCRIPTION =
   "Les informations détaillées de ce cours seront bientôt disponibles.";
 const DEFAULT_COURSE_DISCIPLINE = "Menuiserie";

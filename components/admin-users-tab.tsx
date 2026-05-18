@@ -16,13 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { getAllUsers, createUser, addCreditToUser, makeUserAdmin, removeUserAdmin } from "@/app/admin/actions";
 import { Plus, Loader2, Coins, Shield, ShieldOff } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
@@ -53,7 +46,6 @@ export function AdminUsersTab() {
   const [addCreditDialogOpen, setAddCreditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [creditAmount, setCreditAmount] = useState<string>("");
-  const [creditPaymentType, setCreditPaymentType] = useState<string>("free");
   const [addingCredit, setAddingCredit] = useState(false);
   
   const [newUserEmail, setNewUserEmail] = useState("");
@@ -128,7 +120,7 @@ export function AdminUsersTab() {
         return;
       }
 
-      const result = await addCreditToUser(selectedUser.id, amount, creditPaymentType);
+      const result = await addCreditToUser(selectedUser.id, amount, "admin");
 
       if (result.error) {
         setError(result.error);
@@ -136,7 +128,6 @@ export function AdminUsersTab() {
         setAddCreditDialogOpen(false);
         setSelectedUser(null);
         setCreditAmount("");
-        setCreditPaymentType("free");
         await loadUsers();
       }
     } catch (err) {
@@ -293,7 +284,6 @@ export function AdminUsersTab() {
                               setSelectedUser(user);
                               setAddCreditDialogOpen(true);
                               setCreditAmount("");
-                              setCreditPaymentType("free");
                               setError(null);
                             }}
                           >
@@ -387,20 +377,6 @@ export function AdminUsersTab() {
                   Entrez le nombre de crédits à ajouter
                 </p>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="creditPaymentType">Type de paiement *</Label>
-                <Select value={creditPaymentType} onValueChange={setCreditPaymentType} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un type de paiement" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="free">Gratuit</SelectItem>
-                    <SelectItem value="credit">Crédits</SelectItem>
-                    <SelectItem value="stripe">Stripe</SelectItem>
-                    <SelectItem value="cash">Espèces</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             {error && (
               <div className="text-sm text-destructive mb-4">{error}</div>
@@ -413,13 +389,12 @@ export function AdminUsersTab() {
                   setAddCreditDialogOpen(false);
                   setSelectedUser(null);
                   setCreditAmount("");
-                  setCreditPaymentType("free");
                   setError(null);
                 }}
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={addingCredit || !creditPaymentType}>
+              <Button type="submit" disabled={addingCredit || !creditAmount}>
                 {addingCredit ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
