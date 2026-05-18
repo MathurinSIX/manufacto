@@ -805,7 +805,6 @@ export function ActivitySessionPicker({
                       productId={squareCatalogProductId}
                       activityId={activityId}
                       sessionId={selectedSessionId ?? undefined}
-                      variant="outline"
                       className="w-full sm:w-auto"
                     >
                       {`Réserver pour ${price.toFixed(2)}€`}

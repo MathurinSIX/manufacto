@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { Button, type ButtonProps } from "@/components/ui/button";
+
 type SquareCheckoutButtonProps = {
   productId: string;
   activityId?: string;
@@ -11,7 +13,8 @@ type SquareCheckoutButtonProps = {
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
-  variant?: "button" | "outline";
+  variant?: ButtonProps["variant"] | "button";
+  size?: ButtonProps["size"];
 };
 
 export function SquareCheckoutButton({
@@ -23,10 +26,12 @@ export function SquareCheckoutButton({
   children,
   className,
   disabled = false,
-  variant = "button",
+  variant = "default",
+  size,
 }: SquareCheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const buttonVariant = variant === "button" ? "default" : variant;
 
   async function startCheckout() {
     setLoading(true);
@@ -68,21 +73,17 @@ export function SquareCheckoutButton({
 
   return (
     <div>
-      <button
+      <Button
         type="button"
         onClick={startCheckout}
         disabled={loading || disabled}
-        className={
-          className ??
-          (variant === "outline"
-            ? "inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium"
-            : undefined)
-        }
+        variant={buttonVariant}
+        size={size}
+        className={className}
       >
-        {loading ? "loading" : children}
-      </button>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {loading ? "Chargement..." : children}
+      </Button>
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>
   );
 }
-
