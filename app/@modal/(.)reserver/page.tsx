@@ -37,34 +37,33 @@ async function shouldSkipOuterModal(searchParams: Promise<Search>) {
   return !!activity?.type && !PRACTICE_ACTIVITY_TYPES.has(activity.type);
 }
 
-export default async function ReserverModalPage({
+function ReserverModalFallback() {
+  return (
+    <div className="px-5 py-16 text-center text-black/70">Chargement…</div>
+  );
+}
+
+async function ReserverModalContent({
   searchParams,
 }: {
   searchParams: Promise<Search>;
 }) {
-  if (await shouldSkipOuterModal(searchParams)) {
+  const sp = await searchParams;
+  const activityId = sp.activity?.trim() ?? "";
+  const skipOuterModal = await shouldSkipOuterModal(searchParams);
+
+  if (skipOuterModal) {
     return (
-      <Suspense
-        fallback={
-          <div className="px-5 py-16 text-center text-black/70">
-            Chargement…
-          </div>
-        }
-      >
-        <ReserverPanel
-          searchParams={searchParams}
-          isModal
-          pickerBackOnClose
-          pickerOnly
-        />
-      </Suspense>
+      <ReserverPanel
+        searchParams={searchParams}
+        isModal
+        pickerBackOnClose
+        pickerOnly
+      />
     );
   }
 
-  const sp = await searchParams;
-  const activityId = sp.activity?.trim() ?? "";
-  const isPracticeActivity =
-    UUID_RE.test(activityId) && !(await shouldSkipOuterModal(searchParams));
+  const isPracticeActivity = UUID_RE.test(activityId) && !skipOuterModal;
 
   return (
     <ReservationModal
@@ -72,15 +71,19 @@ export default async function ReserverModalPage({
         isPracticeActivity ? "réserver en pratique libre" : "réserver"
       }
     >
-      <Suspense
-        fallback={
-          <div className="px-5 py-16 text-center text-black/70">
-            Chargement…
-          </div>
-        }
-      >
-        <ReserverPanel searchParams={searchParams} isModal />
-      </Suspense>
+      <ReserverPanel searchParams={searchParams} isModal />
     </ReservationModal>
+  );
+}
+
+export default function ReserverModalPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>;
+}) {
+  return (
+    <Suspense fallback={<ReserverModalFallback />}>
+      <ReserverModalContent searchParams={searchParams} />
+    </Suspense>
   );
 }

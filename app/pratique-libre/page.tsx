@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import { unstable_noStore } from "next/cache";
 import {
   MarketingPageContainer,
@@ -807,7 +808,15 @@ async function PratiqueLibreContent() {
 export default function PratiqueLibrePage() {
   return (
     <main className="flex min-h-screen flex-col bg-white text-black">
-      <PratiqueLibreContent />
+      <Suspense
+        fallback={
+          <div className="mx-auto max-w-[1274px] px-5 py-16 text-center text-black/70">
+            Chargement…
+          </div>
+        }
+      >
+        <PratiqueLibreContent />
+      </Suspense>
     </main>
   );
 }
