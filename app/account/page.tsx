@@ -18,7 +18,7 @@ import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
 import { getSquareEnvironment } from "@/lib/square/environment";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
-import { cn } from "@/lib/utils";
+import { WeeklyActivitiesCalendar } from "@/components/weekly-activities-calendar";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
@@ -30,24 +30,6 @@ const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",
   month: "long",
   year: "numeric",
-  timeZone: PARIS_TIMEZONE,
-});
-
-const quickReservationWeekdayFormatter = new Intl.DateTimeFormat("fr-FR", {
-  weekday: "short",
-  timeZone: "UTC",
-});
-
-const quickReservationDayFormatter = new Intl.DateTimeFormat("fr-FR", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
-
-const quickReservationTimeFormatter = new Intl.DateTimeFormat("fr-FR", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
   timeZone: PARIS_TIMEZONE,
 });
 
@@ -84,7 +66,6 @@ const creditPackPriceFormatter = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 0,
 });
 
-const COURSE_ACTIVITY_TYPES = new Set(["cours"]);
 const PRACTICE_ACTIVITY_TYPES = new Set([
   "autonomie",
   "autonomie_encadree",
@@ -122,48 +103,6 @@ type QuickReservationActivity = {
   name: string;
   type: string | null;
   nb_credits: number | null;
-};
-
-type QuickReservationSessionRow = {
-  id: string;
-  start_ts: string;
-  end_ts: string;
-  activity:
-    | {
-        id: string;
-        name: string;
-        type: string | null;
-        nb_credits: number | null;
-        deleted_at: string | null;
-      }
-    | {
-        id: string;
-        name: string;
-        type: string | null;
-        nb_credits: number | null;
-        deleted_at: string | null;
-      }[]
-    | null;
-};
-
-type QuickCourseCalendarSession = {
-  id: string;
-  start_ts: string;
-  end_ts: string;
-  activityId: string;
-  activityName: string;
-  credits: number | null;
-};
-
-type QuickCourseCalendarWeek = {
-  key: string;
-  label: string;
-  days: {
-    key: string;
-    label: string;
-    dayNumber: string;
-    sessions: QuickCourseCalendarSession[];
-  }[];
 };
 
 type Session = {
@@ -207,131 +146,11 @@ function getSession(
   return session ?? null;
 }
 
-function getQuickReservationActivity(
-  activity: QuickReservationSessionRow["activity"],
-) {
-  if (Array.isArray(activity)) {
-    return activity[0] ?? null;
-  }
-
-  return activity ?? null;
-}
-
 function splitActivityTitle(name: string | null) {
   if (!name) return "Atelier";
   const parts = name.split("/");
   if (parts.length <= 1) return name.trim();
   return parts.slice(1).join("/").trim() || name.trim();
-}
-
-function getParisDateParts(value: string | Date) {
-  const date = typeof value === "string" ? new Date(value) : value;
-  const parts = new Intl.DateTimeFormat("fr-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: PARIS_TIMEZONE,
-  }).formatToParts(date);
-
-  return {
-    year: Number(parts.find((part) => part.type === "year")?.value),
-    month: Number(parts.find((part) => part.type === "month")?.value),
-    day: Number(parts.find((part) => part.type === "day")?.value),
-  };
-}
-
-function getParisCalendarDate(value: string | Date) {
-  const { year, month, day } = getParisDateParts(value);
-  return new Date(Date.UTC(year, month - 1, day, 12));
-}
-
-function startOfParisWeek(value: string | Date) {
-  const date = getParisCalendarDate(value);
-  const dayIndex = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayIndex);
-  return date;
-}
-
-function addUtcDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-function calendarDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getQuickCourseSessions(rows?: QuickReservationSessionRow[] | null) {
-  return (
-    rows
-      ?.map((row) => {
-        const activity = getQuickReservationActivity(row.activity);
-        if (
-          !activity ||
-          activity.deleted_at ||
-          !activity.type ||
-          !COURSE_ACTIVITY_TYPES.has(activity.type)
-        ) {
-          return null;
-        }
-
-        return {
-          id: row.id,
-          start_ts: row.start_ts,
-          end_ts: row.end_ts,
-          activityId: activity.id,
-          activityName: activity.name,
-          credits: activity.nb_credits,
-        } satisfies QuickCourseCalendarSession;
-      })
-      .filter((session): session is QuickCourseCalendarSession => !!session) ??
-    []
-  );
-}
-
-function getQuickCourseCalendarWeeks(
-  sessions: QuickCourseCalendarSession[],
-): QuickCourseCalendarWeek[] {
-  const weeks = new Map<string, QuickCourseCalendarSession[]>();
-
-  sessions.forEach((session) => {
-    const weekStart = startOfParisWeek(session.start_ts);
-    const weekKey = calendarDateKey(weekStart);
-    weeks.set(weekKey, [...(weeks.get(weekKey) ?? []), session]);
-  });
-
-  return Array.from(weeks.entries())
-    .slice(0, 4)
-    .map(([weekKey, weekSessions]) => {
-      const weekStart = new Date(`${weekKey}T12:00:00.000Z`);
-      const days = Array.from({ length: 7 }, (_, index) => {
-        const day = addUtcDays(weekStart, index);
-        const dayKey = calendarDateKey(day);
-        return {
-          key: dayKey,
-          label: quickReservationWeekdayFormatter.format(day),
-          dayNumber: quickReservationDayFormatter.format(day),
-          sessions: weekSessions.filter(
-            (session) =>
-              calendarDateKey(getParisCalendarDate(session.start_ts)) === dayKey,
-          ),
-        };
-      });
-
-      return {
-        key: weekKey,
-        label: `Semaine du ${quickReservationDayFormatter.format(weekStart)}`,
-        days,
-      };
-    });
-}
-
-function getQuickCourseSessionHref(session: QuickCourseCalendarSession) {
-  return `/reserver?${new URLSearchParams({
-    activity: session.activityId,
-    session: session.id,
-  }).toString()}`;
 }
 
 function getPracticeReservationHref(activityId: string) {
@@ -507,16 +326,6 @@ async function AccountContent() {
       return latestStatus && latestStatus.status === "CANCELLED";
     }) || [];
 
-  const bookedSessionIds = new Set(
-    sortedRegistrations
-      .filter((reg) => {
-        const latestStatus = registrationStatusMap[reg.id];
-        return !latestStatus || latestStatus.status !== "CANCELLED";
-      })
-      .map((reg) => reg.session_id)
-      .filter((id): id is string => !!id),
-  );
-
   // Fetch credit history
   const { data: creditHistory, error: creditError } = await supabase
     .from("credit")
@@ -609,26 +418,6 @@ async function AccountContent() {
     .neq("status", "pending")
     .order("created_at", { ascending: false });
 
-  const { data: quickReservationSessions, error: quickReservationError } =
-    await supabase
-      .from("session")
-      .select(
-        `
-        id,
-        start_ts,
-        end_ts,
-        activity:activity_id (
-          id,
-          name,
-          type,
-          nb_credits,
-          deleted_at
-        )
-      `,
-      )
-      .gte("start_ts", now)
-      .order("start_ts", { ascending: true });
-
   const { data: practiceActivities, error: practiceActivitiesError } =
     await supabase
       .from("activity")
@@ -636,13 +425,6 @@ async function AccountContent() {
       .in("type", Array.from(PRACTICE_ACTIVITY_TYPES))
       .is("deleted_at", null)
       .order("name", { ascending: true });
-
-  if (quickReservationError) {
-    console.error(
-      "Error fetching quick reservation sessions:",
-      quickReservationError,
-    );
-  }
 
   if (practiceActivitiesError) {
     console.error(
@@ -652,11 +434,6 @@ async function AccountContent() {
   }
 
   const quickPracticeItems = (practiceActivities ?? []) as QuickReservationActivity[];
-  const quickCourseWeeks = getQuickCourseCalendarWeeks(
-    getQuickCourseSessions(
-      quickReservationSessions as QuickReservationSessionRow[] | null,
-    ),
-  );
 
   // Calculate total credits
   const totalCredits =
@@ -765,145 +542,92 @@ async function AccountContent() {
                 Choisissez un cours ou un créneau de pratique libre disponible
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
-              <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#4a56dd]">
-                      Cours
-                    </p>
-                    <p className="mt-2 text-sm leading-normal text-black/60">
-                      Consultez les prochaines semaines.
-                    </p>
-                  </div>
-                  <Link
-                    href="/cours"
-                    className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+            <CardContent className="p-6 md:p-8">
+              <Tabs defaultValue="cours" className="w-full">
+                <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60">
+                  <TabsTrigger
+                    value="cours"
+                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
                   >
-                    tout voir
-                  </Link>
-                </div>
-                <div className="mt-5 space-y-5">
-                  {quickCourseWeeks.length ? (
-                    quickCourseWeeks.map((week) => (
-                      <div key={week.key}>
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
-                          {week.label}
-                        </p>
-                        <div className="grid grid-cols-7 gap-1">
-                          {week.days.map((day) => (
-                            <div
-                              key={day.key}
-                              className="min-h-[118px] rounded-[10px] border border-black/10 bg-white p-2"
-                            >
-                              <div className="text-center">
-                                <p className="text-[11px] font-semibold uppercase text-black/45">
-                                  {day.label}
-                                </p>
-                                <p className="text-xs font-semibold text-black/70">
-                                  {day.dayNumber}
-                                </p>
-                              </div>
-                              <div className="mt-2 space-y-1">
-                                {day.sessions.map((session) => {
-                                  const isBooked = bookedSessionIds.has(
-                                    session.id,
-                                  );
-
-                                  return (
-                                    <Link
-                                      key={session.id}
-                                      href={getQuickCourseSessionHref(session)}
-                                      scroll={false}
-                                      className={cn(
-                                        "block rounded-[8px] p-2 text-left transition",
-                                        isBooked
-                                          ? "border border-[#20b75a]/40 bg-[#20b75a]/10 hover:bg-[#20b75a]/20"
-                                          : "bg-[#4a56dd]/10 hover:bg-[#4a56dd]/20",
-                                      )}
-                                    >
-                                      <span
-                                        className={cn(
-                                          "block text-[11px] font-semibold leading-tight",
-                                          isBooked
-                                            ? "text-[#1a8f47]"
-                                            : "text-[#313aa6]",
-                                        )}
-                                      >
-                                        {quickReservationTimeFormatter.format(
-                                          new Date(session.start_ts),
-                                        )}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          "mt-1 block line-clamp-2 text-[11px] font-medium leading-tight",
-                                          isBooked
-                                            ? "text-[#1a8f47]"
-                                            : "text-black",
-                                        )}
-                                      >
-                                        {splitActivityTitle(session.activityName)}
-                                      </span>
-                                    </Link>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-black/60">
-                      Aucun cours n&apos;est réservable pour le moment.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
-                      Pratique libre
-                    </p>
-                    <p className="mt-2 text-sm leading-normal text-black/60">
-                      Choisissez ensuite l&apos;heure d&apos;arrivée et la durée.
-                    </p>
-                  </div>
-                  <Link
-                    href="/pratique-libre"
-                    className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+                    Cours
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pratique"
+                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#f56800] data-[state=active]:shadow-sm"
                   >
-                    tout voir
-                  </Link>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {quickPracticeItems.length ? (
-                    quickPracticeItems.map((activity) => (
+                    Pratique libre
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="cours" className="mt-6">
+                  <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-sm leading-normal text-black/60">
+                        Consultez les prochaines semaines.
+                      </p>
                       <Link
-                        key={activity.id}
-                        href={getPracticeReservationHref(activity.id)}
-                        scroll={false}
-                        className="block rounded-[12px] border border-black/10 bg-white p-4 transition hover:border-[#f56800]/60 hover:bg-[#f56800]/5"
+                        href="/cours"
+                        className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
                       >
-                        <span className="block font-semibold text-black">
-                          {splitActivityTitle(activity.name)}
-                        </span>
-                        <span className="mt-1 block text-sm text-black/60">
-                          {activity.nb_credits ?? 0} crédit
-                          {activity.nb_credits === 1 ? "" : "s"} / heure
-                        </span>
+                        tout voir
                       </Link>
-                    ))
-                  ) : (
-                    <p className="text-sm text-black/60">
-                      Aucun créneau de pratique libre n&apos;est disponible pour
-                      le moment.
-                    </p>
-                  )}
-                </div>
-              </div>
+                    </div>
+                    <div className="mt-5 rounded-[14px] border border-black/10 bg-white p-3 md:p-4">
+                      <Suspense
+                        fallback={
+                          <div
+                            className="min-h-[200px] rounded-[14px] bg-[#f2f2f2] md:min-h-[280px]"
+                            aria-hidden
+                          />
+                        }
+                      >
+                        <WeeklyActivitiesCalendar />
+                      </Suspense>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="pratique" className="mt-6">
+                  <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-sm leading-normal text-black/60">
+                        Choisissez ensuite l&apos;heure d&apos;arrivée et la durée.
+                      </p>
+                      <Link
+                        href="/pratique-libre"
+                        className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+                      >
+                        tout voir
+                      </Link>
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      {quickPracticeItems.length ? (
+                        quickPracticeItems.map((activity) => (
+                          <Link
+                            key={activity.id}
+                            href={getPracticeReservationHref(activity.id)}
+                            scroll={false}
+                            className="block rounded-[12px] border border-black/10 bg-white p-4 transition hover:border-[#f56800]/60 hover:bg-[#f56800]/5"
+                          >
+                            <span className="block font-semibold text-black">
+                              {splitActivityTitle(activity.name)}
+                            </span>
+                            <span className="mt-1 block text-sm text-black/60">
+                              {activity.nb_credits ?? 0} crédit
+                              {activity.nb_credits === 1 ? "" : "s"} / heure
+                            </span>
+                          </Link>
+                        ))
+                      ) : (
+                        <p className="text-sm text-black/60">
+                          Aucun créneau de pratique libre n&apos;est disponible
+                          pour le moment.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
