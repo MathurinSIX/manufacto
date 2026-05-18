@@ -2,7 +2,7 @@
   "name": "Manufacto Marseille",
   "short_name": "Manufacto",
   "description": "Atelier partage et multidisciplinaire au coeur de Marseille.",
-  "start_url": "/",
+  "start_url": "/account",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

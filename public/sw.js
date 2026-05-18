@@ -1,6 +1,6 @@
-const CACHE_NAME = "manufacto-static-v2";
+const CACHE_NAME = "manufacto-static-v3";
 const STATIC_ASSETS = [
-  "/",
+  "/account",
   "/manifest.webmanifest",
   "/assets/favicon.png",
   "/icons/icon-192.png",
@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/") || Response.error()),
+      fetch(request).catch(() => caches.match("/account") || Response.error()),
     );
     return;
   }
