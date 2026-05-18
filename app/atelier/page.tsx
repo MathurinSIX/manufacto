@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   AtelierCreditPackGrid,
   AtelierDiscoveryPackGrid,
@@ -499,7 +500,13 @@ export default function AtelierPage() {
                 *offre limitée à un achat / personne.
               </p>
             </div>
-            <AtelierDiscoveryPackGrid />
+            <Suspense
+              fallback={
+                <div className="grid min-h-[155px] animate-pulse gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-2" />
+              }
+            >
+              <AtelierDiscoveryPackGrid />
+            </Suspense>
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
@@ -517,7 +524,13 @@ export default function AtelierPage() {
                 achat, ils s&apos;ajoutent à ceux que vous venez d&apos;acheter.
               </p>
             </div>
-            <AtelierCreditPackGrid />
+            <Suspense
+              fallback={
+                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-5" />
+              }
+            >
+              <AtelierCreditPackGrid />
+            </Suspense>
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
@@ -551,7 +564,20 @@ export default function AtelierPage() {
                 freins à votre venue, venez nous rencontrer et discutons en.
               </p>
             </div>
-            <AtelierSubscriptionList />
+            <Suspense
+              fallback={
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="min-h-[120px] animate-pulse rounded-[14px] bg-[#fff8f0]"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <AtelierSubscriptionList />
+            </Suspense>
           </div>
         </section>
       </div>
