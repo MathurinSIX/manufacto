@@ -3,11 +3,13 @@ import {
   addUtcDays,
   buildNextParisWeekStarts,
 } from "@/lib/paris-calendar";
+import { connection } from "next/server";
 import { WeeklyCalendar } from "./weekly-calendar";
 
 const UPCOMING_WEEKS = 3;
 
 export async function WeeklyActivitiesCalendar() {
+  await connection();
   const now = new Date();
   const weekStarts = buildNextParisWeekStarts(now, UPCOMING_WEEKS);
   const rangeStart = weekStarts[0]!;

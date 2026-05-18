@@ -1,5 +1,6 @@
 import { fetchCourseSessionsByDate } from "@/lib/fetch-course-sessions";
 import { parisYearMonthDay, parisMonthAnchorIso } from "@/lib/paris-calendar";
+import { connection } from "next/server";
 import { MonthlyCalendar } from "./monthly-calendar";
 
 /** Course sessions in a date range, grouped by Paris calendar day. */
@@ -8,6 +9,7 @@ export async function MonthlyActivitiesCalendar({
 }: {
   compact?: boolean;
 } = {}) {
+  await connection();
   const now = new Date();
   const { year: py, month: pm } = parisYearMonthDay(now);
 
