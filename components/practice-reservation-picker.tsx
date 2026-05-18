@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon, CheckCircle2, Loader2 } from "lucide-react";
 
 import { registerForSession } from "@/app/account/actions";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
+import { ReservationAuthStep } from "@/components/reservation-auth-step";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +124,8 @@ interface PracticeReservationPickerProps {
   fixedHourCount?: number;
   isLoggedIn?: boolean;
   inModal?: boolean;
+  modalOpen?: boolean;
+  onAuthStepChange?: (showAuthStep: boolean) => void;
 }
 
 function getLatestActiveRegistrationIds(
@@ -235,6 +238,8 @@ export function PracticeReservationPicker({
   fixedHourCount,
   isLoggedIn,
   inModal = false,
+  modalOpen,
+  onAuthStepChange,
 }: PracticeReservationPickerProps) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
@@ -247,52 +252,59 @@ export function PracticeReservationPicker({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userCredits, setUserCredits] = useState(0);
+  const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const effectiveIsLoggedIn = !!isLoggedIn || !!userId;
+  const hasSelectedHours = selectedHourKeys.length > 0;
+
+  const refreshUser = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    const nextUserId = data.user?.id ?? null;
+    setUserId(nextUserId);
+
+    if (!nextUserId) {
+      setUserCredits(0);
+      return null;
+    }
+
+    const { data: creditsData, error } = await supabase
+      .from("credit")
+      .select("amount")
+      .eq("user_id", nextUserId);
+
+    if (error) {
+      console.error("Error fetching credits:", error);
+      setUserCredits(0);
+      return nextUserId;
+    }
+
+    setUserCredits(
+      creditsData?.reduce((sum, row) => {
+        const amount =
+          typeof row.amount === "number"
+            ? row.amount
+            : parseFloat(String(row.amount)) || 0;
+        return sum + amount;
+      }, 0) ?? 0,
+    );
+    return nextUserId;
+  }, [supabase]);
 
   useEffect(() => {
-    let active = true;
-    const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      setUserId(data.user?.id ?? null);
+    void refreshUser();
+  }, [refreshUser]);
 
-      if (!data.user?.id) {
-        setUserCredits(0);
-        return;
-      }
+  useEffect(() => {
+    if (modalOpen === false) {
+      setShowAuthStep(false);
+    }
+  }, [modalOpen]);
 
-      const { data: creditsData, error } = await supabase
-        .from("credit")
-        .select("amount")
-        .eq("user_id", data.user.id);
-
-      if (!active) return;
-      if (error) {
-        console.error("Error fetching credits:", error);
-        setUserCredits(0);
-        return;
-      }
-
-      setUserCredits(
-        creditsData?.reduce((sum, row) => {
-          const amount =
-            typeof row.amount === "number"
-              ? row.amount
-              : parseFloat(String(row.amount)) || 0;
-          return sum + amount;
-        }, 0) ?? 0,
-      );
-    };
-
-    fetchUser();
-    return () => {
-      active = false;
-    };
-  }, [supabase]);
+  useEffect(() => {
+    onAuthStepChange?.(showAuthStep);
+  }, [showAuthStep, onAuthStepChange]);
 
   const fetchMyRegistrations = async (
     currentUserId: string,
@@ -560,6 +572,16 @@ export function PracticeReservationPicker({
     : requiresExactHourCount
       ? selectedHourCount === minHourCount && hasConsecutiveSelection
       : selectedHourCount >= minHourCount && hasConsecutiveSelection;
+  const reservationRuleMessage =
+    !isAccompagnement && selectedHourCount > 0 && !hasRequiredHourCount
+      ? requiresExactHourCount
+        ? selectedHourCount !== minHourCount
+          ? `Ce pack découverte comprend exactement ${minHourCount} heures consécutives. Sélectionnez ${minHourCount} créneaux à la suite.`
+          : `Les ${minHourCount} créneaux sélectionnés doivent être consécutifs pour réserver ce pack.`
+        : selectedHourCount < minHourCount
+          ? `Sélectionnez au moins ${minHourCount} heures consécutives pour réserver.`
+          : "Les créneaux sélectionnés doivent être consécutifs pour réserver."
+      : null;
   const selectedFirstHour = orderedSelectedSlots[0] ?? null;
   const selectedLastHour =
     orderedSelectedSlots[orderedSelectedSlots.length - 1] ?? null;
@@ -570,12 +592,35 @@ export function PracticeReservationPicker({
   const checkoutEndIso = selectedReservationEnd?.toISOString();
   const checkoutSessionId = selectedFirstHour?.sessionId;
 
+  const handleAuthRequired = () => {
+    if (!hasSelectedHours) {
+      setErrorMessage("Sélectionnez un créneau avant de réserver.");
+      return;
+    }
+    setShowAuthStep(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
+  const handleAuthSuccess = async () => {
+    const nextUserId = await refreshUser();
+    if (!nextUserId) {
+      return;
+    }
+    setShowAuthStep(false);
+    setSuccessMessage(
+      "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
+    );
+    router.refresh();
+  };
+
   const toggleHourSelection = (key: string) => {
     const option = hourSlotOptions.find((slot) => slot.key === key);
     if (!option || option.disabled || option.bookedByMe) {
       return;
     }
 
+    setShowAuthStep(false);
     setSelectedHourKeys((current) => {
       if (current.includes(key)) {
         return current.filter((value) => value !== key);
@@ -629,16 +674,8 @@ export function PracticeReservationPicker({
   const handleRegister = async () => {
     if (!selectedHourKeys.length) return;
 
-    const qs = new URLSearchParams(searchParams?.toString());
-    qs.set("activity", activityId);
-
     if (!userId) {
-      const nextTarget = pathname
-        ? `${pathname}?${qs.toString()}`
-        : `/reserver?${qs.toString()}`;
-      router.push(
-        `/auth/login?${new URLSearchParams({ next: nextTarget }).toString()}`,
-      );
+      handleAuthRequired();
       return;
     }
 
@@ -1007,6 +1044,11 @@ export function PracticeReservationPicker({
               Pack découverte: {minHourCount} heures
             </p>
           ) : null}
+          {reservationRuleMessage ? (
+            <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+              {reservationRuleMessage}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -1017,13 +1059,31 @@ export function PracticeReservationPicker({
         <p className="text-sm text-green-600">{successMessage}</p>
       ) : null}
 
+      {showAuthStep && hasSelectedHours && !effectiveIsLoggedIn ? (
+        <ReservationAuthStep
+          onSuccess={handleAuthSuccess}
+          description="Créez un compte ou connectez-vous. Vos créneaux restent sélectionnés et vous pourrez ensuite payer en ligne ou utiliser vos crédits."
+        />
+      ) : null}
+
       {isSquareReservation ? (
-        !userId ? (
-          <Button className="w-full" onClick={handleRegister}>
+        !effectiveIsLoggedIn && !showAuthStep ? (
+          <Button
+            className="w-full"
+            disabled={
+              !hasSelectableHours ||
+              selectedHourCount === 0 ||
+              hasFullHour ||
+              !hasRequiredHourCount
+            }
+            onClick={handleAuthRequired}
+          >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            Se connecter pour réserver
+            {reservationRuleMessage
+              ? `Choisir ${minHourCount} heures consécutives`
+              : "Payer et réserver le pack découverte"}
           </Button>
-        ) : squareProductId && checkoutSessionId && checkoutStartIso && checkoutEndIso ? (
+        ) : effectiveIsLoggedIn && squareProductId && checkoutSessionId && checkoutStartIso && checkoutEndIso ? (
           <SquareCheckoutButton
             productId={squareProductId}
             activityId={activityId}
@@ -1039,7 +1099,9 @@ export function PracticeReservationPicker({
               !hasRequiredHourCount
             }
           >
-            Payer et réserver le pack découverte
+            {reservationRuleMessage
+              ? `Choisir ${minHourCount} heures consécutives`
+              : "Payer et réserver le pack découverte"}
           </SquareCheckoutButton>
         ) : (
           <Button className="w-full" disabled>
@@ -1047,26 +1109,26 @@ export function PracticeReservationPicker({
             Choisir deux créneaux
           </Button>
         )
-      ) : (
-        <Button
-          className="w-full"
-          disabled={
-            isRegistering ||
-            !hasSelectableHours ||
-            selectedHourCount === 0 ||
-            hasFullHour ||
-            !hasRequiredHourCount ||
-            (isLoggedIn && !hasEnoughCredits)
-          }
-          onClick={handleRegister}
-        >
-          {isRegistering ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CalendarIcon className="mr-2 h-4 w-4" />
-          )}
-          {userId
-            ? selectedHourCount > 0
+      ) : effectiveIsLoggedIn || showAuthStep ? (
+        effectiveIsLoggedIn ? (
+          <Button
+            className="w-full"
+            disabled={
+              isRegistering ||
+              !hasSelectableHours ||
+              selectedHourCount === 0 ||
+              hasFullHour ||
+              !hasRequiredHourCount ||
+              !hasEnoughCredits
+            }
+            onClick={handleRegister}
+          >
+            {isRegistering ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CalendarIcon className="mr-2 h-4 w-4" />
+            )}
+            {selectedHourCount > 0
               ? `Réserver ${selectedHourCount} heure${selectedHourCount > 1 ? "s" : ""}${
                   totalCredits > 0
                     ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}`
@@ -1076,11 +1138,35 @@ export function PracticeReservationPicker({
                 ? "Choisir au moins une heure"
                 : requiresExactHourCount
                   ? `Choisir ${minHourCount} heures consécutives`
-                  : `Choisir au moins ${minHourCount} heures consécutives (ou plus)`
-            : "Se connecter pour réserver"}
+                  : `Choisir au moins ${minHourCount} heures consécutives (ou plus)`}
+          </Button>
+        ) : null
+      ) : (
+        <Button
+          className="w-full"
+          disabled={
+            !hasSelectableHours ||
+            selectedHourCount === 0 ||
+            hasFullHour ||
+            !hasRequiredHourCount
+          }
+          onClick={handleAuthRequired}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {selectedHourCount > 0
+            ? `Réserver ${selectedHourCount} heure${selectedHourCount > 1 ? "s" : ""}${
+                totalCredits > 0
+                  ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}`
+                  : ""
+              }`
+            : isAccompagnement
+              ? "Choisir au moins une heure"
+              : requiresExactHourCount
+                ? `Choisir ${minHourCount} heures consécutives`
+                : `Choisir au moins ${minHourCount} heures consécutives (ou plus)`}
         </Button>
       )}
-      {isLoggedIn && !isSquareReservation && !hasEnoughCredits ? (
+      {effectiveIsLoggedIn && !isSquareReservation && !hasEnoughCredits ? (
         <p className="text-xs text-destructive">
           Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""}, il en
           faut {totalCredits}.

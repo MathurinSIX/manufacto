@@ -9,6 +9,9 @@ type ActivityRow = {
   type: string | null;
   deleted_at: string | null;
   discipline: string | null;
+  nb_credits: number | null;
+  price: number | null;
+  square_product_id: string | null;
 };
 
 type SessionRow = {
@@ -44,7 +47,10 @@ export async function fetchCourseSessionsByDate(
         name,
         type,
         deleted_at,
-        discipline
+        discipline,
+        nb_credits,
+        price,
+        square_product_id
       )
     `,
     )
@@ -83,6 +89,9 @@ export async function fetchCourseSessionsByDate(
       end_ts: session.end_ts,
       activityName,
       discipline,
+      nbCredits: act?.nb_credits ?? null,
+      price: act?.price ?? null,
+      squareProductId: act?.square_product_id ?? null,
     };
     if (!sessionsByDate[dateKey]) {
       sessionsByDate[dateKey] = [];

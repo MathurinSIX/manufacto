@@ -39,13 +39,13 @@ export function OfferCardTabs({
   columns?: 2 | 3;
   isLoggedIn?: boolean;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeOffer = offers[activeIndex];
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const activeOffer = activeIndex === null ? null : offers[activeIndex];
 
-  const body = activeOffer.detail ?? activeOffer.summary;
-  const schedule = activeOffer.schedule ?? null;
-  const showReservation = activeOffer.reservable !== false;
-  const reservationHref = activeOffer.activityId
+  const body = activeOffer ? activeOffer.detail ?? activeOffer.summary : null;
+  const schedule = activeOffer?.schedule ?? null;
+  const showReservation = activeOffer?.reservable !== false;
+  const reservationHref = activeOffer?.activityId
     ? `/reserver?activity=${encodeURIComponent(activeOffer.activityId)}`
     : "/reserver";
 
@@ -97,62 +97,64 @@ export function OfferCardTabs({
         })}
       </div>
 
-      <div className="mt-12 grid gap-10 md:grid-cols-[1fr_1.45fr]">
-        <div>
-          <h4 className="text-[24px] font-bold leading-tight">
-            {activeOffer.title}
-          </h4>
-          <p className="mt-6 whitespace-pre-line text-base leading-normal text-black/75">
-            {body}
-          </p>
-          {schedule ? (
-            <div className="mt-8 rounded-xl border-2 border-[#4a56dd]/35 bg-[#4a56dd]/10 p-5 md:p-6">
-              {(() => {
-                const { title, lines } = parseScheduleBlock(schedule);
-                return (
-                  <div
-                    className={cn(
-                      showReservation &&
-                        "flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      {title ? (
-                        <p className="text-lg font-bold text-[#4a56dd] md:text-xl">
-                          {title}
+      {activeOffer ? (
+        <div className="mt-12 grid gap-10 md:grid-cols-[1fr_1.45fr]">
+          <div>
+            <h4 className="text-[24px] font-bold leading-tight">
+              {activeOffer.title}
+            </h4>
+            <p className="mt-6 whitespace-pre-line text-base leading-normal text-black/75">
+              {body}
+            </p>
+            {schedule ? (
+              <div className="mt-8 rounded-xl border-2 border-[#4a56dd]/35 bg-[#4a56dd]/10 p-5 md:p-6">
+                {(() => {
+                  const { title, lines } = parseScheduleBlock(schedule);
+                  return (
+                    <div
+                      className={cn(
+                        showReservation &&
+                          "flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        {title ? (
+                          <p className="text-lg font-bold text-[#4a56dd] md:text-xl">
+                            {title}
+                          </p>
+                        ) : null}
+                        <p
+                          className={cn(
+                            "whitespace-pre-line text-base font-medium leading-relaxed text-black/85 md:text-lg",
+                            title && "mt-2",
+                          )}
+                        >
+                          {lines}
                         </p>
-                      ) : null}
-                      <p
-                        className={cn(
-                          "whitespace-pre-line text-base font-medium leading-relaxed text-black/85 md:text-lg",
-                          title && "mt-2",
-                        )}
-                      >
-                        {lines}
-                      </p>
+                      </div>
+                      {reserveControl}
                     </div>
-                    {reserveControl}
-                  </div>
-                );
-              })()}
-            </div>
-          ) : (
-            reserveControl
-          )}
+                  );
+                })()}
+              </div>
+            ) : (
+              reserveControl
+            )}
+          </div>
+          <div className="relative min-h-[520px] overflow-hidden rounded-[18px] bg-[#d9d9d9]">
+            {activeOffer.detailImage || activeOffer.image ? (
+              <Image
+                src={activeOffer.detailImage || activeOffer.image || ""}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 680px"
+                aria-hidden
+              />
+            ) : null}
+          </div>
         </div>
-        <div className="relative min-h-[520px] overflow-hidden rounded-[18px] bg-[#d9d9d9]">
-          {activeOffer.detailImage || activeOffer.image ? (
-            <Image
-              src={activeOffer.detailImage || activeOffer.image || ""}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 680px"
-              aria-hidden
-            />
-          ) : null}
-        </div>
-      </div>
+      ) : null}
 
     </div>
   );

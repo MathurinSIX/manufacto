@@ -32,6 +32,9 @@ export type CalendarSessionItem = {
   end_ts: string;
   activityName: string;
   discipline: CourseDiscipline | null;
+  nbCredits?: number | null;
+  price?: number | null;
+  squareProductId?: string | null;
 };
 
 const startOfMonthUTC = (date: Date) =>

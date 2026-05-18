@@ -104,7 +104,6 @@ export async function AtelierDiscoveryPackGrid({
                 activityTitle={pack.title}
                 productId={pack.productId}
                 isLoggedIn={!!user}
-                returnPath={returnPath}
                 label="Acheter"
                 className={discoveryCheckoutButtonClassName}
               />

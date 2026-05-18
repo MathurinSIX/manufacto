@@ -427,7 +427,7 @@ async function PratiqueLibreContent() {
                         activityTitle={pack.title}
                         productId={pack.productId}
                         isLoggedIn={!!user}
-                        returnPath="/pratique-libre"
+                        label="Réserver"
                         className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
                       />
                     ) : (

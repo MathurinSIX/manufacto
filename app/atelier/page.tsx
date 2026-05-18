@@ -6,11 +6,13 @@ import {
   AtelierDiscoveryPackGrid,
   AtelierSubscriptionList,
 } from "@/components/atelier-tarifs-purchases";
+import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
 import {
   MARKETING_LINK_CLASS,
   MarketingBody,
   MarketingSectionTitle,
 } from "@/components/marketing";
+import { createClient } from "@/lib/supabase/server";
 
 const ASSETS = {
   heroWood: "/assets/figma-landing/hero-wood.png",
@@ -77,6 +79,33 @@ const courseCards = [
   },
 ];
 
+const discoveryPacks = [
+  {
+    productId: "decouverte-couture",
+    activityName: "Couture en autonomie encadrée",
+    title: "Pack découverte couture",
+    price: "15€",
+    line1: "2h de couture en",
+    line2: "autonomie encadrée",
+    borderClass: "border-[#4a56dd]/70",
+    cardClass: "bg-[#f0f1ff]",
+    priceClass: "text-[#4a56dd]",
+    linkClass: "text-[#4a56dd]",
+  },
+  {
+    productId: "decouverte-menuiserie",
+    activityName: "Menuiserie en autonomie encadrée",
+    title: "Pack découverte menuiserie",
+    price: "30€",
+    line1: "2h de menuiserie en",
+    line2: "autonomie encadrée",
+    borderClass: "border-[#f56800]/70",
+    cardClass: "bg-[#fff3e8]",
+    priceClass: "text-[#f56800]",
+    linkClass: "text-[#f56800]",
+  },
+] as const;
+
 function ImageTile({
   src,
   alt,
@@ -90,6 +119,85 @@ function ImageTile({
     <div className={`relative overflow-hidden rounded-[6px] bg-[#d9d9d9] ${className}`}>
       <Image src={src} alt={alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 520px" />
     </div>
+  );
+}
+
+async function DiscoveryPackBanner() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: activities } = await supabase
+    .from("activity")
+    .select("id, name")
+    .in(
+      "name",
+      discoveryPacks.map((pack) => pack.activityName),
+    )
+    .is("deleted_at", null);
+
+  const activityIdsByName = new Map(
+    (activities ?? []).map((activity) => [activity.name, activity.id]),
+  );
+
+  return (
+    <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
+      <div className="mx-auto max-w-[1274px] px-5 py-5 md:py-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-6 md:max-w-[55%]">
+            <h2 className="shrink-0 text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
+              pack <br />
+              découverte
+            </h2>
+            <div className="min-w-0">
+              <p className="text-xl leading-normal text-black/75">
+                Une première venue pour tester l&apos;atelier.
+              </p>
+              <p className="mt-2 text-xs leading-tight text-black/65">
+                limitée à un achat par personne
+              </p>
+            </div>
+          </div>
+          <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
+            {discoveryPacks.map((pack) => {
+              const reservationActivityId = activityIdsByName.get(pack.activityName);
+
+              return (
+                <div
+                  key={pack.productId}
+                  className={`flex flex-col items-center justify-center rounded-[14px] border px-4 py-3 text-center ${pack.borderClass} ${pack.cardClass}`}
+                >
+                  <p className={`text-[34px] leading-none ${pack.priceClass}`}>
+                    {pack.price}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
+                    {pack.line1}
+                  </p>
+                  <p className="text-lg leading-tight text-black/75">
+                    {pack.line2}
+                  </p>
+                  {reservationActivityId ? (
+                    <DiscoveryPackReservationButton
+                      activityId={reservationActivityId}
+                      activityTitle={pack.title}
+                      productId={pack.productId}
+                      isLoggedIn={!!user}
+                      label="Réserver"
+                      className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
+                    />
+                  ) : (
+                    <p className="mt-2 text-xs text-black/60">
+                      Créneaux indisponibles
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -201,6 +309,16 @@ export default function AtelierPage() {
             />
           </div>
         </section>
+
+        <Suspense
+          fallback={
+            <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
+              <div className="mx-auto min-h-[193px] max-w-[1274px] animate-pulse px-5 py-5 md:py-6" />
+            </section>
+          }
+        >
+          <DiscoveryPackBanner />
+        </Suspense>
 
         <section id="fonctionnement" className="w-full scroll-mt-28 bg-[#fff8f0]">
           <div className="mx-auto max-w-[1030px] px-5 py-10 md:py-14">
@@ -474,39 +592,6 @@ export default function AtelierPage() {
                 minimale de réservation est de deux heures consécutives.
               </p>
             </div>
-          </div>
-
-          <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-start">
-            <div>
-              <h3 className="text-[28px] font-bold leading-tight text-[#4a56dd]">
-                les packs découverte*
-              </h3>
-              <p className="mt-7 text-lg leading-normal text-black/75">
-                Deux packs à choisir si vous voulez venir une première fois pour
-                tester et découvrir l&apos;atelier, sans vous engager.
-              </p>
-              <p className="mt-7 text-lg leading-normal text-black/75">
-                En savoir plus sur l&apos;autonomie encadrée{" "}
-                <Link href="/pratique-libre" className="font-bold underline">
-                  en menuiserie
-                </Link>{" "}
-                /{" "}
-                <Link href="/pratique-libre" className="font-bold underline">
-                  en couture
-                </Link>
-                .
-              </p>
-              <p className="mt-7 text-lg leading-normal text-black/75">
-                *offre limitée à un achat / personne.
-              </p>
-            </div>
-            <Suspense
-              fallback={
-                <div className="grid min-h-[155px] animate-pulse gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-2" />
-              }
-            >
-              <AtelierDiscoveryPackGrid />
-            </Suspense>
           </div>
 
           <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">

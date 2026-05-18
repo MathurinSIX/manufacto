@@ -21,9 +21,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LoginForm } from "@/components/login-form";
-import { SignUpForm } from "@/components/sign-up-form";
+import { ReservationAuthStep } from "@/components/reservation-auth-step";
+import {
+  scrollableDialogBodyClass,
+  scrollableDialogContentClass,
+} from "@/components/reservation-modal";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { cancelRegistration, registerForSession } from "@/app/account/actions";
@@ -195,8 +197,6 @@ type SessionRow = {
   isFull?: boolean;
 };
 
-type AuthView = "signup" | "login";
-
 interface ActivitySessionPickerProps {
   activityId?: string;
   activityTitle: string;
@@ -253,7 +253,6 @@ export function ActivitySessionPicker({
   >(null);
   // Map of session_id -> registration_id for user's active registrations
   const [userRegistrations, setUserRegistrations] = useState<Record<string, string>>({});
-  const [authView, setAuthView] = useState<AuthView>("signup");
   const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
@@ -268,7 +267,6 @@ export function ActivitySessionPicker({
     setOpen(nextOpen);
     if (!nextOpen) {
       setShowAuthStep(false);
-      setAuthView("signup");
     }
     if (!nextOpen && backOnClose) {
       router.back();
@@ -530,12 +528,11 @@ export function ActivitySessionPicker({
     setErrorMessage(null);
   };
 
-  const handleAuthRequired = (view: AuthView = "signup") => {
+  const handleAuthRequired = () => {
     if (!selectedSessionId) {
       setErrorMessage("Sélectionnez une session avant de réserver.");
       return;
     }
-    setAuthView(view);
     setShowAuthStep(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -544,7 +541,6 @@ export function ActivitySessionPicker({
   const handleAuthSuccess = async () => {
     const nextUserId = await refreshUser();
     if (!nextUserId) {
-      setAuthView("login");
       return;
     }
     setShowAuthStep(false);
@@ -556,7 +552,7 @@ export function ActivitySessionPicker({
 
   const handleRegister = async (paymentType: "credits" | "stripe") => {
     if (!userId) {
-      handleAuthRequired("signup");
+      handleAuthRequired();
       return;
     }
 
@@ -639,7 +635,13 @@ export function ActivitySessionPicker({
         </DialogTrigger>
       )}
 
-      <DialogContent className={cn(showAuthStep ? "sm:max-w-4xl" : "sm:max-w-3xl")}>
+      <DialogContent
+        className={cn(
+          scrollableDialogContentClass,
+          showAuthStep ? "sm:max-w-4xl" : "sm:max-w-3xl",
+        )}
+      >
+        <div className={cn(scrollableDialogBodyClass, "p-6")}>
         <DialogHeader>
           <DialogTitle>Sélectionnez une session</DialogTitle>
           <DialogDescription>
@@ -816,39 +818,7 @@ export function ActivitySessionPicker({
         )}
 
         {showAuthStep && selectedSessionId && !effectiveIsLoggedIn ? (
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="mb-4">
-              <p className="text-sm font-semibold">
-                Finalisez votre réservation
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Créez un compte ou connectez-vous. Votre session reste
-                sélectionnée et vous pourrez ensuite payer en ligne ou utiliser
-                vos crédits.
-              </p>
-            </div>
-            <Tabs
-              value={authView}
-              onValueChange={(value) => setAuthView(value as AuthView)}
-            >
-              <TabsList className="grid h-auto w-full grid-cols-2">
-                <TabsTrigger value="signup">Créer un compte</TabsTrigger>
-                <TabsTrigger value="login">J&apos;ai déjà un compte</TabsTrigger>
-              </TabsList>
-              <TabsContent value="signup" className="mt-4">
-                <SignUpForm
-                  onSwitchToLogin={() => setAuthView("login")}
-                  onSuccess={handleAuthSuccess}
-                />
-              </TabsContent>
-              <TabsContent value="login" className="mt-4">
-                <LoginForm
-                  onSwitchToSignUp={() => setAuthView("signup")}
-                  onSuccess={handleAuthSuccess}
-                />
-              </TabsContent>
-            </Tabs>
-          </div>
+          <ReservationAuthStep onSuccess={handleAuthSuccess} />
         ) : null}
 
         <DialogFooter className="flex-col gap-3 sm:flex-row">
@@ -913,7 +883,7 @@ export function ActivitySessionPicker({
               {normalizedCredits !== null ? (
                 <Button
                   className="w-full sm:w-auto"
-                  onClick={() => handleAuthRequired("signup")}
+                  onClick={() => handleAuthRequired()}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {`Réserver pour ${normalizedCredits} crédits`}
@@ -922,7 +892,7 @@ export function ActivitySessionPicker({
               {normalizedPrice !== null && squareCatalogProductId ? (
                 <Button
                   className="w-full sm:w-auto"
-                  onClick={() => handleAuthRequired("signup")}
+                  onClick={() => handleAuthRequired()}
                 >
                   {`Acheter et réserver pour ${normalizedPrice.toFixed(2)}€`}
                 </Button>
@@ -930,7 +900,7 @@ export function ActivitySessionPicker({
               {normalizedCredits === null && normalizedPrice === null ? (
                 <Button
                   className="w-full sm:w-auto"
-                  onClick={() => handleAuthRequired("signup")}
+                  onClick={() => handleAuthRequired()}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   Réserver
@@ -939,6 +909,7 @@ export function ActivitySessionPicker({
             </div>
           ) : null}
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

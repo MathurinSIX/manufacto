@@ -1,10 +1,10 @@
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
 import { createClient } from "@/lib/supabase/server";
+import { ActivitySessionReserveTrigger } from "@/components/activity-session-reserve-trigger";
 import {
   MARKETING_LINK_CLASS,
   MarketingBody,
@@ -104,6 +104,10 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
     notFound();
   }
   const sessions = await getUpcomingSessions(course.id);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const priceLabel = formatPrice(course.price);
   const creditsLabel = formatCredits(course.credits);
 
@@ -176,12 +180,19 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
                     className="flex items-center justify-between gap-4 text-xl leading-normal text-black/75"
                   >
                     <p className="capitalize">{formatSession(session)}</p>
-                    <Link
-                      href={`/reserver?activity=${encodeURIComponent(course.id)}&session=${encodeURIComponent(session.id)}`}
-                      className={MARKETING_LINK_CLASS}
+                    <ActivitySessionReserveTrigger
+                      activityId={course.id}
+                      activityTitle={course.title}
+                      activityType="cours"
+                      sessionId={session.id}
+                      credits={course.credits}
+                      price={course.price}
+                      squareProductId={course.squareProductId}
+                      isLoggedIn={!!user}
+                      className={`${MARKETING_LINK_CLASS} cursor-pointer bg-transparent p-0 text-left`}
                     >
                       réserver
-                    </Link>
+                    </ActivitySessionReserveTrigger>
                   </div>
                 ))
               ) : (

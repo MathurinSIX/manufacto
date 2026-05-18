@@ -1,10 +1,10 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { AuthModal } from "@/components/auth-modal";
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { buildSignUpUrl } from "@/lib/auth-redirect";
+import { createClient } from "@/lib/supabase/client";
 
 type SquareCheckoutButtonProps = {
   productId: string;
@@ -33,29 +33,16 @@ export function SquareCheckoutButton({
   variant = "default",
   size,
   isLoggedIn = true,
-  returnPath,
 }: SquareCheckoutButtonProps) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(isLoggedIn);
   const buttonVariant = variant === "button" ? "default" : variant;
 
-  function getReturnPath() {
-    if (returnPath) {
-      return returnPath;
-    }
-
-    return pathname;
-  }
-
-  function redirectToSignUp() {
-    router.push(buildSignUpUrl(getReturnPath()));
-  }
-
-  async function startCheckout() {
-    if (!isLoggedIn) {
-      redirectToSignUp();
+  async function startCheckout(options?: { skipAuthCheck?: boolean }) {
+    if (!options?.skipAuthCheck && !isAuthenticated) {
+      setAuthOpen(true);
       return;
     }
 
@@ -82,7 +69,8 @@ export function SquareCheckoutButton({
       };
 
       if (response.status === 401) {
-        redirectToSignUp();
+        setIsAuthenticated(false);
+        setAuthOpen(true);
         return;
       }
 
@@ -101,11 +89,27 @@ export function SquareCheckoutButton({
     }
   }
 
+  async function handleAuthSuccess() {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getUser();
+
+    if (!data.user) {
+      setError(
+        "Compte créé. Vérifiez votre e-mail, puis connectez-vous pour finaliser l'achat.",
+      );
+      return;
+    }
+
+    setIsAuthenticated(true);
+    setAuthOpen(false);
+    await startCheckout({ skipAuthCheck: true });
+  }
+
   return (
     <div>
       <Button
         type="button"
-        onClick={startCheckout}
+        onClick={() => void startCheckout()}
         disabled={loading || disabled}
         variant={buttonVariant}
         size={size}
@@ -114,6 +118,12 @@ export function SquareCheckoutButton({
         {loading ? "Chargement..." : children}
       </Button>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      <AuthModal
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        defaultView="signup"
+        onSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }
