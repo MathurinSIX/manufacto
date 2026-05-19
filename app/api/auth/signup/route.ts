@@ -87,11 +87,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Explicitly sign out to ensure user is not logged in until email is confirmed
-    await supabase.auth.signOut();
-
     return NextResponse.json(
-      { message: "Compte créé avec succès. Veuillez vérifier votre e-mail pour confirmer votre compte." },
+      { message: "Compte créé avec succès." },
       { status: 201 }
     );
   } catch {

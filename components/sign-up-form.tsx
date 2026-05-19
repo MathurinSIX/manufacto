@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,6 +35,7 @@ export function SignUpForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
   const router = useRouter();
   const firstNameId = useId();
   const lastNameId = useId();
@@ -70,20 +72,37 @@ export function SignUpForm({
         throw new Error(data.error || "Une erreur s'est produite");
       }
 
-      // Show success message - user needs to validate email before logging in
+      // Email verification is disabled, so log the user in immediately to
+      // establish the client-side session, then trigger onSuccess / redirect.
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        // Fallback: confirmation may still be required for this account.
+        setSuccess(true);
+        setNeedsEmailConfirmation(true);
+        if (onSuccess) {
+          setTimeout(() => {
+            onSuccess();
+          }, 2000);
+        } else {
+          setTimeout(() => {
+            router.push("/auth/sign-up-success");
+          }, 2000);
+        }
+        return;
+      }
+
       setSuccess(true);
-      
-      // Call onSuccess callback if provided, otherwise redirect after a delay
       if (onSuccess) {
-        // Small delay to show success message
-        setTimeout(() => {
-          onSuccess();
-        }, 2000);
+        onSuccess();
+      } else if (redirectTo) {
+        router.push(redirectTo);
       } else {
-        // Small delay to show success message before redirect
-        setTimeout(() => {
-          router.push("/auth/sign-up-success");
-        }, 2000);
+        router.push("/account");
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -170,7 +189,9 @@ export function SignUpForm({
                     Compte créé avec succès !
                   </p>
                   <p className="mt-1 text-sm text-green-700">
-                    Veuillez vérifier votre e-mail pour confirmer votre compte avant de vous connecter.
+                    {needsEmailConfirmation
+                      ? "Veuillez vérifier votre e-mail pour confirmer votre compte avant de vous connecter."
+                      : "Connexion en cours..."}
                   </p>
                 </div>
               )}
