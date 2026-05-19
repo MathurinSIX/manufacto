@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { unstable_noStore } from "next/cache";
 import {
   AtelierCreditPackGrid,
@@ -10,6 +10,7 @@ import {
   MarketingPageHeader,
   MarketingSectionTitle,
 } from "@/components/marketing";
+import { CuissonOfferDetail } from "@/components/cuisson-offer-detail";
 import { OfferCardTabs } from "@/components/offer-card-tabs";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
 import { DetailsHashOpener } from "@/components/details-hash-opener";
@@ -37,7 +38,7 @@ type PracticeOfferInput = {
   title: string;
   summary: string;
   activityName: PracticeActivityName;
-  detail?: string;
+  detail?: string | ReactNode;
   image?: string;
   detailImage?: string;
   /** When false, no online reservation link is shown (e.g. cuisson). */
@@ -47,8 +48,8 @@ type PracticeOfferInput = {
 const stepCards = [
   {
     number: "1.",
-    title: "Créez un compte et achetez un pass manufacto,",
-    text: " que vous chargez avec le nombre de crédits de votre choix.",
+    title: "Créez un compte que vous chargez",
+    text: " avec le nombre de crédits de votre choix.",
   },
   {
     number: "2.",
@@ -141,9 +142,8 @@ const ceramiqueOffers: PracticeOfferInput[] = [
     activityName: "Cuisson céramique",
     reservable: false,
     summary:
-      "Cuisez les pièces que vous avez réalisées hors de l’atelier. Elles sont incluses pour les pièces ayant été réalisées chez nous.",
-    detail:
-      "À manufacto, vous pouvez cuire les pièces que vous avez réalisées hors de l’atelier. Le four se réserve alors en totalité.\n\nSeules certaines terres sont acceptées : Faïence, grès, porcelaine.\n(sont exclus : terre de papier, riz, métaux, autres matériaux). Pour chaque cuisson, la fiche technique détaillée présente sur l’emballage (type de terre, température etc) sera demandée.\n⚠️ En l’absence de ces informations, la cuisson ne pourra pas être acceptée.\nL'enfournement est exclusivement réservé au responsable d’atelier. Chaque élément sera vérifié avant la cuisson pour éviter tout risque d’explosion durant le cycle du four.\n\nTypes de cuisson proposées :\n· biscuit : 980°C.\n· émaux (à venir)\n\nCaractéristiques du four :\nFour à céramique ROHDE TE – 95L\n· Dimensions intérieures : 520 x 460\n· Dimensions des plaques de cuissons : 470 de diamètre\nFonctionnement\nDépôts sur rendez-vous, envoyez-nous un mail pour venir poser vos pièces.\n\nTarif :\nfour complet : 60€",
+      "Cuisez les pièces que vous avez réalisées hors de l’atelier.\n\nLes cuissons sont incluses pour les pièces ayant été réalisées chez nous.",
+    detail: <CuissonOfferDetail />,
     image: "/assets/pratique libre/Frame 36.jpg",
     detailImage: "/assets/pratique libre/Frame 26.jpg",
   },
@@ -373,9 +373,10 @@ async function PratiqueLibreContent() {
 
       return {
         ...offer,
-        detail: offer.detail
-          ? stripPracticeScheduleFromDetail(offer.detail)
-          : offer.detail,
+        detail:
+          typeof offer.detail === "string"
+            ? stripPracticeScheduleFromDetail(offer.detail)
+            : offer.detail,
         activityId,
         activityCredits: activity?.nb_credits ?? null,
         reservable: offer.reservable !== false,
@@ -830,7 +831,7 @@ async function PratiqueLibreContent() {
         </h2>
 
         <div className="border-t border-black/45">
-          <details open className="group border-b border-black/45 py-4">
+          <details className="group border-b border-black/45 py-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-xl font-bold leading-tight [&::-webkit-details-marker]:hidden">
               Est-ce que je peux stocker des pièces à l&apos;atelier ?
               <span className="text-2xl font-normal group-open:rotate-180">⌃</span>

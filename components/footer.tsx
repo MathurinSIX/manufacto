@@ -64,6 +64,9 @@ export function Footer() {
             <a href="mailto:contact@manufacto-marseille.com" className="block hover:text-black">
               contact@manufacto-marseille.com
             </a>
+            <a href="tel:+33743461214" className="block hover:text-black">
+              07 43 46 12 14
+            </a>
             <p>8 rue de Locarno</p>
             <p>13005 Marseille</p>
           </div>

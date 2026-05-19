@@ -23,16 +23,18 @@ export function DisciplineLegend({ compact = false }: { compact?: boolean }) {
         compact ? "mb-2 text-[10px]" : "mb-4 text-xs",
       )}
     >
-      {entries.map(([discipline, palette]) => (
-        <span key={discipline} className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: palette.fg }}
-          />
-          {DISCIPLINE_LABEL[discipline]}
-        </span>
-      ))}
+      {entries
+        .filter(([discipline]) => discipline !== "ceramique")
+        .map(([discipline, palette]) => (
+          <span key={discipline} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: palette.fg }}
+            />
+            {DISCIPLINE_LABEL[discipline]}
+          </span>
+        ))}
     </div>
   );
 }

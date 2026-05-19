@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { PRACTICE_SCHEDULE_MARKER } from "@/lib/format-practice-schedule";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 type Offer = {
   title: string;
   summary: string;
-  detail?: string;
+  detail?: string | ReactNode;
   image?: string;
   detailImage?: string;
   activityId?: string;
@@ -89,7 +89,7 @@ export function OfferCardTabs({
             ) : null}
             <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-white/85 to-white/0" />
             <h4 className="relative text-[26px] font-bold leading-tight">{offer.title}</h4>
-            <p className="relative mt-4 text-xl leading-normal text-black/75">
+            <p className="relative mt-4 whitespace-pre-line text-xl leading-normal text-black/75">
               {offer.summary}
             </p>
             </button>
@@ -103,9 +103,13 @@ export function OfferCardTabs({
             <h4 className="text-[24px] font-bold leading-tight">
               {activeOffer.title}
             </h4>
-            <p className="mt-6 whitespace-pre-line text-base leading-normal text-black/75">
-              {body}
-            </p>
+            <div className="mt-6 text-base leading-normal text-black/75">
+              {typeof body === "string" ? (
+                <p className="whitespace-pre-line">{body}</p>
+              ) : (
+                body
+              )}
+            </div>
             {schedule ? (
               <div className="mt-8 rounded-xl border-2 border-[#4a56dd]/35 bg-[#4a56dd]/10 p-5 md:p-6">
                 {(() => {

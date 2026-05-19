@@ -58,6 +58,12 @@ export default function ContactPage() {
                 >
                   contact@manufacto-marseille.com
                 </Link>
+                <Link
+                  href="tel:+33743461214"
+                  className="mt-2 block hover:text-black"
+                >
+                  07 43 46 12 14
+                </Link>
               </MarketingBody>
             </address>
           </div>

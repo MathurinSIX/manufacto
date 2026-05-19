@@ -249,7 +249,7 @@ export function LandingPage() {
 
       <section id="calendrier" className="mx-auto max-w-[1274px] px-5 py-20">
         <h2 className="mb-8 text-[30px] font-semibold leading-tight text-black/80">
-          calendrier du mois
+          calendrier des cours
         </h2>
         <div className="mb-8 max-w-[1196px] text-xl leading-normal text-black/75">
           <p>Retrouvez notre proposition de cours pour ce mois-ci.</p>
