@@ -14,7 +14,6 @@ export type SquareProduct = {
    * 3 credits/hour), which is NOT the same as the reservation duration.
    */
   discoveryHours?: number;
-  paymentLinkUrl: string;
   catalogObjectId?: string | null;
   catalogLabel?: string | null;
 };
@@ -27,7 +26,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "20 crédits / mois.",
     amountCents: 9000,
     credits: 20,
-    paymentLinkUrl: "https://square.link/u/2tdwuxzj",
   },
   {
     id: "formule-02",
@@ -36,7 +34,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "40 crédits / mois.",
     amountCents: 17000,
     credits: 40,
-    paymentLinkUrl: "https://square.link/u/gW0StYbg",
   },
   {
     id: "formule-03",
@@ -45,7 +42,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "60 crédits / mois.",
     amountCents: 24000,
     credits: 60,
-    paymentLinkUrl: "https://square.link/u/qmFVI9nB",
   },
   {
     id: "credits-2",
@@ -54,7 +50,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "Pack de 2 crédits.",
     amountCents: 1500,
     credits: 2,
-    paymentLinkUrl: "https://square.link/u/xIA0Pahf",
   },
   {
     id: "credits-6",
@@ -63,7 +58,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "Pack de 6 crédits.",
     amountCents: 3600,
     credits: 6,
-    paymentLinkUrl: "https://square.link/u/hgbetnRA",
   },
   {
     id: "credits-12",
@@ -72,7 +66,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "Pack de 12 crédits.",
     amountCents: 6600,
     credits: 12,
-    paymentLinkUrl: "https://square.link/u/uIOBYTuu",
   },
   {
     id: "credits-20",
@@ -81,7 +74,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "Pack de 20 crédits.",
     amountCents: 10000,
     credits: 20,
-    paymentLinkUrl: "https://square.link/u/CZCMiUpo",
   },
   {
     id: "credits-60",
@@ -90,7 +82,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     description: "Pack de 60 crédits.",
     amountCents: 27000,
     credits: 60,
-    paymentLinkUrl: "https://square.link/u/qUHYmiNc",
   },
   {
     id: "decouverte-couture",
@@ -101,7 +92,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     amountCents: 1500,
     credits: 2,
     discoveryHours: 2,
-    paymentLinkUrl: "https://square.link/u/OPAqHpzu",
   },
   {
     id: "decouverte-menuiserie",
@@ -112,7 +102,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     amountCents: 3000,
     credits: 6,
     discoveryHours: 2,
-    paymentLinkUrl: "https://square.link/u/9sIC6VDe",
   },
 ] satisfies SquareProduct[];
 
@@ -121,14 +110,5 @@ export const squareProducts = DEFAULT_SQUARE_PRODUCTS;
 
 export function getSquareProductFromDefaults(productId: string) {
   return DEFAULT_SQUARE_PRODUCTS.find((product) => product.id === productId) ?? null;
-}
-
-/** Production payment links only — sandbox must use the Square API instead. */
-export function getSquareProductPaymentLinkUrl(product: SquareProduct) {
-  if (process.env.SQUARE_ENVIRONMENT !== "production") {
-    return null;
-  }
-
-  return product.paymentLinkUrl;
 }
 

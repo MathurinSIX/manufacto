@@ -2,35 +2,63 @@
 
 import { useEffect } from "react";
 
-/**
- * Opens the <details> element whose id matches the current URL hash,
- * then scrolls it into view. Re-runs on hashchange so in-page navigation
- * to a different sublink still expands the target section.
- */
 export function DetailsHashOpener() {
   useEffect(() => {
+    let retryTimeout: number | null = null;
+    let animationFrame: number | null = null;
+
+    const clearPending = () => {
+      if (retryTimeout) {
+        window.clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+    };
+
     const openFromHash = () => {
+      clearPending();
+
       const rawHash = window.location.hash;
       if (!rawHash || rawHash.length < 2) return;
 
       const id = decodeURIComponent(rawHash.slice(1));
       if (!id) return;
 
-      const target = document.getElementById(id);
-      if (!target) return;
+      let attempts = 0;
 
-      if (target instanceof HTMLDetailsElement && !target.open) {
-        target.open = true;
-      }
+      const openWhenReady = () => {
+        const target = document.getElementById(id);
 
-      requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+        if (!target) {
+          attempts += 1;
+          if (attempts < 20) {
+            retryTimeout = window.setTimeout(openWhenReady, 100);
+          }
+          return;
+        }
+
+        if (target instanceof HTMLDetailsElement && !target.open) {
+          target.open = true;
+        }
+
+        animationFrame = window.requestAnimationFrame(() => {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      };
+
+      openWhenReady();
     };
 
     openFromHash();
     window.addEventListener("hashchange", openFromHash);
-    return () => window.removeEventListener("hashchange", openFromHash);
+    return () => {
+      clearPending();
+      window.removeEventListener("hashchange", openFromHash);
+    };
   }, []);
 
   return null;

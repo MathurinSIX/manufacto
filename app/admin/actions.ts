@@ -1155,7 +1155,6 @@ export type InternalProductRow = {
   description: string;
   amount_cents: number;
   credits: number;
-  payment_link_url: string;
   sort_order: number;
   enabled: boolean;
 };
@@ -1182,7 +1181,6 @@ function productToInternalRow(
     description: product.description,
     amount_cents: product.amountCents,
     credits: product.credits,
-    payment_link_url: product.paymentLinkUrl,
     sort_order: sortOrder,
     enabled: true,
   };

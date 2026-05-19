@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import {
   AtelierCreditPackGrid,
-  AtelierDiscoveryPackGrid,
   AtelierSubscriptionList,
 } from "@/components/atelier-tarifs-purchases";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
@@ -12,6 +11,7 @@ import {
   MarketingBody,
   MarketingSectionTitle,
 } from "@/components/marketing";
+import { loadSquareProducts } from "@/lib/square/load-products";
 import { createClient } from "@/lib/supabase/server";
 
 const ASSETS = {
@@ -140,6 +140,12 @@ async function DiscoveryPackBanner() {
   const activityIdsByName = new Map(
     (activities ?? []).map((activity) => [activity.name, activity.id]),
   );
+  const products = await loadSquareProducts(supabase);
+  const mappedProductIds = new Set(
+    products
+      .filter((product) => product.catalogObjectId)
+      .map((product) => product.id),
+  );
 
   return (
     <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
@@ -162,6 +168,7 @@ async function DiscoveryPackBanner() {
           <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
             {discoveryPacks.map((pack) => {
               const reservationActivityId = activityIdsByName.get(pack.activityName);
+              const hasSquareMapping = mappedProductIds.has(pack.productId);
 
               return (
                 <div
@@ -177,7 +184,7 @@ async function DiscoveryPackBanner() {
                   <p className="text-lg leading-tight text-black/75">
                     {pack.line2}
                   </p>
-                  {reservationActivityId ? (
+                  {reservationActivityId && hasSquareMapping ? (
                     <DiscoveryPackReservationButton
                       activityId={reservationActivityId}
                       activityTitle={pack.title}
@@ -188,7 +195,9 @@ async function DiscoveryPackBanner() {
                     />
                   ) : (
                     <p className="mt-2 text-xs text-black/60">
-                      Créneaux indisponibles
+                      {reservationActivityId
+                        ? "Paiement indisponible"
+                        : "Créneaux indisponibles"}
                     </p>
                   )}
                 </div>

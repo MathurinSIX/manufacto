@@ -1,12 +1,9 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSquareProduct } from "@/lib/square/load-products";
-import { getSquareProductPaymentLinkUrl } from "@/lib/square/products";
 import { resolveSquareSubscriptionFromItemVariation } from "@/lib/square/catalog-api";
 import {
   createSquareCatalogPaymentLink,
-  createSquarePaymentLink,
   createSquareSubscriptionPaymentLink,
   ensureSquareCustomerForUser,
   getAdminClient,
@@ -263,85 +260,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ url: paymentLink.paymentLinkUrl });
       }
 
-      const paymentLinkUrl =
-        catalogProduct.kind === "credit_pack"
-          ? null
-          : getSquareProductPaymentLinkUrl(catalogProduct);
-
-      if (paymentLinkUrl) {
-        if (user) {
-          const adminClient = getAdminClient();
-          const { error: insertError } = await adminClient.from("square_purchase").insert({
-            user_id: user.id,
-            product_id: catalogProduct.id,
-            product_kind: catalogProduct.kind,
-            amount_cents: catalogProduct.amountCents,
-            credits: catalogProduct.credits,
-            currency: "EUR",
-            status: "pending",
-            square_payment_link_url: paymentLinkUrl,
-            square_customer_id: squareCustomerId,
-            idempotency_key: crypto.randomUUID(),
-            ...purchaseContextColumns,
-          });
-
-          if (insertError) {
-            console.error("Error recording Square purchase:", insertError);
-            return NextResponse.json(
-              { error: "Impossible de préparer le paiement" },
-              { status: 500 },
-            );
-          }
-        }
-
-        return NextResponse.json({ url: paymentLinkUrl });
-      }
-
-      if (catalogProduct.kind === "credit_pack") {
-        return NextResponse.json(
-          {
-            error:
-              "Ce pack n'est pas encore lié à un produit Square. Contactez l'atelier.",
-          },
-          { status: 400 },
-        );
-      }
-
-      const paymentLink = await createSquarePaymentLink({
-        product: catalogProduct,
-        buyer,
-        siteUrl,
-        redirectPath,
-      });
-
-      if (user) {
-        const adminClient = getAdminClient();
-        const { error: insertError } = await adminClient.from("square_purchase").insert({
-          user_id: user.id,
-          product_id: catalogProduct.id,
-          product_kind: catalogProduct.kind,
-          amount_cents: catalogProduct.amountCents,
-          credits: catalogProduct.credits,
-          currency: "EUR",
-          status: "pending",
-          square_payment_link_id: paymentLink.paymentLinkId,
-          square_payment_link_url: paymentLink.paymentLinkUrl,
-          square_order_id: paymentLink.orderId,
-          square_customer_id: squareCustomerId,
-          idempotency_key: paymentLink.idempotencyKey,
-          ...purchaseContextColumns,
-        });
-
-        if (insertError) {
-          console.error("Error recording Square purchase:", insertError);
-          return NextResponse.json(
-            { error: "Impossible de préparer le paiement" },
-            { status: 500 },
-          );
-        }
-      }
-
-      return NextResponse.json({ url: paymentLink.paymentLinkUrl });
+      return NextResponse.json(
+        {
+          error:
+            "Ce produit n'est pas encore lié à un produit Square. Contactez l'atelier.",
+        },
+        { status: 400 },
+      );
     }
 
     if (!user) {

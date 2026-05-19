@@ -64,9 +64,7 @@ type TarifsPurchaseProps = {
   returnPath?: string;
 };
 
-export async function AtelierDiscoveryPackGrid({
-  returnPath = ATELIER_TARIFS_RETURN_PATH,
-}: TarifsPurchaseProps = {}) {
+export async function AtelierDiscoveryPackGrid() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -171,33 +169,49 @@ export async function AtelierSubscriptionList({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const products = await loadSquareProducts(supabase);
+  const mappedProductIds = new Set(
+    products
+      .filter((product) => product.kind === "subscription" && product.catalogObjectId)
+      .map((product) => product.id),
+  );
 
   return (
     <div className="space-y-3">
-      {ATELIER_SUBSCRIPTION_PLANS.map((plan) => (
-        <div
-          key={plan.id}
-          className="grid gap-4 rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] px-6 py-5 text-left md:grid-cols-[160px_1fr_auto] md:items-center"
-        >
-          <div className="text-center md:text-left">
-            <p className="text-lg text-[#c97a25]">{plan.label}</p>
-            <p className="mt-2 text-[34px] leading-none">{plan.price}</p>
-            <p className="whitespace-nowrap text-xl leading-none">
-              {plan.credits}
-              {" / mois"}
-            </p>
-          </div>
-          <p className="text-sm leading-snug text-black/75">{plan.copy}</p>
-          <SquareCheckoutButton
-            productId={plan.id}
-            isLoggedIn={!!user}
-            returnPath={returnPath}
-            className={`md:w-auto ${checkoutButtonClassName} md:px-5 md:py-3 md:text-sm`}
+      {ATELIER_SUBSCRIPTION_PLANS.map((plan) => {
+        const hasSquareMapping = mappedProductIds.has(plan.id);
+
+        return (
+          <div
+            key={plan.id}
+            className="grid gap-4 rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] px-6 py-5 text-left md:grid-cols-[160px_1fr_auto] md:items-center"
           >
-            Souscrire
-          </SquareCheckoutButton>
-        </div>
-      ))}
+            <div className="text-center md:text-left">
+              <p className="text-lg text-[#c97a25]">{plan.label}</p>
+              <p className="mt-2 text-[34px] leading-none">{plan.price}</p>
+              <p className="whitespace-nowrap text-xl leading-none">
+                {plan.credits}
+                {" / mois"}
+              </p>
+            </div>
+            <p className="text-sm leading-snug text-black/75">{plan.copy}</p>
+            {hasSquareMapping ? (
+              <SquareCheckoutButton
+                productId={plan.id}
+                isLoggedIn={!!user}
+                returnPath={returnPath}
+                className={`md:w-auto ${checkoutButtonClassName} md:px-5 md:py-3 md:text-sm`}
+              >
+                Souscrire
+              </SquareCheckoutButton>
+            ) : (
+              <p className="text-center text-xs leading-snug text-black/50 md:text-right">
+                Paiement indisponible
+              </p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

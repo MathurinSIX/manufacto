@@ -449,7 +449,7 @@ async function PratiqueLibreContent() {
             <details
               key={label}
               id={id}
-              className="group border-b border-black/45"
+              className="group scroll-mt-28 border-b border-black/45"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-[30px] font-bold leading-tight [&::-webkit-details-marker]:hidden">
                 <span className={color}>{label}</span>
