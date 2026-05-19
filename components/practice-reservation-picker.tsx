@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon, CheckCircle2, Loader2 } from "lucide-react";
 
-import { registerForSession } from "@/app/account/actions";
+import {
+  registerForPracticeReservation,
+  registerForSession,
+} from "@/app/account/actions";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
 import { ReservationAuthStep } from "@/components/reservation-auth-step";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
@@ -760,17 +763,19 @@ export function PracticeReservationPicker({
         return;
       }
 
-      for (const block of blocks) {
-        const result = await registerForSession(block.sessionId, "credits", {
+      const result = await registerForPracticeReservation(
+        blocks.map((block) => ({
+          sessionId: block.sessionId,
           start: block.startIso,
           end: block.endIso,
-        });
+        })),
+        "credits",
+      );
 
-        if (result.error) {
-          setIsRegistering(false);
-          setErrorMessage(result.error);
-          return;
-        }
+      if (result.error) {
+        setIsRegistering(false);
+        setErrorMessage(result.error);
+        return;
       }
     }
 

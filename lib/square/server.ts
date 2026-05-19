@@ -1616,3 +1616,45 @@ export async function fulfillSquarePurchase({
   });
 }
 
+// Fallback fulfillment for the Square redirect: webhooks can't always reach
+// the app (e.g. local dev, misconfigured webhook URL), so when the buyer is
+// redirected back to /account/square/return we verify the payment status with
+// Square and run the same fulfillment pipeline. `fulfillSquarePurchase` uses
+// idempotent status transitions, so it's safe to call concurrently with the
+// webhook.
+export async function fulfillSquarePurchaseFromRedirect({
+  orderId,
+  paymentId,
+}: {
+  orderId?: string | null;
+  paymentId?: string | null;
+}) {
+  if (!orderId && !paymentId) {
+    return { fulfilled: false, reason: "missing-ids" as const };
+  }
+
+  try {
+    let resolvedOrderId = orderId ?? null;
+
+    if (paymentId) {
+      const payment = await retrieveSquarePayment(paymentId);
+
+      if (payment.status !== "COMPLETED") {
+        return { fulfilled: false, reason: "payment-not-completed" as const };
+      }
+
+      resolvedOrderId = payment.order_id ?? resolvedOrderId;
+    }
+
+    await fulfillSquarePurchase({
+      orderId: resolvedOrderId,
+      paymentId: paymentId ?? null,
+    });
+
+    return { fulfilled: true } as const;
+  } catch (error) {
+    console.error("Error fulfilling Square purchase from redirect:", error);
+    return { fulfilled: false, reason: "error" as const };
+  }
+}
+

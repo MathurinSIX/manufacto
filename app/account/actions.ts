@@ -328,6 +328,302 @@ export async function registerForSession(
   return { error: null, registrationId: data.id };
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+type PracticeReservationBlock = { sessionId: string; start: string; end: string };
+
+type SessionWithActivity = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  max_registrations: number | null;
+  activity_id: string;
+  activity: ActivityRow | ActivityRow[] | null;
+};
+
+/**
+ * Atomically register a practice reservation that may span multiple contiguous
+ * sessions. The minimum-duration rule is enforced on the *total* contiguous
+ * span, not per-block, so a user booking 2h that crosses a session boundary
+ * (e.g. 18-19 in session A and 19-20 in session B) is accepted as a single
+ * 2-hour reservation rather than rejected as two separate 1-hour ones.
+ */
+export async function registerForPracticeReservation(
+  blocks: PracticeReservationBlock[],
+  paymentType: PaymentType,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Non authentifié", registrationIds: [] as string[] };
+  }
+
+  if (!blocks.length) {
+    return { error: "Aucun créneau sélectionné.", registrationIds: [] };
+  }
+
+  for (const block of blocks) {
+    if (!UUID_RE.test(block.sessionId)) {
+      return { error: "Session invalide", registrationIds: [] };
+    }
+  }
+
+  const sortedBlocks = [...blocks]
+    .map((block) => ({
+      sessionId: block.sessionId,
+      start: new Date(block.start),
+      end: new Date(block.end),
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  for (const block of sortedBlocks) {
+    if (
+      Number.isNaN(block.start.getTime()) ||
+      Number.isNaN(block.end.getTime()) ||
+      block.end.getTime() <= block.start.getTime() ||
+      !isWholeHour(block.start) ||
+      !isWholeHour(block.end)
+    ) {
+      return {
+        error: "La réservation doit être faite par heure entière.",
+        registrationIds: [],
+      };
+    }
+  }
+
+  for (let index = 1; index < sortedBlocks.length; index += 1) {
+    const previous = sortedBlocks[index - 1];
+    const current = sortedBlocks[index];
+    if (current.start.getTime() !== previous.end.getTime()) {
+      return {
+        error: "Les créneaux sélectionnés doivent être consécutifs.",
+        registrationIds: [],
+      };
+    }
+  }
+
+  const sessionIds = Array.from(new Set(sortedBlocks.map((block) => block.sessionId)));
+  const { data: sessionRows, error: sessionsError } = await supabase
+    .from("session")
+    .select(
+      "id, start_ts, end_ts, max_registrations, activity_id, activity:activity_id(id, nb_credits, type)",
+    )
+    .in("id", sessionIds);
+
+  if (sessionsError) {
+    console.error("Error fetching sessions for practice reservation:", sessionsError);
+    return { error: "Session introuvable", registrationIds: [] };
+  }
+
+  const sessions = (sessionRows ?? []) as SessionWithActivity[];
+  if (sessions.length !== sessionIds.length) {
+    return { error: "Session introuvable", registrationIds: [] };
+  }
+
+  const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+  const firstActivity = activityFromSession(sessions[0].activity);
+  if (!firstActivity) {
+    return { error: "Activité introuvable", registrationIds: [] };
+  }
+
+  for (const session of sessions) {
+    const activity = activityFromSession(session.activity);
+    if (!activity || activity.id !== firstActivity.id) {
+      return {
+        error: "Les créneaux doivent appartenir à la même activité.",
+        registrationIds: [],
+      };
+    }
+  }
+
+  if (!PRACTICE_ACTIVITY_TYPES.has(firstActivity.type ?? "")) {
+    return {
+      error: "Cette activité ne se réserve pas en pratique libre.",
+      registrationIds: [],
+    };
+  }
+
+  for (const block of sortedBlocks) {
+    const session = sessionsById.get(block.sessionId)!;
+    const sessionStart = new Date(session.start_ts);
+    const sessionEnd = new Date(session.end_ts);
+    if (
+      block.start.getTime() < sessionStart.getTime() ||
+      block.end.getTime() > sessionEnd.getTime()
+    ) {
+      return { error: "Le créneau choisi n'est pas disponible.", registrationIds: [] };
+    }
+    if (block.start.getTime() <= Date.now()) {
+      return { error: "Ce créneau n'est plus réservable", registrationIds: [] };
+    }
+  }
+
+  const totalStart = sortedBlocks[0].start;
+  const totalEnd = sortedBlocks[sortedBlocks.length - 1].end;
+  const totalDurationHours =
+    (totalEnd.getTime() - totalStart.getTime()) / HOUR_MS;
+  const minHours = getMinPracticeReservationHours(firstActivity.type);
+
+  if (
+    firstActivity.type === ACCOMPAGNEMENT_ACTIVITY_TYPE &&
+    !sortedBlocks.every(
+      (block) => block.end.getTime() - block.start.getTime() === HOUR_MS,
+    )
+  ) {
+    return {
+      error: "Les séances d'accompagnement se réservent heure par heure.",
+      registrationIds: [],
+    };
+  }
+
+  if (!Number.isInteger(totalDurationHours) || totalDurationHours < minHours) {
+    return {
+      error:
+        minHours === 1
+          ? "Choisissez au moins une heure de réservation."
+          : `La réservation minimale est de ${minHours} heures consécutives.`,
+      registrationIds: [],
+    };
+  }
+
+  const { data: existingRegistrations, error: registrationsError } = await supabase
+    .from("registration")
+    .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts")
+    .in("session_id", sessionIds);
+
+  if (registrationsError) {
+    console.error("Error fetching registrations:", registrationsError);
+    return { error: "Impossible de vérifier les inscriptions", registrationIds: [] };
+  }
+
+  const existingIds = existingRegistrations?.map((row) => row.id) ?? [];
+  const { data: statuses, error: statusesError } = existingIds.length
+    ? await supabase
+        .from("registration_status")
+        .select("registration_id, status, created_at")
+        .in("registration_id", existingIds)
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
+
+  if (statusesError) {
+    console.error("Error fetching registration statuses:", statusesError);
+    return { error: "Impossible de vérifier les inscriptions", registrationIds: [] };
+  }
+
+  const activeRegistrationIds = getLatestActiveRegistrationIds(existingIds, statuses);
+  const activeRegistrations =
+    (existingRegistrations ?? []).filter((registration) =>
+      activeRegistrationIds.has(registration.id),
+    );
+
+  const ownOverlaps = activeRegistrations.some((registration) => {
+    if (registration.user_id !== user.id) return false;
+    if (!registration.reserved_start_ts || !registration.reserved_end_ts) {
+      return false;
+    }
+    const existingStart = new Date(registration.reserved_start_ts).getTime();
+    const existingEnd = new Date(registration.reserved_end_ts).getTime();
+    return sortedBlocks.some(
+      (block) =>
+        existingStart < block.end.getTime() &&
+        existingEnd > block.start.getTime(),
+    );
+  });
+
+  if (ownOverlaps) {
+    return {
+      error: "Vous avez déjà une réservation sur ce créneau.",
+      registrationIds: [],
+    };
+  }
+
+  for (const block of sortedBlocks) {
+    const session = sessionsById.get(block.sessionId)!;
+    if (session.max_registrations === null) continue;
+    const sessionRegistrations = activeRegistrations.filter(
+      (registration) => registration.session_id === block.sessionId,
+    );
+    const counts = getPracticeHourlyCounts(
+      block.start,
+      block.end,
+      sessionRegistrations.map((registration) => ({
+        reservedStartTs: registration.reserved_start_ts,
+        reservedEndTs: registration.reserved_end_ts,
+      })),
+    );
+    const isAnyHourFull = Array.from(counts.values()).some(
+      (count) => count >= session.max_registrations!,
+    );
+    if (isAnyHourFull) {
+      return {
+        error: "Ce créneau est complet sur au moins une heure.",
+        registrationIds: [],
+      };
+    }
+  }
+
+  if (paymentType === "credits") {
+    const requiredCredits = toNumber(firstActivity.nb_credits) * totalDurationHours;
+    if (requiredCredits > 0) {
+      const { data: credits, error: creditsError } = await supabase
+        .from("credit")
+        .select("amount")
+        .eq("user_id", user.id);
+
+      if (creditsError) {
+        console.error("Error fetching credits:", creditsError);
+        return {
+          error: "Impossible de vérifier vos crédits",
+          registrationIds: [],
+        };
+      }
+
+      const availableCredits =
+        credits?.reduce((total, credit) => total + toNumber(credit.amount), 0) ?? 0;
+
+      if (availableCredits < requiredCredits) {
+        return {
+          error: `Vous n'avez pas assez de crédits. Vous avez ${availableCredits} crédit${availableCredits !== 1 ? "s" : ""} et il en faut ${requiredCredits}.`,
+          registrationIds: [],
+        };
+      }
+    }
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("registration")
+    .insert(
+      sortedBlocks.map((block) => ({
+        session_id: block.sessionId,
+        user_id: user.id,
+        payment_type: paymentType,
+        reserved_start_ts: block.start.toISOString(),
+        reserved_end_ts: block.end.toISOString(),
+      })),
+    )
+    .select("id");
+
+  if (insertError || !inserted) {
+    console.error("Error creating practice reservation:", insertError);
+    return {
+      error: "Votre inscription n'a pas pu être enregistrée.",
+      registrationIds: [],
+    };
+  }
+
+  revalidatePath("/account");
+  revalidatePath("/cours");
+  revalidatePath("/reserver");
+
+  return {
+    error: null as string | null,
+    registrationIds: inserted.map((row) => row.id),
+  };
+}
+
 export async function cancelRegistration(registrationId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

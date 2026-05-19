@@ -12,6 +12,7 @@ import {
 } from "@/components/marketing";
 import { OfferCardTabs } from "@/components/offer-card-tabs";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
+import { DetailsHashOpener } from "@/components/details-hash-opener";
 import {
   formatPracticeScheduleFromSessions,
   stripPracticeScheduleFromDetail,
@@ -370,6 +371,7 @@ async function PratiqueLibreContent() {
 
   return (
     <MarketingPageContainer className="pb-20 md:pb-[140px]">
+      <DetailsHashOpener />
       <MarketingPageHeader title="la pratique libre" className="max-w-[1180px]">
         <p>
           Manufacto est un atelier partagé, ouvert à toutes et tous.
