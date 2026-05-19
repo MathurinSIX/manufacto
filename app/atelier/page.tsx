@@ -11,6 +11,7 @@ import {
   MarketingBody,
   MarketingSectionTitle,
 } from "@/components/marketing";
+import { DetailsHashOpener } from "@/components/details-hash-opener";
 import { loadSquareProducts } from "@/lib/square/load-products";
 import { createClient } from "@/lib/supabase/server";
 
@@ -217,6 +218,7 @@ async function DiscoveryPackBanner() {
 export default function AtelierPage() {
   return (
     <main className="min-h-screen bg-white text-black">
+      <DetailsHashOpener />
       <div className="flex min-h-screen w-full flex-col items-center">
         <section className="relative h-[176px] w-full overflow-hidden bg-[#d9d9d9] md:h-[300px]">
           <Image
