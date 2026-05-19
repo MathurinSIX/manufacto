@@ -25,43 +25,18 @@ type SquareWebhookPayload = {
   };
 };
 
-export async function POST(request: Request) {
-  const body = await request.text();
-  const signature = request.headers.get("x-square-hmacsha256-signature");
-  const requestUrl = new URL(request.url);
-  const forwardedProto = request.headers.get("x-forwarded-proto") ?? requestUrl.protocol.replace(":", "");
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const forwardedUrl = forwardedHost
-    ? `${forwardedProto}://${forwardedHost}${requestUrl.pathname}`
-    : request.url;
-  const configuredWebhookUrl = process.env.SQUARE_WEBHOOK_URL;
-  const candidateUrls = [
-    configuredWebhookUrl,
-    forwardedUrl,
-    request.url,
-  ].filter((url): url is string => Boolean(url));
+function acknowledgeSquareWebhook() {
+  return NextResponse.json({ received: true });
+}
 
-  if (
-    !candidateUrls.some((notificationUrl) =>
-      verifySquareWebhookSignature({
-        body,
-        signature,
-        notificationUrl,
-      }),
-    )
-  ) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
-  }
-
-  const payload = JSON.parse(body) as SquareWebhookPayload;
-
+async function handleSquareWebhook(payload: SquareWebhookPayload) {
   if (payload.type === "subscription.created") {
     const subscription = payload.data?.object?.subscription;
     if (subscription) {
       await linkSquareSubscriptionFromWebhook(subscription);
       await syncSquareSubscriptionStatusFromWebhook(subscription);
     }
-    return NextResponse.json({ received: true });
+    return;
   }
 
   if (payload.type === "subscription.updated") {
@@ -69,18 +44,18 @@ export async function POST(request: Request) {
     if (subscription) {
       await syncSquareSubscriptionStatusFromWebhook(subscription);
     }
-    return NextResponse.json({ received: true });
+    return;
   }
 
   if (payload.type !== "payment.updated" && payload.type !== "payment.created") {
-    return NextResponse.json({ received: true });
+    return;
   }
 
   const webhookPayment = payload.data?.object?.payment;
   const paymentId = webhookPayment?.id;
 
   if (!paymentId) {
-    return NextResponse.json({ received: true });
+    return;
   }
 
   const payment =
@@ -94,7 +69,57 @@ export async function POST(request: Request) {
       paymentId,
     });
   }
+}
 
-  return NextResponse.json({ received: true });
+export async function POST(request: Request) {
+  const body = await request.text();
+  const signature = request.headers.get("x-square-hmacsha256-signature");
+  const requestUrl = new URL(request.url);
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto") ?? requestUrl.protocol.replace(":", "");
+  const forwardedHost =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedUrl = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}${requestUrl.pathname}`
+    : request.url;
+  const configuredWebhookUrl = process.env.SQUARE_WEBHOOK_URL;
+  const candidateUrls = [configuredWebhookUrl, forwardedUrl, request.url].filter(
+    (url): url is string => Boolean(url),
+  );
+
+  const hasValidSignature = candidateUrls.some((notificationUrl) =>
+    verifySquareWebhookSignature({
+      body,
+      signature,
+      notificationUrl,
+    }),
+  );
+
+  if (!hasValidSignature) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+  }
+
+  let payload: SquareWebhookPayload;
+
+  try {
+    payload = JSON.parse(body) as SquareWebhookPayload;
+  } catch (error) {
+    console.error("Invalid Square webhook payload:", error);
+    return acknowledgeSquareWebhook();
+  }
+
+  try {
+    await handleSquareWebhook(payload);
+  } catch (error) {
+    console.error("Square webhook processing failed:", {
+      type: payload.type,
+      paymentId: payload.data?.object?.payment?.id,
+      orderId: payload.data?.object?.payment?.order_id,
+      subscriptionId: payload.data?.object?.subscription?.id,
+      error,
+    });
+  }
+
+  return acknowledgeSquareWebhook();
 }
 
