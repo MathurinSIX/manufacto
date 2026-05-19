@@ -7,6 +7,13 @@ export type SquareProduct = {
   description: string;
   amountCents: number;
   credits: number;
+  /**
+   * For `discovery` packs only: the number of consecutive reservation hours
+   * the pack includes. `credits` represents the number of credits granted to
+   * the buyer (e.g. 6 credits for 2h of menuiserie en autonomie encadrée at
+   * 3 credits/hour), which is NOT the same as the reservation duration.
+   */
+  discoveryHours?: number;
   paymentLinkUrl: string;
   catalogObjectId?: string | null;
   catalogLabel?: string | null;
@@ -93,6 +100,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
       "2h de couture en autonomie encadrée, si vous voulez venir une première fois pour tester et découvrir l'atelier, sans vous engager.",
     amountCents: 1500,
     credits: 2,
+    discoveryHours: 2,
     paymentLinkUrl: "https://square.link/u/OPAqHpzu",
   },
   {
@@ -103,6 +111,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
       "2h de menuiserie en autonomie encadrée, si vous voulez venir une première fois pour tester et découvrir l'atelier, sans vous engager.",
     amountCents: 3000,
     credits: 6,
+    discoveryHours: 2,
     paymentLinkUrl: "https://square.link/u/9sIC6VDe",
   },
 ] satisfies SquareProduct[];

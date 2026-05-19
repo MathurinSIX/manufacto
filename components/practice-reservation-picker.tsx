@@ -602,16 +602,79 @@ export function PracticeReservationPicker({
     setSuccessMessage(null);
   };
 
+  const startSquareCheckout = useCallback(
+    async (params: {
+      productId: string;
+      sessionId: string;
+      reservationStart: string;
+      reservationEnd: string;
+    }) => {
+      setIsRegistering(true);
+      setErrorMessage(null);
+      try {
+        const response = await fetch("/api/square/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId: params.productId,
+            activityId,
+            sessionId: params.sessionId,
+            reservationStart: params.reservationStart,
+            reservationEnd: params.reservationEnd,
+          }),
+        });
+        const payload = (await response.json()) as {
+          url?: string;
+          error?: string;
+        };
+        if (!response.ok || !payload.url) {
+          throw new Error(payload.error ?? "Paiement indisponible");
+        }
+        window.location.href = payload.url;
+      } catch (checkoutError) {
+        setIsRegistering(false);
+        setErrorMessage(
+          checkoutError instanceof Error
+            ? checkoutError.message
+            : "Paiement indisponible",
+        );
+      }
+    },
+    [activityId],
+  );
+
   const handleAuthSuccess = async () => {
     const nextUserId = await refreshUser();
     if (!nextUserId) {
       return;
     }
     setShowAuthStep(false);
+    router.refresh();
+
+    // For discovery / Square-backed reservations the user already pressed
+    // "Payer et réserver" before the auth step, so resume the checkout
+    // automatically instead of forcing a second click on the modal.
+    if (
+      isSquareReservation &&
+      squareProductId &&
+      checkoutSessionId &&
+      checkoutStartIso &&
+      checkoutEndIso &&
+      hasRequiredHourCount
+    ) {
+      setSuccessMessage("Compte créé, redirection vers le paiement…");
+      await startSquareCheckout({
+        productId: squareProductId,
+        sessionId: checkoutSessionId,
+        reservationStart: checkoutStartIso,
+        reservationEnd: checkoutEndIso,
+      });
+      return;
+    }
+
     setSuccessMessage(
       "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
     );
-    router.refresh();
   };
 
   const toggleHourSelection = (key: string) => {
