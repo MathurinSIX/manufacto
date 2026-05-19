@@ -21,6 +21,7 @@ interface Session {
 interface Credit {
   id: string;
   amount: number | string;
+  payment_type?: string | null;
   created_at: string;
 }
 
@@ -34,6 +35,8 @@ interface Registration {
   credit_id: string;
   session_id: string | null;
   payment_type: string | null;
+  reserved_start_ts?: string | null;
+  reserved_end_ts?: string | null;
   status?: RegistrationStatus | null;
   session?: Session | Session[] | null;
 }
@@ -108,11 +111,14 @@ export function CreditHistoryList({
             <CreditHistoryItem
               key={credit.id}
               amount={amount}
+              paymentType={credit.payment_type}
               date={date}
               registration={registration ? {
                 id: registration.id,
                 session_id: registration.session_id,
                 payment_type: registration.payment_type,
+                reserved_start_ts: registration.reserved_start_ts,
+                reserved_end_ts: registration.reserved_end_ts,
                 status: registration.status,
               } : null}
               session={session ? {

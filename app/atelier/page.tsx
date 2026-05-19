@@ -1,198 +1,683 @@
 import Image from "next/image";
-import { Navigation } from "@/components/navigation";
-import { Suspense } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Suspense } from "react";
+import {
+  AtelierCreditPackGrid,
+  AtelierSubscriptionList,
+} from "@/components/atelier-tarifs-purchases";
+import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
+import {
+  MARKETING_LINK_CLASS,
+  MarketingBody,
+  MarketingSectionTitle,
+} from "@/components/marketing";
+import { DetailsHashOpener } from "@/components/details-hash-opener";
+import { loadSquareProducts } from "@/lib/square/load-products";
+import { createClient } from "@/lib/supabase/server";
+
+const ASSETS = {
+  heroWood: "/assets/figma-landing/hero-wood.png",
+  heroCouture: "/assets/figma-landing/hero-couture.png",
+  heroElec: "/assets/figma-landing/hero-elec.png",
+  wordMenuiserie: "/assets/figma-landing/words-orange.png",
+  wordCouture: "/assets/figma-landing/words-blue.png",
+  wordElectronique: "/assets/figma-landing/words-green.png",
+  wordCeramique: "/assets/figma-landing/words-pink.png",
+  pictoVectoriel: "/assets/picto/picto_vectoriel.svg",
+  starBlue: "/assets/figma-landing/star-blue.png",
+  starOrange: "/assets/figma-landing/star-orange.png",
+  heroAtelier: "/assets/l_atelier/Frame 44.jpg",
+  universAtelier: "/assets/l_atelier/Vector.jpg",
+  creditSystem: "/assets/l_atelier/Frame 1321317462.jpg",
+  tarifs: "/assets/l_atelier/WhatsApp Image 2026-05-11 at 17.40.04 1.jpg",
+} as const;
+
+const universes = [
+  {
+    label: "menuiserie",
+    image: "/assets/picto/menuiserie/menuiserie.png",
+    width: 180,
+    height: 140,
+  },
+  {
+    label: "couture",
+    image: "/assets/picto/couture/couture.png",
+    width: 180,
+    height: 140,
+  },
+  {
+    label: "électronique",
+    image: "/assets/picto/electronique/electronique.png",
+    width: 180,
+    height: 140,
+  },
+  {
+    label: "céramique",
+    image: "/assets/picto/ceramique/ceramique.png",
+    width: 180,
+    height: 140,
+  },
+];
+
+const courseCards = [
+  {
+    number: "1.",
+    title: "créez un compte et achetez un pass manufacto,",
+    color: "text-[#f56800]",
+    copy: " que vous chargez avec le nombre de crédits de votre choix.",
+  },
+  {
+    number: "2.",
+    title: "avant votre première venue, nous vous enverrons un lien pour vous inscrire à une visite détaillée",
+    color: "text-[#f56800]",
+    copy: " de l’atelier. Elle sera l’occasion de se rencontrer, de vous faire faire le tour des lieux et de vous expliquer comment l’atelier fonctionne.",
+  },
+  {
+    number: "3.",
+    title: "réservez vos prochains créneaux / cours.",
+    color: "text-[#f56800]",
+    copy: " Vous serez débité du nombre de crédits correspondant, le solde reste disponible pour une prochaine fois, sur votre espace en ligne.",
+  },
+];
+
+const discoveryPacks = [
+  {
+    discipline: "couture",
+    title: "Pack découverte couture",
+    price: "15€",
+    line1: "2h de couture en",
+    line2: "autonomie encadrée",
+    borderClass: "border-[#4a56dd]/70",
+    cardClass: "bg-[#f0f1ff]",
+    priceClass: "text-[#4a56dd]",
+    linkClass: "text-[#4a56dd]",
+  },
+  {
+    discipline: "menuiserie",
+    title: "Pack découverte menuiserie",
+    price: "30€",
+    line1: "2h de menuiserie en",
+    line2: "autonomie encadrée",
+    borderClass: "border-[#f56800]/70",
+    cardClass: "bg-[#fff3e8]",
+    priceClass: "text-[#f56800]",
+    linkClass: "text-[#f56800]",
+  },
+] as const;
+
+function ImageTile({
+  src,
+  alt,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-[6px] bg-[#d9d9d9] ${className}`}>
+      <Image src={src} alt={alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 520px" />
+    </div>
+  );
+}
+
+async function DiscoveryPackBanner() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: activities } = await supabase
+    .from("activity")
+    .select("id, discipline, square_product_id")
+    .eq("type", "pack_decouverte")
+    .in(
+      "discipline",
+      discoveryPacks.map((pack) => pack.discipline),
+    )
+    .is("deleted_at", null);
+
+  const activityIdsByDiscipline = new Map(
+    (activities ?? []).map((activity) => [activity.discipline, activity]),
+  );
+  const products = await loadSquareProducts(supabase);
+  const mappedProductIds = new Set(
+    products
+      .filter((product) => product.catalogObjectId)
+      .map((product) => product.id),
+  );
+
+  return (
+    <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
+      <div className="mx-auto max-w-[1274px] px-5 py-5 md:py-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-6 md:max-w-[55%]">
+            <h2 className="shrink-0 text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
+              pack <br />
+              découverte
+            </h2>
+            <div className="min-w-0">
+              <p className="text-xl leading-normal text-black/75">
+                Une première venue pour tester l&apos;atelier.
+              </p>
+              <p className="mt-2 text-xs leading-tight text-black/65">
+                limitée à un achat par personne
+              </p>
+            </div>
+          </div>
+          <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
+            {discoveryPacks.map((pack) => {
+              const activity = activityIdsByDiscipline.get(pack.discipline);
+              const squareProductId = activity?.square_product_id ?? null;
+              const hasSquareMapping = squareProductId
+                ? mappedProductIds.has(squareProductId)
+                : false;
+
+              return (
+                <div
+                  key={pack.discipline}
+                  className={`flex flex-col items-center justify-center rounded-[14px] border px-4 py-3 text-center ${pack.borderClass} ${pack.cardClass}`}
+                >
+                  <p className={`text-[34px] leading-none ${pack.priceClass}`}>
+                    {pack.price}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
+                    {pack.line1}
+                  </p>
+                  <p className="text-lg leading-tight text-black/75">
+                    {pack.line2}
+                  </p>
+                  {activity && squareProductId && hasSquareMapping ? (
+                    <DiscoveryPackReservationButton
+                      activityId={activity.id}
+                      activityTitle={pack.title}
+                      squareProductId={squareProductId}
+                      isLoggedIn={!!user}
+                      label="Réserver"
+                      className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
+                    />
+                  ) : (
+                    <p className="mt-2 text-xs text-black/60">
+                      {!activity
+                        ? "Créneaux indisponibles"
+                        : !squareProductId
+                          ? "Produit Square manquant"
+                          : "Paiement indisponible"}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function AtelierPage() {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col items-center">
-        <Suspense fallback={<nav className="w-full h-16" />}>
-          <Navigation />
-        </Suspense>
-
-        {/* Hero Section with Big Picture */}
-        <div className="relative w-full h-[50vh] min-h-[400px]">
+    <main className="min-h-screen bg-white text-black">
+      <DetailsHashOpener />
+      <div className="flex min-h-screen w-full flex-col items-center">
+        <section className="relative h-[176px] w-full overflow-hidden bg-[#d9d9d9] md:h-[300px]">
           <Image
-            src="https://images.unsplash.com/photo-1522065893269-6fd20f6d7438?auto=format&fit=crop&w=1920&q=80"
-            alt="L'Atelier Manufacto"
+            src={ASSETS.heroAtelier}
+            alt="Manufacto, atelier partagé de menuiserie"
             fill
             className="object-cover"
             priority
             sizes="100vw"
           />
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-8 md:p-12">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center space-y-3">
-                <p className="text-sm uppercase tracking-wide text-foreground/80">
-                  L&apos;Atelier
-                </p>
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground">
-                  Des ateliers de montée en compétence
-                </h1>
-                <p className="text-lg md:text-xl text-foreground/90 max-w-3xl mx-auto">
-                  Apprenez de nouvelles techniques artisanales avec nos encadrants expérimentés
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        </section>
 
-        {/* Main Content Section */}
-        <section className="w-full max-w-7xl px-5 py-20">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-            <div className="space-y-4">
-              <h2 className="text-3xl md:text-4xl font-bold">Qu&apos;est-ce que L&apos;Atelier ?</h2>
-              <p className="text-lg text-muted-foreground">
-                L&apos;Atelier Manufacto propose des sessions d&apos;initiation et de formation 
-                encadrées par des professionnels expérimentés. Ces ateliers sont conçus pour vous 
-                permettre d&apos;apprendre des techniques artisanales spécifiques dans un cadre 
-                structuré et pédagogique.
+        <section id="concept" className="mx-auto w-full max-w-[990px] scroll-mt-28 px-5 pb-10 pt-8 text-center">
+          <h2 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
+            qu&apos;est-ce que manufacto?
+          </h2>
+          <div className="mx-auto mt-5 max-w-[620px] space-y-12 text-xl leading-normal text-black/75">
+            <p>
+              Manufacto est né d&apos;une envie : proposer un{" "}
+              <strong>lieu accessible</strong> à des{" "}
+              <strong>particuliers et amateurs, amatrices</strong> qui
+              voudraient travailler le bois, le textile, la terre, ou
+              l&apos;électronique dans un espace adapté et avec des machines de
+              qualité.
+            </p>
+            <p>
+              Situé au cœur du 5ème arrondissement, l&apos;atelier rassemble
+              plusieurs espaces de pratique: menuiserie, couture, électronique
+              et céramique.
+            </p>
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-[1030px] px-5 pb-12">
+          <h1 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
+            un atelier, quatre univers
+          </h1>
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-8">
+            {universes.map((universe) => (
+              <div key={universe.label} className="text-center">
+                <div className="flex h-[112px] items-center justify-center p-4 md:h-[156px]">
+                  <Image
+                    src={universe.image}
+                    alt={universe.label}
+                    width={universe.width}
+                    height={universe.height}
+                    className="max-h-full w-auto object-contain"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-[1030px] px-5 pb-16">
+          <div className="grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
+            <div>
+            <MarketingBody className="max-w-[920px] space-y-8">
+              <p>
+                Manufacto est organisé autour de quatre univers techniques et
+                créatifs distincts. Chacun d&apos;entre eux a son espace, ses
+                outils, ses machines.
               </p>
-              <p className="text-lg text-muted-foreground">
-                Que vous soyez débutant ou plus avancé, découvrez nos propositions de cours ponctuels 
-                pour développer de nouvelles compétences, et pouvoir ensuite donner vie à vos projets.
+              <p>
+                Chaque espace est organisé autour de{" "}
+                <strong>plusieurs postes de travail distincts</strong>, que
+                chacun peut réserver pour la durée et l&apos;usage de son choix,
+                pour <strong>réaliser ses propres projets</strong>, en autonomie
+                ou en autonomie encadrée.
               </p>
-              <Link href="/cours">
-                <Button variant="outline" className="mt-4">
-                  Voir nos cours
-                </Button>
+              <p>
+                En complément de ces temps de{" "}
+                <strong>pratique libre</strong>, nous vous proposons également
+                des <strong>cours ponctuels</strong> pour débloquer de nouvelles
+                compétences.
+              </p>
+              <p>
+                L&apos;objectif : se faire plaisir en donnant vie à ses projets,{" "}
+                <strong>
+                  quel que soit votre niveau, vos besoins et vos envies.
+                </strong>
+              </p>
+            </MarketingBody>
+            <div className="mt-12 flex flex-wrap gap-x-24 gap-y-4">
+              <Link
+                href="/pratique-libre"
+                className={MARKETING_LINK_CLASS}
+              >
+                découvrez la pratique libre
+              </Link>
+              <Link
+                href="/cours"
+                className="text-2xl font-semibold text-[#58a34d] underline underline-offset-2"
+              >
+                découvrez nos cours
               </Link>
             </div>
-            <div className="relative w-full h-96 rounded-lg overflow-hidden">
+            </div>
+            <ImageTile
+              src={ASSETS.universAtelier}
+              alt="Chaise en bois en cours de fabrication"
+              className="h-[380px] rounded-[16px]"
+            />
+          </div>
+        </section>
+
+        <Suspense
+          fallback={
+            <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
+              <div className="mx-auto min-h-[193px] max-w-[1274px] animate-pulse px-5 py-5 md:py-6" />
+            </section>
+          }
+        >
+          <DiscoveryPackBanner />
+        </Suspense>
+
+        <section id="fonctionnement" className="w-full scroll-mt-28 bg-[#fff8f0]">
+          <div className="mx-auto max-w-[1030px] px-5 py-10 md:py-14">
+            <MarketingSectionTitle className="mb-12 text-black">
+              fonctionnement
+            </MarketingSectionTitle>
+
+            <div className="mb-7 flex items-center gap-5">
               <Image
-                src="https://images.unsplash.com/photo-1597960194599-22929afc25b1?auto=format&fit=crop&w=800&q=80"
-                alt="Atelier Manufacto"
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
+                src={ASSETS.starBlue}
+                alt=""
+                width={120}
+                height={96}
+                className="h-16 w-20 object-contain"
+                aria-hidden
               />
-            </div>
-          </div>
-        </section>
-
-        {/* Domains Section */}
-        <section className="w-full bg-muted/50 py-20">
-          <div className="w-full max-w-7xl mx-auto px-5">
-            <h2 className="text-3xl md:text-4xl font-bold mb-12">Nos domaines d&apos;expertise</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold">Menuiserie</h3>
-                <p className="text-base text-muted-foreground">
-                  Apprenez les techniques de base et avancées du travail du bois : découpes précises, 
-                  assemblages traditionnels (tenons-mortaises, queues d&apos;aronde), utilisation de la 
-                  défonceuse, et maîtrise du tour à bois pour créer des objets cylindriques.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold">Couture</h3>
-                <p className="text-base text-muted-foreground">
-                  De l&apos;initiation pour débutants aux techniques intermédiaires, découvrez la 
-                  couture à la machine : points de base, ourlets, fermetures éclair, poches, manches, 
-                  et apprenez à créer vos propres patrons sur mesure.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold">Tapisserie</h3>
-                <p className="text-base text-muted-foreground">
-                  Redonnez vie à vos meubles avec les techniques de tapisserie traditionnelle : 
-                  rembourrage, pose de tissus et finitions pour transformer vos meubles anciens en 
-                  pièces uniques.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold">Repair Café</h3>
-                <p className="text-base text-muted-foreground">
-                  Un atelier collaboratif où vous pouvez réparer vos objets du quotidien avec l&apos;aide 
-                  de bénévoles expérimentés. Apprenez à réparer plutôt que jeter, dans une ambiance 
-                  conviviale et solidaire.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* How it works Section */}
-        <section className="w-full max-w-7xl px-5 py-20">
-          <h2 className="text-3xl md:text-4xl font-bold mb-12">Comment ça fonctionne ?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
-                1
-              </div>
-              <h3 className="text-xl font-semibold">Choisissez votre atelier</h3>
-              <p className="text-base text-muted-foreground">
-                Consultez notre programme d&apos;ateliers disponibles. Chaque atelier a un nombre 
-                de crédits requis et un prix fixe.
+              <p className="max-w-[760px] text-2xl font-bold leading-tight text-black/80">
+                vous êtes intéressé par la{" "}
+                <span className="text-[#58a34d]">pratique libre</span>, <br />
+                et peut être{" "}
+                <span className="text-[#58a34d]">quelques cours</span> de temps
+                en temps
               </p>
             </div>
-            <div className="space-y-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
-                2
+
+            <div className="grid gap-5 md:grid-cols-3">
+              {courseCards.map((card) => (
+                <article
+                  key={card.number}
+                  className="min-h-[280px] rounded-[28px] bg-white px-8 py-9 shadow-sm"
+                >
+                  <p className={`text-[64px] font-normal leading-none ${card.color}`}>
+                    {card.number}
+                  </p>
+                  <p className="mt-4 text-lg leading-normal text-black/75">
+                    <strong className="text-black/80">{card.title}</strong>
+                    {card.copy}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-16">
+              <div className="mb-7 flex items-center gap-5">
+                <Image
+                  src={ASSETS.starOrange}
+                  alt=""
+                  width={120}
+                  height={100}
+                  className="h-16 w-20 object-contain"
+                  aria-hidden
+                />
+                <p className="max-w-[760px] text-2xl font-bold leading-tight text-black">
+                  vous voulez{" "}
+                  <span className="text-[#f6c51d]">
+                    simplement acheter un cours
+                  </span>
+                  <br />
+                  de montée en compétence
+                </p>
               </div>
-              <h3 className="text-xl font-semibold">Réservez votre place</h3>
-              <p className="text-base text-muted-foreground">
-                Inscrivez-vous à la session qui vous convient. Les ateliers ont des places limitées 
-                pour garantir un encadrement de qualité.
+              <p className="text-xl leading-normal text-black/75">
+                Que ce soit pour <strong>découvrir</strong> avant de pratiquer,
+                ou pour <strong>offrir</strong> (et c&apos;est une très bonne
+                idée !), alors rien de plus simple : Choisissez-le parmi nos
+                propositions, réglez et venez le jour dit.
               </p>
             </div>
-            <div className="space-y-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
-                3
-              </div>
-              <h3 className="text-xl font-semibold">Apprenez et créez</h3>
-              <p className="text-base text-muted-foreground">
-                Participez à l&apos;atelier encadré par un professionnel. Vous repartirez avec de 
-                nouvelles compétences et, selon l&apos;atelier, avec votre réalisation.
+          </div>
+
+          <div className="mt-4 bg-white/55">
+            <div className="mx-auto grid max-w-[1030px] gap-6 px-5 py-8 md:grid-cols-[210px_1fr] md:items-center">
+              <p className="text-2xl font-bold text-[#f56800]">
+                besoin d&apos;aide ?
+              </p>
+              <p className="text-lg leading-normal text-black/75">
+                <strong className="text-black/80">
+                  Toutes ces démarches peuvent également être effectuées sur
+                  place
+                </strong>{" "}
+                à l&apos;atelier, si vous préférez. Passez dans nos heures
+                d&apos;ouvertures, nous pourrons vous aider.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Benefits Section */}
-        <section className="w-full py-20">
-          <div className="w-full max-w-7xl mx-auto px-5">
-            <div className="bg-muted/50 border rounded-lg p-6 md:p-8">
-              <h2 className="text-2xl md:text-3xl font-bold mb-6">Pourquoi choisir nos ateliers ?</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-primary mt-1 text-xl">✓</span>
-                  <div>
-                    <p className="font-semibold">Encadrement professionnel</p>
-                    <p className="text-sm text-muted-foreground">Nos encadrants sont des artisans expérimentés qui vous guident pas à pas.</p>
+        <section id="horaires-et-tarifs" className="mx-auto w-full max-w-[1030px] scroll-mt-28 px-5 py-14">
+          <MarketingSectionTitle className="text-black">
+            horaires
+          </MarketingSectionTitle>
+
+          <div className="relative mx-auto mt-12 max-w-[610px] rounded-[18px] border border-[#f56800]/60 bg-[#fff8f0] px-8 py-10 text-center text-xl leading-normal text-black/75">
+            <Image
+              src={ASSETS.starOrange}
+              alt=""
+              width={166}
+              height={138}
+              className="absolute -right-10 -top-10 h-[112px] w-[135px] object-contain"
+              aria-hidden
+            />
+            <div className="relative space-y-1 font-medium">
+              <p>Mardi : 13h / 20h</p>
+              <p>Mercredi : 9h / 21h</p>
+              <p>Jeudi : 13h / 21h</p>
+              <p>Vendredi : 9h / 17h</p>
+              <p>Samedi* : 9h / 12h &amp; 13h / 17h</p>
+            </div>
+            <p className="relative mt-5 text-xs">
+              *nous sommes fermés tous les derniers samedi du mois.
+            </p>
+          </div>
+        </section>
+
+        <section id="tarifs" className="mx-auto w-full max-w-[1030px] px-5 pb-20">
+          <MarketingSectionTitle className="text-black">
+            tarifs
+          </MarketingSectionTitle>
+
+          <div className="mt-16 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
+            <div>
+              <h3 className="text-[28px] font-bold leading-none text-black">
+                manufacto fonctionne avec <br />
+                un système de crédit
+              </h3>
+              <MarketingBody className="mt-14 text-lg">
+                <p>
+                  Pour avoir accès à l&apos;atelier, il vous suffit de{" "}
+                  <strong>charger votre pass</strong> avec un certain nombre de
+                  crédits, avec lesquels vous pouvez ensuite{" "}
+                  <strong>acheter des heures de pratique libre</strong> en
+                  menuiserie, en couture, des ateliers de montée en
+                  compétence... ou autre selon votre choix.
+                </p>
+                <p>
+                  Les crédits s&apos;achètent par lots, et sont{" "}
+                  <strong>valables un an.</strong>
+                  <br />
+                  Les tarifs sont dégressifs.
+                </p>
+                <p>
+                  Parmi nos activités, deux peuvent être payées en dehors de ce
+                  système de crédit :
+                </p>
+                <ul className="list-disc space-y-1 pl-6">
+                  <li>
+                    <strong>les ateliers de montée en compétence</strong>, si
+                    vous voulez simplement les offrir, ou découvrir le lieu, une
+                    pratique ou des outils spécifiques.
+                  </li>
+                  <li>
+                    <strong>les cuissons de céramique</strong> : elles sont
+                    facturées à l&apos;unité, en dehors du système de crédit.
+                  </li>
+                </ul>
+              </MarketingBody>
+            </div>
+            <ImageTile
+              src={ASSETS.creditSystem}
+              alt="Maillet et copeaux de bois"
+              className="h-[440px] rounded-[16px]"
+            />
+          </div>
+
+          <div className="mt-20 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
+            <ImageTile
+              src={ASSETS.tarifs}
+              alt="Outils de menuiserie sur un établi"
+              className="h-[760px] rounded-[16px]"
+            />
+            <div className="space-y-8">
+              <div>
+                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f56800]">
+                  menuiserie
+                </h3>
+                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie complète</span>
+                    <span>2 crédits / heure</span>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-primary mt-1 text-xl">✓</span>
-                  <div>
-                    <p className="font-semibold">Matériel fourni</p>
-                    <p className="text-sm text-muted-foreground">Tout le matériel et les outils nécessaires sont mis à votre disposition.</p>
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie encadrée</span>
+                    <span>3 crédits / heure</span>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-primary mt-1 text-xl">✓</span>
-                  <div>
-                    <p className="font-semibold">Groupes réduits</p>
-                    <p className="text-sm text-muted-foreground">Des sessions avec un nombre limité de participants pour un apprentissage optimal.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-primary mt-1 text-xl">✓</span>
-                  <div>
-                    <p className="font-semibold">Progression structurée</p>
-                    <p className="text-sm text-muted-foreground">Des ateliers adaptés à tous les niveaux, du débutant à l&apos;intermédiaire.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 md:col-span-2">
-                  <span className="text-primary mt-1 text-xl">✓</span>
-                  <div>
-                    <p className="font-semibold">Réalisations concrètes</p>
-                    <p className="text-sm text-muted-foreground">Repartez avec vos créations et les compétences pour continuer chez vous.</p>
+                  <div className="flex justify-between gap-6">
+                    <span>aide à la conception</span>
+                    <span>4 crédits / heure</span>
                   </div>
                 </div>
               </div>
+
+              <div>
+                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#4a56dd]">
+                  couture
+                </h3>
+                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie complète</span>
+                    <span>1 crédit / heure</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie encadrée</span>
+                    <span>2 crédits / heure</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#d73459]">
+                  céramique
+                </h3>
+                <div className="mt-4 space-y-3 text-lg leading-tight text-black/75">
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie complète</span>
+                    <span>2 crédits / heure</span>
+                  </div>
+                  <div>
+                    <p>cuissons</p>
+                    <div className="flex justify-between gap-6">
+                      <span>· four entier</span>
+                      <span>60 €</span>
+                    </div>
+                    <p className="mt-2 max-w-[300px] text-xs leading-tight">
+                      pour retrouver le détail des modalités de nos cuissons
+                      (terres acceptées, taille du four etc), allez sur notre
+                      page cuisson.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#20b75a]">
+                  électronique
+                </h3>
+                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie complète</span>
+                    <span>1 crédit / heure</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span>repair café</span>
+                    <span>prix libre</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f6c51d]">
+                  cours
+                </h3>
+                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
+                  <div className="flex justify-between gap-6">
+                    <span>catégorie 01</span>
+                    <span>50 € / 10 crédits</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span>catégorie 02</span>
+                    <span>72 € / 15 crédits</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span>catégorie 03</span>
+                    <span>100 € / 20 crédits</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="pt-8 text-lg leading-tight text-black/75">
+                À savoir : en pratique libre{" "}
+                <strong>(autonomie complète &amp; encadrée)</strong> la durée
+                minimale de réservation est de deux heures consécutives.
+              </p>
             </div>
+          </div>
+
+          <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
+            <div>
+              <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
+                les packs de crédits
+              </h3>
+              <p className="mt-6 text-lg leading-normal text-black/75">
+                Les crédits sont <strong>valables un an</strong> à partir de
+                leur date d&apos;achat.
+              </p>
+              <p className="mt-6 text-lg leading-normal text-black/75">
+                Ces recharges sont créditées directement sur votre compte
+                personnel. S&apos;il vous reste des crédits au moment de votre
+                achat, ils s&apos;ajoutent à ceux que vous venez d&apos;acheter.
+              </p>
+            </div>
+            <Suspense
+              fallback={
+                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-5" />
+              }
+            >
+              <AtelierCreditPackGrid />
+            </Suspense>
+          </div>
+
+          <div className="mt-20 grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
+            <div>
+              <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
+                les abonnements
+              </h3>
+              <div className="mt-6 space-y-5 text-lg leading-normal text-black/75">
+                <p>
+                  Les abonnements vous permettent d&apos;avoir un volume de
+                  crédit mensuel à utiliser à l&apos;atelier, à tarif
+                  préférentiel.
+                </p>
+                <p>
+                  Chaque mois, votre compte sera crédité du nombre de crédit
+                  correspondant. Si vous n&apos;utilisez pas tout sur le mois, le
+                  solde reste disponible et se cumule à celui du mois suivant.
+                  Vous devrez par ailleurs{" "}
+                  <strong>dans tous les cas réserver vos créneaux</strong> avant
+                  de venir à l&apos;atelier.
+                  <br />
+                  <strong>La durée d&apos;engagement est de 3 mois</strong>, vous
+                  pouvez ensuite résilier chaque mois. Après résiliation, vous
+                  disposez de 3 mois pour utiliser votre solde de crédits.
+                </p>
+              </div>
+              <p className="mt-14 max-w-[390px] text-xs leading-tight text-black/75">
+                15% de réduction sur tous nos tarifs pour les personnes
+                étudiantes, au chômages, bénéficiaires du RSA. Et si vous ne
+                rentrez dans aucune de ces cases mais que nos tarifs sont à
+                freins à votre venue, venez nous rencontrer et discutons en.
+              </p>
+            </div>
+            <Suspense
+              fallback={
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="min-h-[120px] animate-pulse rounded-[14px] bg-[#fff8f0]"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <AtelierSubscriptionList />
+            </Suspense>
           </div>
         </section>
       </div>

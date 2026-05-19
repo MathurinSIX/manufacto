@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { Pagination } from "@/components/ui/pagination";
+import { formatPaymentTypeLabel } from "@/lib/format-payment-type";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
@@ -38,6 +40,8 @@ interface Registration {
   id: string;
   payment_type: string | null;
   session_id: string | null;
+  reserved_start_ts?: string | null;
+  reserved_end_ts?: string | null;
   session?: Session | Session[] | null;
 }
 
@@ -114,14 +118,16 @@ export function PastReservationsList({
                 : (typeof session.activity === "object" ? session.activity : null))
             : null;
           const activityName = activity?.name || "Activité inconnue";
-          const startDate = session.start_ts ? new Date(session.start_ts) : new Date();
-          const endDate = session.end_ts ? new Date(session.end_ts) : new Date();
+          const activityId = activity?.id ?? session.activity_id;
+          const startDate = reg.reserved_start_ts
+            ? new Date(reg.reserved_start_ts)
+            : session.start_ts ? new Date(session.start_ts) : new Date();
+          const endDate = reg.reserved_end_ts
+            ? new Date(reg.reserved_end_ts)
+            : session.end_ts ? new Date(session.end_ts) : new Date();
 
           return (
-            <div
-              key={reg.id}
-              className="flex items-center justify-between p-4 border rounded-lg opacity-75"
-            >
+            <div key={reg.id} className="flex items-center justify-between gap-4 p-4 border rounded-lg opacity-75">
               <div>
                 <p className="font-medium">{activityName}</p>
                 <p className="text-sm text-muted-foreground">
@@ -133,10 +139,19 @@ export function PastReservationsList({
                 </p>
                 {reg.payment_type && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Paiement: {reg.payment_type === "credit" ? "Crédits" : reg.payment_type}
+                    Paiement: {formatPaymentTypeLabel(reg.payment_type)}
                   </p>
                 )}
               </div>
+              {activityId && (
+                <Link
+                  href={`/reserver?activity=${encodeURIComponent(activityId)}`}
+                  scroll={false}
+                  className="shrink-0 rounded-[10px] border border-[#f56800]/40 px-3 py-1.5 text-xs font-semibold text-[#f56800] transition hover:bg-[#fff8f0]"
+                >
+                  Réserver à nouveau
+                </Link>
+              )}
             </div>
           );
         })}

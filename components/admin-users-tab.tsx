@@ -14,15 +14,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { getAllUsers, createUser, addCreditToUser, makeUserAdmin, removeUserAdmin } from "@/app/admin/actions";
-import { Plus, Loader2, Coins, Shield, ShieldOff } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  getAllUsers,
+  createUser,
+  addCreditToUser,
+  makeUserAdmin,
+  removeUserAdmin,
+  updateUser,
+  deleteUser,
+} from "@/app/admin/actions";
+import { Plus, Loader2, Coins, Shield, ShieldOff, Pencil, Trash2 } from "lucide-react";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
@@ -46,19 +47,26 @@ type User = {
 
 export function AdminUsersTab() {
   const [users, setUsers] = useState<User[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [addCreditDialogOpen, setAddCreditDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [creditAmount, setCreditAmount] = useState<string>("");
-  const [creditPaymentType, setCreditPaymentType] = useState<string>("free");
   const [addingCredit, setAddingCredit] = useState(false);
-  
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFirstName, setNewUserFirstName] = useState("");
   const [newUserLastName, setNewUserLastName] = useState("");
+  const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserFirstName, setEditUserFirstName] = useState("");
+  const [editUserLastName, setEditUserLastName] = useState("");
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -69,6 +77,7 @@ export function AdminUsersTab() {
         setError(result.error);
       } else {
         setUsers(result.users as User[]);
+        setCurrentUserId(result.currentUserId ?? null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -112,6 +121,74 @@ export function AdminUsersTab() {
     }
   };
 
+  const openEditDialog = (user: User) => {
+    setEditingUser(user);
+    setEditUserEmail(user.email);
+    setEditUserFirstName(user.user_metadata?.first_name ?? "");
+    setEditUserLastName(user.user_metadata?.last_name ?? "");
+    setEditDialogOpen(true);
+    setError(null);
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setSavingEdit(true);
+    setError(null);
+
+    try {
+      const result = await updateUser(editingUser.id, {
+        email: editUserEmail,
+        first_name: editUserFirstName,
+        last_name: editUserLastName,
+      });
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditDialogOpen(false);
+        setEditingUser(null);
+        await loadUsers();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    const name =
+      user.user_metadata?.first_name && user.user_metadata?.last_name
+        ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+        : user.email;
+
+    if (
+      !confirm(
+        `Êtes-vous sûr de vouloir supprimer ${name} ? Cette action est irréversible.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingUserId(user.id);
+    setError(null);
+
+    try {
+      const result = await deleteUser(user.id);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        await loadUsers();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const handleAddCredit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
@@ -128,7 +205,7 @@ export function AdminUsersTab() {
         return;
       }
 
-      const result = await addCreditToUser(selectedUser.id, amount, creditPaymentType);
+      const result = await addCreditToUser(selectedUser.id, amount, "admin");
 
       if (result.error) {
         setError(result.error);
@@ -136,7 +213,6 @@ export function AdminUsersTab() {
         setAddCreditDialogOpen(false);
         setSelectedUser(null);
         setCreditAmount("");
-        setCreditPaymentType("free");
         await loadUsers();
       }
     } catch (err) {
@@ -157,18 +233,18 @@ export function AdminUsersTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Liste des utilisateurs</h3>
+        <h3 className="text-lg font-semibold">liste des utilisateurs</h3>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Ajouter un utilisateur
+              ajouter un utilisateur
             </Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
-                <DialogTitle>Nouvel utilisateur</DialogTitle>
+                <DialogTitle>nouvel utilisateur</DialogTitle>
                 <DialogDescription>
                   Créez un nouveau compte utilisateur. Un email d'invitation sera envoyé pour définir le mot de passe.
                 </DialogDescription>
@@ -215,7 +291,7 @@ export function AdminUsersTab() {
                       Création...
                     </>
                   ) : (
-                    "Créer"
+                    "créer"
                   )}
                 </Button>
               </DialogFooter>
@@ -285,25 +361,42 @@ export function AdminUsersTab() {
                         {dateFormatter.format(new Date(user.created_at))}
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <Button
-                            size="sm"
+                            type="button"
+                            size="icon"
                             variant="outline"
+                            className="h-8 w-8"
+                            title="Modifier"
+                            aria-label="Modifier"
+                            onClick={() => openEditDialog(user)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="Ajouter des crédits"
+                            aria-label="Ajouter des crédits"
                             onClick={() => {
                               setSelectedUser(user);
                               setAddCreditDialogOpen(true);
                               setCreditAmount("");
-                              setCreditPaymentType("free");
                               setError(null);
                             }}
                           >
-                            <Coins className="h-4 w-4 mr-2" />
-                            Crédits
+                            <Coins className="h-4 w-4" />
                           </Button>
                           {isAdmin ? (
                             <Button
-                              size="sm"
+                              type="button"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
+                              title="Retirer admin"
+                              aria-label="Retirer admin"
                               onClick={async () => {
                                 if (!confirm(`Êtes-vous sûr de vouloir retirer le rôle admin de ${user.email} ?`)) {
                                   return;
@@ -321,13 +414,16 @@ export function AdminUsersTab() {
                                 }
                               }}
                             >
-                              <ShieldOff className="h-4 w-4 mr-2" />
-                              Retirer admin
+                              <ShieldOff className="h-4 w-4" />
                             </Button>
                           ) : (
                             <Button
-                              size="sm"
+                              type="button"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
+                              title="Rendre admin"
+                              aria-label="Rendre admin"
                               onClick={async () => {
                                 if (!confirm(`Êtes-vous sûr de vouloir donner le rôle admin à ${user.email} ?`)) {
                                   return;
@@ -345,10 +441,28 @@ export function AdminUsersTab() {
                                 }
                               }}
                             >
-                              <Shield className="h-4 w-4 mr-2" />
-                              Rendre admin
+                              <Shield className="h-4 w-4" />
                             </Button>
                           )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="Supprimer"
+                            aria-label="Supprimer"
+                            disabled={
+                              user.id === currentUserId ||
+                              deletingUserId === user.id
+                            }
+                            onClick={() => handleDeleteUser(user)}
+                          >
+                            {deletingUserId === user.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -360,12 +474,80 @@ export function AdminUsersTab() {
         </div>
       </div>
 
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleEditUser}>
+            <DialogHeader>
+              <DialogTitle>modifier l&apos;utilisateur</DialogTitle>
+              <DialogDescription>
+                Modifiez l&apos;email et le nom de {editingUser?.email}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="editEmail">Email *</Label>
+                <Input
+                  id="editEmail"
+                  type="email"
+                  value={editUserEmail}
+                  onChange={(e) => setEditUserEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editFirstName">Prénom</Label>
+                <Input
+                  id="editFirstName"
+                  value={editUserFirstName}
+                  onChange={(e) => setEditUserFirstName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editLastName">Nom</Label>
+                <Input
+                  id="editLastName"
+                  value={editUserLastName}
+                  onChange={(e) => setEditUserLastName(e.target.value)}
+                />
+              </div>
+            </div>
+            {error && (
+              <div className="text-sm text-destructive mb-4">{error}</div>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditDialogOpen(false);
+                  setEditingUser(null);
+                  setError(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  "enregistrer"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Credit Dialog */}
       <Dialog open={addCreditDialogOpen} onOpenChange={setAddCreditDialogOpen}>
         <DialogContent>
           <form onSubmit={handleAddCredit}>
             <DialogHeader>
-              <DialogTitle>Ajouter des crédits</DialogTitle>
+              <DialogTitle>ajouter des crédits</DialogTitle>
               <DialogDescription>
                 Ajoutez des crédits à {selectedUser?.email}
               </DialogDescription>
@@ -387,20 +569,6 @@ export function AdminUsersTab() {
                   Entrez le nombre de crédits à ajouter
                 </p>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="creditPaymentType">Type de paiement *</Label>
-                <Select value={creditPaymentType} onValueChange={setCreditPaymentType} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un type de paiement" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="free">Gratuit</SelectItem>
-                    <SelectItem value="credit">Crédits</SelectItem>
-                    <SelectItem value="stripe">Stripe</SelectItem>
-                    <SelectItem value="cash">Espèces</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             {error && (
               <div className="text-sm text-destructive mb-4">{error}</div>
@@ -413,20 +581,19 @@ export function AdminUsersTab() {
                   setAddCreditDialogOpen(false);
                   setSelectedUser(null);
                   setCreditAmount("");
-                  setCreditPaymentType("free");
                   setError(null);
                 }}
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={addingCredit || !creditPaymentType}>
+              <Button type="submit" disabled={addingCredit || !creditAmount}>
                 {addingCredit ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Ajout...
                   </>
                 ) : (
-                  "Ajouter"
+                  "ajouter"
                 )}
               </Button>
             </DialogFooter>

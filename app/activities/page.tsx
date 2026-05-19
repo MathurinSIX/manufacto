@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { unstable_noStore } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { Navigation } from "@/components/navigation";
 import {
   Card,
   CardContent,
@@ -13,25 +12,16 @@ import {
 } from "@/components/ui/card";
 import { ActivitySessionPicker } from "@/components/activity-session-picker";
 
-const activityContent = {
-  couture_autonomie: {
-    title: "Couture en Autonomie",
-    description:
-      "Accédez à l'atelier en libre-service pour travailler sur vos projets personnels avec l'assistance de notre équipe si nécessaire.",
-    image:
-      "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
-  },
-  couture_atelier_1: {
-    title: "Atelier Couture Niveau 1",
-    description:
-      "Apprenez les bases de la machine à coudre, réalisez vos premières pièces et repartez avec les fondamentaux indispensables.",
-    image:
-      "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=800&q=80",
-  },
-} satisfies Record<
-  string,
-  { title: string; description: string; image: string }
->;
+const DEFAULT_ACTIVITY_IMAGE = "/assets/homepage/Frame 42.jpg";
+const DEFAULT_ACTIVITY_DESCRIPTION =
+  "Les informations détaillées de cette activité seront bientôt disponibles.";
+
+function splitActivityTitle(name: string | null) {
+  if (!name) return "Activité";
+  const parts = name.split("/");
+  if (parts.length <= 1) return name.trim();
+  return parts.slice(1).join("/").trim() || name.trim();
+}
 
 async function ActivitiesList() {
   unstable_noStore();
@@ -39,22 +29,30 @@ async function ActivitiesList() {
 
   const { data, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits");
+    .select("id, name, description, image_url, nb_credits")
+    .is("deleted_at", null)
+    .order("name");
 
   if (error) {
     console.error("Error fetching activities", error);
   }
 
-  const entries = Object.entries(activityContent).map(
-    ([name, content]) => {
-      const dbActivity = data?.find((activity) => activity.name === name);
-      return {
-        ...content,
-        id: dbActivity?.id ?? name,
-        credits: dbActivity?.nb_credits ?? null,
-      };
-    },
-  );
+  const entries =
+    data?.map((activity) => ({
+      id: activity.id,
+      title: splitActivityTitle(activity.name),
+      description: activity.description || DEFAULT_ACTIVITY_DESCRIPTION,
+      image: activity.image_url || DEFAULT_ACTIVITY_IMAGE,
+      credits: activity.nb_credits ?? null,
+    })) ?? [];
+
+  if (!entries.length) {
+    return (
+      <div className="rounded-lg border p-8 text-center text-muted-foreground">
+        Aucune activité disponible pour le moment.
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -104,7 +102,6 @@ async function ActivitiesList() {
 export default async function ActivitiesPage() {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Navigation />
       <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
       <div className="w-full max-w-6xl space-y-10">
         <div className="text-center space-y-3">
@@ -115,7 +112,7 @@ export default async function ActivitiesPage() {
             Découvrez nos ateliers couture
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Chaque activité dispose d'un nombre de crédits requis qui se met à
+            Chaque activité dispose d&apos;un nombre de crédits requis qui se met à
             jour automatiquement depuis Supabase. Choisissez celle qui
             correspond le mieux à vos envies créatives.
           </p>

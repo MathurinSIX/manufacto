@@ -1,29 +1,76 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
-import { NavLinks } from "@/components/nav-links";
-import { CreditsDisplay } from "@/components/credits-display";
-import { AdminButton } from "@/components/admin-button";
+import { NAV_LINKS } from "@/lib/nav-links";
+import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
+import { HashLink } from "@/components/hash-link";
+import { createClient } from "@/lib/supabase/server";
+import { unstable_noStore } from "next/cache";
 
-export function Navigation() {
+const ASSETS = {
+  logoMark: "/assets/figma-landing/logo-mark.png",
+  accountIcon: "/assets/figma-landing/account-icon.png",
+} as const;
+
+type ClaimsWithAppMetadata = {
+  app_metadata?: {
+    role?: string;
+  };
+};
+
+export async function Navigation() {
+  unstable_noStore();
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims as ClaimsWithAppMetadata | undefined;
+  const isadmin = claims?.app_metadata?.role === "admin";
+
   return (
-    <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-      <div className="w-full max-w-7xl flex items-center justify-between p-3 px-5 text-sm">
-        <Link
-          href={"/"}
-          className="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity"
-        >
-          Manufacto
+    <nav className="w-full bg-white">
+      <div className="mx-auto flex h-[105px] max-w-[1320px] items-center justify-between px-5 text-black md:px-10">
+        <Link href="/" className="relative h-[57px] w-[190px] shrink-0">
+          <Image
+            src={ASSETS.logoMark}
+            alt="Manufacto"
+            fill
+            className="object-contain object-left"
+            priority
+            sizes="190px"
+          />
         </Link>
-        <div className="absolute left-1/2 transform -translate-x-1/2">
-          <NavLinks />
+
+        <div className="hidden items-center gap-8 text-center text-base md:flex">
+          {NAV_LINKS.map((item) => (
+            <div key={item.label} className="group relative flex min-w-[90px] flex-col items-center py-8">
+              <Link href={item.href} className="leading-normal hover:text-[#4a56dd]">
+                {item.label}
+              </Link>
+              {item.subLinks?.length ? (
+                <div className="invisible absolute left-1/2 top-full z-20 flex min-w-[150px] -translate-x-1/2 flex-col gap-1 rounded-xl bg-white px-4 py-3 text-sm leading-tight text-black/55 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                  {item.subLinks.map((subLink) => (
+                    <HashLink key={subLink.href} href={subLink.href} className="hover:text-[#4a56dd]">
+                      {subLink.label}
+                    </HashLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {isadmin ? (
+            <Link href="/admin" className="leading-normal font-semibold text-[#4a56dd] hover:text-[#3540bf]">
+              admin
+            </Link>
+          ) : null}
         </div>
+
         <div className="flex items-center gap-2">
-          <Suspense>
-            <AdminButton />
-          </Suspense>
-          <Suspense>
-            <CreditsDisplay />
-          </Suspense>
+          <MobileNavDrawer showadminLink={isadmin} />
+          <Link
+            href="/account"
+            className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
+          >
+            <span className="hidden sm:inline">mon compte</span>
+            <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
+          </Link>
         </div>
       </div>
     </nav>

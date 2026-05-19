@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { Navigation } from "@/components/navigation";
 import { redirect } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
@@ -16,6 +15,51 @@ import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+
+type Activity = {
+  id: string;
+  name: string;
+};
+
+type Session = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  activity_id: string;
+  activity?: Activity | Activity[] | null;
+};
+
+type RegistrationStatus = {
+  status: string;
+  created_at: string;
+};
+
+type CreditSessionRegistration = {
+  id: string;
+  credit_id: string;
+  session_id: string | null;
+  payment_type: string | null;
+  reserved_start_ts?: string | null;
+  reserved_end_ts?: string | null;
+  status?: RegistrationStatus | null;
+  session?: Session | Session[] | null;
+};
+
+type RegistrationStatusRow = RegistrationStatus & {
+  id?: string;
+  credit_id?: string | null;
+  registration_id?: string | null;
+  registration?: CreditSessionRegistration | CreditSessionRegistration[] | null;
+};
+
+function getSession(
+  session: Session | Session[] | null | undefined,
+): Session | null {
+  if (Array.isArray(session)) {
+    return session[0] ?? null;
+  }
+  return session ?? null;
+}
 
 // Get admin client for admin operations
 function getAdminClient() {
@@ -70,6 +114,8 @@ async function UserAccountContent({
       id,
       payment_type,
       session_id,
+      reserved_start_ts,
+      reserved_end_ts,
       session:session_id (
         id,
         start_ts,
@@ -85,7 +131,7 @@ async function UserAccountContent({
 
   // Fetch latest registration_status for each registration
   const registrationIds = registrations?.map((reg) => reg.id) || [];
-  let registrationStatusMap: Record<string, { status: string; created_at: string }> = {};
+  const registrationStatusMap: Record<string, RegistrationStatus> = {};
   
   if (registrationIds.length > 0) {
     // Get the latest status for each registration
@@ -129,7 +175,7 @@ async function UserAccountContent({
 
   // Separate upcoming and past registrations
   // First, let's try to fetch sessions separately if nested query fails
-  let sessionsMap: Record<string, any> = {};
+  const sessionsMap: Record<string, Session> = {};
   if (registrations && registrations.length > 0) {
     const sessionIds = registrations
       .map((reg) => reg.session_id)
@@ -151,7 +197,7 @@ async function UserAccountContent({
         .in("id", sessionIds);
       
       if (sessionsData) {
-        sessionsData.forEach((session: any) => {
+        (sessionsData as Session[]).forEach((session) => {
           sessionsMap[session.id] = session;
         });
       }
@@ -161,9 +207,7 @@ async function UserAccountContent({
   const upcomingRegistrations =
     sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
-      let session = Array.isArray(reg.session) 
-        ? reg.session[0] 
-        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      let session = getSession(reg.session);
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
@@ -180,15 +224,13 @@ async function UserAccountContent({
         return false;
       }
       
-      return session.start_ts >= now;
+      return (reg.reserved_end_ts ?? session.end_ts) >= now;
     }) || [];
 
   const pastRegistrations =
     sortedRegistrations.filter((reg) => {
       // Try to get session from nested query first, then from separate query
-      let session = Array.isArray(reg.session) 
-        ? reg.session[0] 
-        : (reg.session && typeof reg.session === "object" ? reg.session : null);
+      let session = getSession(reg.session);
       
       // Fallback to separate query result
       if (!session && reg.session_id) {
@@ -205,7 +247,7 @@ async function UserAccountContent({
         return false;
       }
       
-      return session.start_ts < now;
+      return (reg.reserved_end_ts ?? session.end_ts) < now;
     }) || [];
 
   const cancelledRegistrations =
@@ -236,6 +278,8 @@ async function UserAccountContent({
             id,
             session_id,
             payment_type,
+            reserved_start_ts,
+            reserved_end_ts,
             session:session_id (
               id,
               start_ts,
@@ -254,19 +298,19 @@ async function UserAccountContent({
 
   // Create an object of credit_id to registration/session info with status
   // Only use the latest registration_status for each credit (already ordered by created_at desc)
-  const creditSessionMap: Record<string, any> = {};
+  const creditSessionMap: Record<string, CreditSessionRegistration> = {};
   if (registrationStatusesWithCredits) {
     const seenCredits = new Set<string>();
-    registrationStatusesWithCredits.forEach((regStatus: any) => {
+    (registrationStatusesWithCredits as RegistrationStatusRow[]).forEach((regStatus) => {
       if (regStatus.credit_id && regStatus.registration && !seenCredits.has(regStatus.credit_id)) {
         // Handle nested registration data (could be array or object)
-        let registration = Array.isArray(regStatus.registration)
+        const registration = Array.isArray(regStatus.registration)
           ? regStatus.registration[0]
           : regStatus.registration;
 
         if (registration) {
           // Handle nested session data
-          let session = null;
+          let session: Session | null = null;
           if (registration.session) {
             if (Array.isArray(registration.session)) {
               session = registration.session[0] || null;
@@ -277,6 +321,7 @@ async function UserAccountContent({
 
           creditSessionMap[regStatus.credit_id] = {
             ...registration,
+            credit_id: regStatus.credit_id,
             session: session,
             status: {
               status: regStatus.status,
@@ -395,9 +440,6 @@ export default async function UserAccountPage({
 }) {
   return (
     <main className="min-h-screen flex flex-col items-center">
-      <Suspense fallback={<nav className="w-full h-16" />}>
-        <Navigation />
-      </Suspense>
       <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
         <UserAccountContent params={params} />
       </Suspense>

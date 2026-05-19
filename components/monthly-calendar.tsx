@@ -1,8 +1,13 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { CourseDiscipline } from "@/lib/course-disciplines";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
+import {
+  CalendarSessionPill,
+  DisciplineLegend,
+} from "@/components/calendar-session-ui";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -20,84 +25,131 @@ const dayKeyFormatter = new Intl.DateTimeFormat("fr-CA", {
   timeZone: PARIS_TIMEZONE,
 });
 
-const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: PARIS_TIMEZONE,
-});
+export type CalendarSessionItem = {
+  id: string;
+  activityId: string;
+  start_ts: string;
+  end_ts: string;
+  activityName: string;
+  discipline: CourseDiscipline | null;
+  nbCredits?: number | null;
+  price?: number | null;
+  squareProductId?: string | null;
+};
 
-const startOfMonth = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth(), 1);
+const startOfMonthUTC = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 12, 0, 0));
 
-const addMonths = (date: Date, delta: number) =>
-  new Date(date.getFullYear(), date.getMonth() + delta, 1);
+const addMonthsUTC = (date: Date, delta: number) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1, 12, 0, 0));
 
 const toDayKey = (date: Date) => dayKeyFormatter.format(date);
 
 const buildCalendarGrid = (month: Date) => {
-  const firstOfMonth = startOfMonth(month);
-  const weekday = (firstOfMonth.getDay() + 6) % 7; // convert Sunday(0) -> 6
+  const firstOfMonth = new Date(
+    Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1, 12, 0, 0),
+  );
+  const weekday = (firstOfMonth.getUTCDay() + 6) % 7;
   const gridStart = new Date(firstOfMonth);
-  gridStart.setDate(firstOfMonth.getDate() - weekday);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() - weekday);
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
+    date.setUTCDate(gridStart.getUTCDate() + index);
     return date;
   });
 };
 
 interface MonthlyCalendarProps {
-  sessionsByDate: Map<string, Array<{ id: string; start_ts: string; end_ts: string; activityName: string }>>;
-  currentMonth: Date;
+  sessionsByDate: Record<string, CalendarSessionItem[]>;
+  currentMonthIso: string;
+  compact?: boolean;
 }
 
-export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalendarProps) {
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(currentMonth));
+export function MonthlyCalendar({
+  sessionsByDate,
+  currentMonthIso,
+  compact = false,
+}: MonthlyCalendarProps) {
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    startOfMonthUTC(new Date(currentMonthIso)),
+  );
   const todayKey = toDayKey(new Date());
 
   const calendarDays = useMemo(
     () => buildCalendarGrid(visibleMonth),
-    [visibleMonth]
+    [visibleMonth],
   );
 
   const getSessionsForDay = (day: Date) => {
     const key = toDayKey(day);
-    return sessionsByDate.get(key) || [];
+    return sessionsByDate[key] ?? [];
   };
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex items-center justify-between">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3",
+          compact ? "mb-3" : "mb-5",
+        )}
+      >
         <button
           type="button"
-          onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-muted"
+          onClick={() => setVisibleMonth(addMonthsUTC(visibleMonth, -1))}
+          className={cn(
+            "inline-flex items-center justify-center rounded-full border border-black/10 text-black/70 transition hover:bg-black/5",
+            compact ? "h-8 w-8" : "h-10 w-10",
+          )}
           aria-label="Mois précédent"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className={compact ? "h-4 w-4" : "h-5 w-5"} />
         </button>
-        <p className="text-lg font-semibold capitalize">
+        <p
+          className={cn(
+            "font-semibold capitalize text-black/85",
+            compact ? "text-lg md:text-xl" : "text-xl md:text-2xl",
+          )}
+        >
           {monthFormatter.format(visibleMonth)}
         </p>
         <button
           type="button"
-          onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-muted"
+          onClick={() => setVisibleMonth(addMonthsUTC(visibleMonth, 1))}
+          className={cn(
+            "inline-flex items-center justify-center rounded-full border border-black/10 text-black/70 transition hover:bg-black/5",
+            compact ? "h-8 w-8" : "h-10 w-10",
+          )}
           aria-label="Mois suivant"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className={compact ? "h-4 w-4" : "h-5 w-5"} />
         </button>
       </div>
-      <div className="mb-2 grid grid-cols-7 text-center text-xs uppercase text-muted-foreground">
-        {WEEKDAY_LABELS.map((label) => (
-          <span key={label}>{label}</span>
+
+      <DisciplineLegend compact={compact} />
+
+      <div
+        className={cn(
+          "mb-2 grid grid-cols-7 text-center font-semibold uppercase tracking-wide text-black/45",
+          compact ? "text-[10px]" : "text-xs",
+        )}
+      >
+        {WEEKDAY_LABELS.map((label, i) => (
+          <span key={`${i}-${label}`} className={compact ? "py-1" : "py-2"}>
+            {label}
+          </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div
+        className={cn(
+          "grid grid-cols-7",
+          compact ? "gap-1 md:gap-1.5" : "gap-1.5 md:gap-2",
+        )}
+      >
         {calendarDays.map((day) => {
           const key = toDayKey(day);
-          const isCurrentMonth = day.getMonth() === visibleMonth.getMonth();
+          const isCurrentMonth =
+            day.getUTCMonth() === visibleMonth.getUTCMonth() &&
+            day.getUTCFullYear() === visibleMonth.getUTCFullYear();
           const isToday = key === todayKey;
           const sessions = getSessionsForDay(day);
           const hasSessions = sessions.length > 0;
@@ -106,29 +158,44 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
             <div
               key={key}
               className={cn(
-                "flex flex-col min-h-[80px] rounded-md border p-1 text-sm transition-colors",
-                !isCurrentMonth && "text-muted-foreground/40 border-muted/40",
-                isToday && "ring-2 ring-primary",
-                hasSessions && "bg-primary/5 border-primary/20"
+                "flex flex-col rounded-xl border bg-white text-sm transition-colors",
+                compact ? "p-1.5" : "p-2",
+                compact
+                  ? "min-h-[72px] md:min-h-[96px] lg:min-h-[108px]"
+                  : "min-h-[110px] md:min-h-[150px] lg:min-h-[170px]",
+                !isCurrentMonth && "border-black/[0.04] bg-black/[0.015] text-black/30",
+                isCurrentMonth && "border-black/10",
+                isToday && "border-black/30 ring-2 ring-black/20",
               )}
             >
-              <span className="text-xs font-medium mb-1">{day.getDate()}</span>
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center font-semibold",
+                  compact
+                    ? "mb-1 h-5 w-5 text-[10px]"
+                    : "mb-1.5 h-6 w-6 text-xs",
+                  isToday && isCurrentMonth
+                    ? "rounded-full bg-black text-white"
+                    : "text-black/70",
+                  !isCurrentMonth && "text-black/30",
+                )}
+              >
+                {day.getUTCDate()}
+              </span>
               {hasSessions && (
-                <div className="flex-1 space-y-0.5 overflow-hidden">
-                  {sessions.slice(0, 2).map((session) => (
-                    <div
-                      key={session.id}
-                      className="text-[10px] bg-primary/10 text-primary rounded px-1 py-0.5 truncate"
-                      title={`${session.activityName} - ${timeFormatter.format(new Date(session.start_ts))}`}
-                    >
-                      {timeFormatter.format(new Date(session.start_ts))} {session.activityName}
-                    </div>
-                  ))}
-                  {sessions.length > 2 && (
-                    <div className="text-[10px] text-muted-foreground">
-                      +{sessions.length - 2}
-                    </div>
+                <div
+                  className={cn(
+                    "flex flex-1 flex-col overflow-hidden",
+                    compact ? "gap-0.5" : "gap-1",
                   )}
+                >
+                  {sessions.map((session) => (
+                    <CalendarSessionPill
+                      key={session.id}
+                      session={session}
+                      compact={compact}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -138,4 +205,3 @@ export function MonthlyCalendar({ sessionsByDate, currentMonth }: MonthlyCalenda
     </div>
   );
 }
-

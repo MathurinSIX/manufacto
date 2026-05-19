@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { formatPaymentTypeLabel } from "@/lib/format-payment-type";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 
@@ -29,11 +29,14 @@ interface RegistrationStatus {
 
 interface CreditHistoryItemProps {
   amount: number;
+  paymentType?: string | null;
   date: Date;
   registration?: {
     id: string;
     session_id: string | null;
     payment_type: string | null;
+    reserved_start_ts?: string | null;
+    reserved_end_ts?: string | null;
     status?: RegistrationStatus | null;
   } | null;
   session?: {
@@ -53,6 +56,7 @@ interface CreditHistoryItemProps {
 
 export function CreditHistoryItem({
   amount,
+  paymentType,
   date,
   registration,
   session,
@@ -63,6 +67,14 @@ export function CreditHistoryItem({
 
   const registrationStatus = registration?.status;
   const isCancelled = registrationStatus?.status === "CANCELLED";
+  const creditPaymentLabel =
+    paymentType === "square:subscription"
+      ? "Square - formule"
+      : paymentType === "square:credit_pack"
+        ? "Square - crédits"
+        : paymentType === "square:discovery"
+          ? "Square - découverte"
+          : null;
 
   return (
     <div className="flex items-start justify-between p-4 border rounded-lg">
@@ -71,11 +83,16 @@ export function CreditHistoryItem({
           <p className="font-medium">
             {amount >= 0 ? "+" : ""}{Math.round(amount)} crédit{Math.abs(amount) !== 1 ? "s" : ""}
           </p>
+          {!hasRegistration && creditPaymentLabel && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {creditPaymentLabel}
+            </span>
+          )}
           {hasRegistration && (
             <>
               {registration.payment_type && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {registration.payment_type === "credit" ? "Crédits" : registration.payment_type}
+                  {formatPaymentTypeLabel(registration.payment_type)}
                 </span>
               )}
               {isCancelled && (
@@ -97,8 +114,9 @@ export function CreditHistoryItem({
             )}
             {session && (
               <p className="text-muted-foreground">
-                {dateFormatter.format(new Date(session.start_ts))} à{" "}
-                {timeFormatter.format(new Date(session.start_ts))} - {timeFormatter.format(new Date(session.end_ts))}
+                {dateFormatter.format(new Date(registration?.reserved_start_ts ?? session.start_ts))} à{" "}
+                {timeFormatter.format(new Date(registration?.reserved_start_ts ?? session.start_ts))} -{" "}
+                {timeFormatter.format(new Date(registration?.reserved_end_ts ?? session.end_ts))}
               </p>
             )}
           </div>

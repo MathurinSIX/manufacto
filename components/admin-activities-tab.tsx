@@ -25,56 +25,33 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  COURSE_DISCIPLINE_OPTIONS,
+  inferPracticeDiscipline,
+} from "@/lib/course-disciplines";
+import {
+  addParisCalendarDays,
+  formatParisDate,
+  formatParisTime,
+  getParisHour,
+  getParisMondayDate,
+  PARIS_TIMEZONE,
+  parseParisDateTime,
+} from "@/lib/paris-time";
 import { cn } from "@/lib/utils";
+import {
+  countRegistrationsOverlappingHour,
+  getPracticeCapacitySummary,
+  type PracticeReservationSlot,
+} from "@/lib/practice-capacity";
 
-const PARIS_TIMEZONE = "Europe/Paris";
-
-// Helper function to get current date/time in Paris timezone
-function getNowInParis(): Date {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: PARIS_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(now);
-  const year = parseInt(parts.find(p => p.type === "year")!.value);
-  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
-  const day = parseInt(parts.find(p => p.type === "day")!.value);
-  const hour = parseInt(parts.find(p => p.type === "hour")!.value);
-  const minute = parseInt(parts.find(p => p.type === "minute")!.value);
-  const second = parseInt(parts.find(p => p.type === "second")!.value);
-  return new Date(year, month, day, hour, minute, second);
-}
-
-// Helper function to get Monday of a week in Paris timezone
-function getMondayInParis(date: Date): Date {
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: PARIS_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(date);
-  const year = parseInt(parts.find(p => p.type === "year")!.value);
-  const month = parseInt(parts.find(p => p.type === "month")!.value) - 1;
-  const day = parseInt(parts.find(p => p.type === "day")!.value);
-  const d = new Date(year, month, day);
-  const dayOfWeek = d.getDay();
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  d.setDate(d.getDate() - daysFromMonday);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+const PRACTICE_ACTIVITY_FILTER_ALL = "__all__";
 
 type User = {
   id: string;
@@ -90,6 +67,15 @@ type RegisteredUser = {
   userId: string;
   email: string;
   name: string;
+  reservedStartTs?: string | null;
+  reservedEndTs?: string | null;
+};
+
+type PublicRegisteredUser = {
+  id: string;
+  name: string;
+  phone: string;
+  createdAt: string;
 };
 
 type SessionWithUsers = {
@@ -98,16 +84,37 @@ type SessionWithUsers = {
   end_ts: string;
   max_registrations: number | null;
   registeredUsers: RegisteredUser[];
+  publicRegisteredUsers?: PublicRegisteredUser[];
   activity_id: string;
   activity_name: string;
   activity_type: string | null;
 };
+
+function toPracticeReservationSlots(
+  users: RegisteredUser[],
+): PracticeReservationSlot[] {
+  return users.map((user) => ({
+    reservedStartTs: user.reservedStartTs,
+    reservedEndTs: user.reservedEndTs,
+  }));
+}
+
+function getPracticeSessionCapacity(session: SessionWithUsers) {
+  return getPracticeCapacitySummary(
+    new Date(session.start_ts),
+    new Date(session.end_ts),
+    toPracticeReservationSlots(session.registeredUsers ?? []),
+    session.max_registrations,
+  );
+}
 
 type Activity = {
   id: string;
   name: string;
   nb_credits: number | null;
   type: string | null;
+  discipline: string | null;
+  square_product_id?: string | null;
   sessionsByDate: {
     date: string;
     sessions: SessionWithUsers[];
@@ -117,32 +124,28 @@ type Activity = {
 interface WeekViewSessionsProps {
   sessionsByDate: Map<string, SessionWithUsers[]>;
   weekOffset: number;
+  isPracticeView: boolean;
   onSessionClick: (session: SessionWithUsers) => void;
   onEditSession: (session: SessionWithUsers) => void;
   onDeleteSession: (session: SessionWithUsers) => void;
 }
 
-function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSession, onDeleteSession }: WeekViewSessionsProps) {
+function WeekViewSessions({
+  sessionsByDate,
+  weekOffset,
+  isPracticeView,
+  onSessionClick,
+  onEditSession,
+  onDeleteSession,
+}: WeekViewSessionsProps) {
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
-  // Calculate the Monday of the selected week in Paris timezone
   const weekDays = useMemo(() => {
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
-    
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(selectedWeekMonday);
-      date.setDate(selectedWeekMonday.getDate() + i);
-      return date;
-    });
+    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
+    return Array.from({ length: 7 }, (_, index) =>
+      addParisCalendarDays(weekMonday, index),
+    );
   }, [weekOffset]);
-
-  const formatDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
-  };
 
   const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
@@ -156,24 +159,21 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
     timeZone: PARIS_TIMEZONE,
   });
 
-  const formatDayLabel = (date: Date) => {
-    return dateFormatter.format(date);
+  const formatDayLabel = (dateKey: string) => {
+    return dateFormatter.format(parseParisDateTime(dateKey, "12:00"));
   };
 
   const formatTime = (dateString: string) => {
     return timeFormatter.format(new Date(dateString));
   };
 
-  const hasAnySessions = Array.from(sessionsByDate.values()).some(sessions => sessions.length > 0);
-
   return (
     <div className="border rounded-lg p-4 bg-background">
       <div className="grid grid-cols-7 gap-2 items-start">
         {WEEKDAY_LABELS.map((label, index) => {
-          const day = weekDays[index];
-          const dateKey = formatDateKey(day);
+          const dateKey = weekDays[index];
           const daySessions = sessionsByDate.get(dateKey) || [];
-          const isToday = formatDateKey(getNowInParis()) === dateKey;
+          const isToday = formatParisDate(new Date()) === dateKey;
 
           return (
             <div
@@ -190,16 +190,29 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
                   {label}
                 </p>
                 <p className="text-sm font-medium">
-                  {formatDayLabel(day)}
+                  {formatDayLabel(dateKey)}
                 </p>
               </div>
               <div className="space-y-1 w-full">
                 {daySessions.length > 0 ? (
                   daySessions.map((session) => {
-                    const registeredCount = session.registeredUsers?.length || 0;
+                    const publicCount = session.publicRegisteredUsers?.length || 0;
                     const maxReg = session.max_registrations ?? null;
-                    const isFull = maxReg !== null && registeredCount >= maxReg;
-                    const available = maxReg !== null ? maxReg - registeredCount : null;
+                    const practiceCapacity = isPracticeView
+                      ? getPracticeSessionCapacity(session)
+                      : null;
+                    const registeredCount = isPracticeView
+                      ? (practiceCapacity?.peakHourCount ?? 0) + publicCount
+                      : (session.registeredUsers?.length || 0) + publicCount;
+                    const isFull = isPracticeView
+                      ? (practiceCapacity?.isAnyHourFull ?? false)
+                      : maxReg !== null && registeredCount >= maxReg;
+                    const available =
+                      maxReg !== null && !isPracticeView
+                        ? maxReg - registeredCount
+                        : maxReg !== null && practiceCapacity
+                          ? maxReg - practiceCapacity.peakHourCount
+                          : null;
 
                     return (
                       <div
@@ -217,8 +230,11 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
                           <div className="flex items-center gap-1 min-w-0 flex-1">
                             <Users className="h-4 w-4 flex-shrink-0" />
                             <span className={`text-sm font-bold truncate ${isFull ? 'text-red-300' : ''}`}>
-                              {registeredCount}{maxReg !== null && `/${maxReg}`}
-                              {available !== null && available > 0 && !isFull && <span className="text-green-300"> ({available})</span>}
+                              {registeredCount}
+                              {maxReg !== null && `/${maxReg}${isPracticeView ? "/h" : ""}`}
+                              {available !== null && available > 0 && !isFull && (
+                                <span className="text-green-300"> ({available})</span>
+                              )}
                             </span>
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -261,17 +277,33 @@ function WeekViewSessions({ sessionsByDate, weekOffset, onSessionClick, onEditSe
   );
 }
 
-export function AdminActivitiesTab() {
+interface AdminActivitiesTabProps {
+  onAddSessions?: () => void;
+  activityTypes?: string[];
+  title?: string;
+}
+
+const PRACTICE_ACTIVITY_TYPES = new Set([
+  "autonomie",
+  "autonomie_encadree",
+  "accompagnement",
+  "cuisson",
+]);
+
+export function AdminActivitiesTab({
+  onAddSessions,
+  activityTypes,
+  title = "Sessions",
+}: AdminActivitiesTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [selectedDate, setSelectedDate] = useState(() => getNowInParis());
+  const [selectedDate, setSelectedDate] = useState(() => formatParisDate(new Date()));
   const [selectedSession, setSelectedSession] = useState<SessionWithUsers | null>(null);
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
-  const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
   const [adding, setAdding] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -294,7 +326,40 @@ export function AdminActivitiesTab() {
   };
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
+  const [selectedPracticeActivityId, setSelectedPracticeActivityId] = useState(
+    PRACTICE_ACTIVITY_FILTER_ALL,
+  );
+  const isPracticeView = activityTypes?.some((type) =>
+    PRACTICE_ACTIVITY_TYPES.has(type),
+  ) ?? false;
+
+  const visibleActivities = useMemo(() => {
+    if (!isPracticeView || selectedPracticeActivityId === PRACTICE_ACTIVITY_FILTER_ALL) {
+      return activities;
+    }
+    return activities.filter((activity) => activity.id === selectedPracticeActivityId);
+  }, [activities, isPracticeView, selectedPracticeActivityId]);
+
+  const practiceActivityFilterGroups = useMemo(() => {
+    if (!isPracticeView) return [];
+
+    const byDiscipline = new Map(
+      COURSE_DISCIPLINE_OPTIONS.map((option) => [option.value, [] as Activity[]]),
+    );
+
+    for (const activity of activities) {
+      const discipline = inferPracticeDiscipline(activity.name, activity.discipline);
+      if (!discipline) continue;
+      byDiscipline.get(discipline)?.push(activity);
+    }
+
+    return COURSE_DISCIPLINE_OPTIONS.map((option) => ({
+      ...option,
+      activities: (byDiscipline.get(option.value) ?? []).sort((a, b) =>
+        a.name.localeCompare(b.name, "fr"),
+      ),
+    })).filter((group) => group.activities.length > 0);
+  }, [activities, isPracticeView]);
 
   const loadData = async () => {
     setLoading(true);
@@ -308,7 +373,16 @@ export function AdminActivitiesTab() {
       if (activitiesResult.error) {
         setError(activitiesResult.error);
       } else {
-        setActivities(activitiesResult.activities);
+        const filteredActivities = activitiesResult.activities.filter((activity) => {
+          if (activity.type === "cours") {
+            return activityTypes?.includes("cours") ?? false;
+          }
+
+          return activityTypes?.length
+            ? activity.type ? activityTypes.includes(activity.type) : false
+            : true;
+        });
+        setActivities(filteredActivities);
       }
 
       if (usersResult.users) {
@@ -325,25 +399,12 @@ export function AdminActivitiesTab() {
     loadData();
   }, []);
 
-  // Get all activities for filtering
-  const availableActivities = useMemo(() => {
-    return activities.map(activity => ({
-      id: activity.id,
-      name: activity.name,
-    })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [activities]);
-
   // Get all sessions for the selected date, flattened and with activity info
   const sessionsForDate = useMemo(() => {
-    const dateKey = selectedDate.toISOString().split('T')[0];
+    const dateKey = selectedDate;
     const allSessions: SessionWithUsers[] = [];
     
-    activities.forEach(activity => {
-      // Filter by activity if filter is active
-      if (selectedActivities.length > 0 && !selectedActivities.includes(activity.id)) {
-        return;
-      }
-      
+    visibleActivities.forEach(activity => {
       const dayData = activity.sessionsByDate.find(d => d.date === dateKey);
       if (dayData) {
         dayData.sessions.forEach(session => {
@@ -360,32 +421,20 @@ export function AdminActivitiesTab() {
     return allSessions.sort((a, b) => 
       new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime()
     );
-  }, [activities, selectedDate, selectedActivities]);
+  }, [visibleActivities, selectedDate]);
 
   // Get all sessions for the selected week
   const sessionsForWeek = useMemo(() => {
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + weekOffset * 7);
-    
-    const weekDays = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(selectedWeekMonday);
-      date.setDate(selectedWeekMonday.getDate() + i);
-      return date.toISOString().split('T')[0];
-    });
+    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
+    const weekDays = Array.from({ length: 7 }, (_, index) =>
+      addParisCalendarDays(weekMonday, index),
+    );
     
     const weekSessions: Map<string, SessionWithUsers[]> = new Map();
     
     weekDays.forEach(dateKey => {
       const daySessions: SessionWithUsers[] = [];
-      activities.forEach(activity => {
-        // Filter by activity if filter is active
-        if (selectedActivities.length > 0 && !selectedActivities.includes(activity.id)) {
-          return;
-        }
-        
+      visibleActivities.forEach(activity => {
         const dayData = activity.sessionsByDate.find(d => d.date === dateKey);
         if (dayData) {
           dayData.sessions.forEach(session => {
@@ -404,13 +453,13 @@ export function AdminActivitiesTab() {
     });
     
     return weekSessions;
-  }, [activities, weekOffset, selectedActivities]);
+  }, [visibleActivities, weekOffset]);
 
   // Update selectedSession when activities data changes (after add/remove user)
   useEffect(() => {
     if (selectedSession && usersDialogOpen) {
       // Find updated session from both day and week views
-      const dateKey = new Date(selectedSession.start_ts).toISOString().split('T')[0];
+      const dateKey = formatParisDate(new Date(selectedSession.start_ts));
       let updatedSession = sessionsForDate.find(s => s.id === selectedSession.id);
       
       // If not found in day view, try week view
@@ -419,18 +468,24 @@ export function AdminActivitiesTab() {
         updatedSession = weekSessions?.find(s => s.id === selectedSession.id);
       }
       
-      if (updatedSession && updatedSession.registeredUsers.length !== selectedSession.registeredUsers.length) {
+      const updatedCount =
+        (updatedSession?.registeredUsers.length || 0) +
+        (updatedSession?.publicRegisteredUsers?.length || 0);
+      const selectedCount =
+        selectedSession.registeredUsers.length +
+        (selectedSession.publicRegisteredUsers?.length || 0);
+      if (updatedSession && updatedCount !== selectedCount) {
         setSelectedSession(updatedSession);
       }
     }
-  }, [activities, selectedSession?.id, usersDialogOpen, sessionsForDate, sessionsForWeek]);
+  }, [activities, selectedSession, usersDialogOpen, sessionsForDate, sessionsForWeek]);
 
   // Group sessions by hour for calendar view
   const sessionsByHour = useMemo(() => {
     const grouped: Record<number, SessionWithUsers[]> = {};
     
     sessionsForDate.forEach(session => {
-      const hour = new Date(session.start_ts).getHours();
+      const hour = getParisHour(new Date(session.start_ts));
       if (!grouped[hour]) {
         grouped[hour] = [];
       }
@@ -447,14 +502,9 @@ export function AdminActivitiesTab() {
     setSelectedSession(session);
     const startDate = new Date(session.start_ts);
     const endDate = new Date(session.end_ts);
-    
-    // Format date as YYYY-MM-DD
-    const dateStr = startDate.toISOString().split('T')[0];
-    setEditDate(dateStr);
-    
-    // Format time as HH:MM
-    const startTimeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
-    setEditStartTime(startTimeStr);
+
+    setEditDate(formatParisDate(startDate));
+    setEditStartTime(formatParisTime(startDate));
     
     // Calculate duration in minutes
     const durationMs = endDate.getTime() - startDate.getTime();
@@ -473,7 +523,7 @@ export function AdminActivitiesTab() {
     
     try {
       // Combine date and time into ISO string for start
-      const startDateTime = new Date(`${editDate}T${editStartTime}:00`);
+      const startDateTime = parseParisDateTime(editDate, editStartTime);
       
       // Calculate end time from start time + duration
       const durationMinutes = parseInt(editDuration) || 60;
@@ -514,19 +564,18 @@ export function AdminActivitiesTab() {
   };
 
   const handleAddUser = async () => {
-    if (!selectedSession || !selectedUserId || !selectedPaymentType) return;
+    if (!selectedSession || !selectedUserId) return;
 
     setAdding(true);
     setError(null);
 
     try {
-      const result = await addUserToSession(selectedSession.id, selectedUserId, selectedPaymentType);
+      const result = await addUserToSession(selectedSession.id, selectedUserId, "admin");
       if (result.error) {
         setError(result.error);
       } else {
         setAddUserDialogOpen(false);
         setSelectedUserId("");
-        setSelectedPaymentType("free");
         await loadData();
       }
     } catch (err) {
@@ -596,14 +645,14 @@ export function AdminActivitiesTab() {
     return timeFormatter.format(new Date(dateString));
   };
 
-  const formatDate = (date: Date) => {
-    return fullDateFormatter.format(date);
+  const formatDate = (dateKey: string) => {
+    return fullDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
   };
 
   const navigateDay = (direction: 'prev' | 'next') => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
-    setSelectedDate(newDate);
+    setSelectedDate(
+      addParisCalendarDays(selectedDate, direction === "next" ? 1 : -1),
+    );
   };
 
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -611,32 +660,25 @@ export function AdminActivitiesTab() {
   };
 
   const goToToday = () => {
-    setSelectedDate(getNowInParis());
+    setSelectedDate(formatParisDate(new Date()));
     setWeekOffset(0);
   };
 
   const getWeekLabel = (offset: number): string => {
-    const now = getNowInParis();
-    const currentMonday = getMondayInParis(now);
-    
-    const selectedWeekMonday = new Date(currentMonday);
-    selectedWeekMonday.setDate(currentMonday.getDate() + offset * 7);
-    
-    const selectedWeekSunday = new Date(selectedWeekMonday);
-    selectedWeekSunday.setDate(selectedWeekMonday.getDate() + 6);
-    
-    const formatDate = (date: Date) => {
-      return shortDateFormatter.format(date);
-    };
+    const selectedWeekMonday = addParisCalendarDays(getParisMondayDate(), offset * 7);
+    const selectedWeekSunday = addParisCalendarDays(selectedWeekMonday, 6);
+
+    const formatWeekDate = (dateKey: string) =>
+      shortDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
     
     if (offset === 0) {
-      return `Cette semaine (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
+      return `Cette semaine (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
     } else if (offset === -1) {
-      return `Semaine précédente (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
+      return `semaine précédente (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
     } else if (offset > 0) {
-      return `Dans ${offset} semaine${offset > 1 ? "s" : ""} (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
+      return `Dans ${offset} semaine${offset > 1 ? "s" : ""} (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
     } else {
-      return `${Math.abs(offset)} semaines précédentes (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
+      return `${Math.abs(offset)} semaines précédentes (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
     }
   };
 
@@ -650,60 +692,58 @@ export function AdminActivitiesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Sessions</h3>
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "day" | "week")}>
-          <TabsList>
-            <TabsTrigger value="day">
-              <Calendar className="h-4 w-4 mr-2" />
-              Jour
-            </TabsTrigger>
-            <TabsTrigger value="week">
-              <Calendar className="h-4 w-4 mr-2" />
-              Semaine
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+          {isPracticeView ? (
+            <Select
+              value={selectedPracticeActivityId}
+              onValueChange={setSelectedPracticeActivityId}
+            >
+              <SelectTrigger className="w-full min-w-[220px] sm:w-[280px]">
+                <SelectValue placeholder="Filtrer par offre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PRACTICE_ACTIVITY_FILTER_ALL}>
+                  Toutes les offres
+                </SelectItem>
+                {practiceActivityFilterGroups.map((group) => (
+                  <SelectGroup key={group.value}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.activities.map((activity) => (
+                      <SelectItem key={activity.id} value={activity.id}>
+                        {activity.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {onAddSessions && (
+            <Button onClick={onAddSessions}>
+              <Plus className="mr-2 h-4 w-4" />
+              {isPracticeView ? "ajouter des créneaux" : "ajouter des sessions"}
+            </Button>
+          )}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "day" | "week")}>
+            <TabsList>
+              <TabsTrigger value="day">
+                <Calendar className="h-4 w-4 mr-2" />
+                jour
+              </TabsTrigger>
+              <TabsTrigger value="week">
+                <Calendar className="h-4 w-4 mr-2" />
+                semaine
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       {error && (
         <div className="text-sm text-destructive p-4 bg-destructive/10 rounded-md">
           {error}
-        </div>
-      )}
-
-      {/* Activity Filter */}
-      {availableActivities.length > 0 && (
-        <div className="flex items-center gap-4 border rounded-lg p-4 bg-muted/50">
-          <Label className="text-sm font-medium">Filtrer par activité:</Label>
-          <div className="flex flex-wrap gap-2">
-            {availableActivities.map((activity) => (
-              <Button
-                key={activity.id}
-                variant={selectedActivities.includes(activity.id) ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setSelectedActivities(prev =>
-                    prev.includes(activity.id)
-                      ? prev.filter(id => id !== activity.id)
-                      : [...prev, activity.id]
-                  );
-                }}
-              >
-                {activity.name}
-              </Button>
-            ))}
-            {selectedActivities.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedActivities([])}
-                className="text-xs"
-              >
-                Réinitialiser
-              </Button>
-            )}
-          </div>
         </div>
       )}
 
@@ -716,7 +756,7 @@ export function AdminActivitiesTab() {
             onClick={() => navigateDay('prev')}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
-            Jour précédent
+            jour précédent
           </Button>
           <div className="text-center">
             <p className="font-semibold capitalize">{formatDate(selectedDate)}</p>
@@ -726,7 +766,7 @@ export function AdminActivitiesTab() {
               onClick={goToToday}
               className="text-xs text-muted-foreground"
             >
-              Aujourd'hui
+              Aujourd&apos;hui
             </Button>
           </div>
           <Button
@@ -734,7 +774,7 @@ export function AdminActivitiesTab() {
             size="sm"
             onClick={() => navigateDay('next')}
           >
-            Jour suivant
+            jour suivant
             <ChevronRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
@@ -749,7 +789,7 @@ export function AdminActivitiesTab() {
             onClick={() => navigateWeek('prev')}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
-            Semaine précédente
+            semaine précédente
           </Button>
           <div className="text-center">
             <p className="font-semibold">{getWeekLabel(weekOffset)}</p>
@@ -767,7 +807,7 @@ export function AdminActivitiesTab() {
             size="sm"
             onClick={() => navigateWeek('next')}
           >
-            Semaine suivante
+            semaine suivante
             <ChevronRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
@@ -777,7 +817,11 @@ export function AdminActivitiesTab() {
       {viewMode === "day" && (
         sessionsForDate.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground border rounded-lg">
-            <p>Aucune session prévue pour ce jour</p>
+            <p>
+              {isPracticeView
+                ? "Aucun créneau d'ouverture prévu pour ce jour"
+                : "Aucune session prévue pour ce jour"}
+            </p>
           </div>
         ) : (
           <div className="border rounded-lg overflow-hidden">
@@ -795,10 +839,24 @@ export function AdminActivitiesTab() {
                       <div className="flex-1 grid gap-3">
                         {hourSessions.map((session) => {
                           if (!session) return null;
-                          const registeredCount = session.registeredUsers?.length || 0;
+                          const publicCount = session.publicRegisteredUsers?.length || 0;
                           const maxReg = session.max_registrations ?? null;
-                          const isFull = maxReg !== null && registeredCount >= maxReg;
-                          const available = maxReg !== null ? maxReg - registeredCount : null;
+                          const hourStart = parseParisDateTime(
+                            selectedDate,
+                            `${hour.toString().padStart(2, "0")}:00`,
+                          );
+                          const hourCount = isPracticeView
+                            ? countRegistrationsOverlappingHour(
+                                toPracticeReservationSlots(session.registeredUsers ?? []),
+                                hourStart.getTime(),
+                              )
+                            : (session.registeredUsers?.length || 0) + publicCount;
+                          const registeredCount = isPracticeView ? hourCount + publicCount : hourCount;
+                          const isFull = isPracticeView
+                            ? maxReg !== null && hourCount >= maxReg
+                            : maxReg !== null && registeredCount >= maxReg;
+                          const available =
+                            maxReg !== null ? maxReg - (isPracticeView ? hourCount : registeredCount) : null;
 
                           return (
                             <div
@@ -816,7 +874,8 @@ export function AdminActivitiesTab() {
                                   <span className="flex items-center gap-1">
                                     <Users className="h-3 w-3" />
                                     {registeredCount} inscrit{registeredCount > 1 ? "s" : ""}
-                                    {maxReg !== null && ` / ${maxReg}`}
+                                    {maxReg !== null &&
+                                      ` / ${maxReg}${isPracticeView ? " max/h" : ""}`}
                                     {available !== null && available > 0 && (
                                       <span className="text-green-600">({available} disponible{available > 1 ? "s" : ""})</span>
                                     )}
@@ -869,6 +928,7 @@ export function AdminActivitiesTab() {
         <WeekViewSessions 
           sessionsByDate={sessionsForWeek} 
           weekOffset={weekOffset}
+          isPracticeView={isPracticeView}
           onSessionClick={(session) => {
             setSelectedSession(session);
             setUsersDialogOpen(true);
@@ -882,9 +942,13 @@ export function AdminActivitiesTab() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Modifier la session</DialogTitle>
+          <DialogTitle>
+            {isPracticeView ? "Modifier le créneau" : "Modifier la session"}
+          </DialogTitle>
             <DialogDescription>
-              Modifiez les détails de la session
+              {isPracticeView
+                ? "Modifiez les détails du créneau d'ouverture"
+                : "Modifiez les détails de la session"}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -955,7 +1019,7 @@ export function AdminActivitiesTab() {
                   <p className="text-xs text-muted-foreground">
                     Fin: {(() => {
                       try {
-                        const startDateTime = new Date(`${editDate}T${editStartTime}:00`);
+                        const startDateTime = parseParisDateTime(editDate, editStartTime);
                         const durationMinutes = parseInt(editDuration) || 60;
                         const endDateTime = new Date(startDateTime);
                         endDateTime.setMinutes(endDateTime.getMinutes() + durationMinutes);
@@ -969,7 +1033,11 @@ export function AdminActivitiesTab() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-max-registrations">Nombre maximum d'inscriptions</Label>
+              <Label htmlFor="edit-max-registrations">
+                {isPracticeView
+                  ? "Nombre maximum de personnes par heure"
+                  : "Nombre maximum d'inscriptions"}
+              </Label>
               <Input
                 id="edit-max-registrations"
                 type="number"
@@ -979,7 +1047,9 @@ export function AdminActivitiesTab() {
                 placeholder="Illimité si vide"
               />
               <p className="text-xs text-muted-foreground">
-                Laissez vide pour un nombre illimité d'inscriptions
+                {isPracticeView
+                  ? "Laissez vide pour un nombre illimité de personnes par heure"
+                  : "Laissez vide pour un nombre illimité d'inscriptions"}
               </p>
             </div>
           </div>
@@ -1019,31 +1089,82 @@ export function AdminActivitiesTab() {
               {selectedSession?.activity_name} - {selectedSession && formatTime(selectedSession.start_ts)} - {selectedSession && formatTime(selectedSession.end_ts)}
             </DialogTitle>
             <DialogDescription>
-              Gérer les utilisateurs inscrits à cette session
+              {isPracticeView
+                ? "gérer les utilisateurs inscrits sur ce créneau d'ouverture"
+                : "gérer les utilisateurs inscrits à cette session"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {selectedSession?.registeredUsers?.length || 0} inscrit{selectedSession && (selectedSession.registeredUsers?.length || 0) > 1 ? "s" : ""}
-                {selectedSession?.max_registrations !== null && selectedSession?.max_registrations !== undefined && ` / ${selectedSession.max_registrations} max`}
+                {(() => {
+                  const publicCount = selectedSession?.publicRegisteredUsers?.length || 0;
+                  const reservationCount = selectedSession?.registeredUsers?.length || 0;
+                  const totalCount = reservationCount + publicCount;
+                  const maxReg = selectedSession?.max_registrations;
+
+                  if (isPracticeView && selectedSession) {
+                    const practiceStats = getPracticeSessionCapacity(selectedSession);
+                    return (
+                      <>
+                        {totalCount} réservation{totalCount > 1 ? "s" : ""}
+                        {maxReg != null &&
+                          ` · pic ${practiceStats.peakHourCount}/${maxReg} par heure`}
+                      </>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {totalCount} inscrit{totalCount > 1 ? "s" : ""}
+                      {maxReg != null && ` / ${maxReg} max`}
+                    </>
+                  );
+                })()}
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setSelectedPaymentType("free");
-                  setAddUserDialogOpen(true);
-                }}
-                disabled={selectedSession?.max_registrations !== null && selectedSession?.max_registrations !== undefined && (selectedSession?.registeredUsers?.length || 0) >= (selectedSession.max_registrations || 0)}
+                onClick={() => setAddUserDialogOpen(true)}
+                disabled={(() => {
+                  if (!selectedSession || selectedSession.max_registrations == null) {
+                    return false;
+                  }
+
+                  const publicCount = selectedSession.publicRegisteredUsers?.length || 0;
+                  const totalCount =
+                    (selectedSession.registeredUsers?.length || 0) + publicCount;
+
+                  if (isPracticeView) {
+                    return getPracticeSessionCapacity(selectedSession).areAllHoursFull;
+                  }
+
+                  return totalCount >= selectedSession.max_registrations;
+                })()}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Ajouter un utilisateur
+                ajouter un utilisateur
               </Button>
             </div>
 
-            {selectedSession && (selectedSession.registeredUsers?.length || 0) > 0 ? (
+            {selectedSession && ((selectedSession.registeredUsers?.length || 0) > 0 || (selectedSession.publicRegisteredUsers?.length || 0) > 0) ? (
               <div className="border rounded-lg divide-y max-h-96 overflow-y-auto">
+                {selectedSession.publicRegisteredUsers?.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 hover:bg-muted/50"
+                  >
+                    <div>
+                      <p className="font-medium">{user.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {user.phone}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#fff8f0] px-2.5 py-1 text-xs font-medium text-[#f56800]">
+                      Nom + téléphone
+                    </span>
+                  </div>
+                ))}
                 {selectedSession.registeredUsers.map((user) => (
                   <div
                     key={user.registrationId}
@@ -1051,7 +1172,13 @@ export function AdminActivitiesTab() {
                   >
                     <div>
                       <p className="font-medium">{user.name}</p>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                    {user.reservedStartTs && user.reservedEndTs ? (
+                      <p className="text-xs text-muted-foreground">
+                        Réservé: {formatTime(user.reservedStartTs)} -{" "}
+                        {formatTime(user.reservedEndTs)}
+                      </p>
+                    ) : null}
                     </div>
                     <Button
                       size="sm"
@@ -1077,9 +1204,15 @@ export function AdminActivitiesTab() {
       <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ajouter un utilisateur à la session</DialogTitle>
+          <DialogTitle>
+            {isPracticeView
+              ? "ajouter un utilisateur au créneau"
+              : "ajouter un utilisateur à la session"}
+          </DialogTitle>
             <DialogDescription>
-              Sélectionnez un utilisateur à ajouter à cette session
+              {isPracticeView
+                ? "L'ajout manuel inscrit l'utilisateur sur tout le créneau d'ouverture."
+                : "Sélectionnez un utilisateur à ajouter à cette session"}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -1113,20 +1246,6 @@ export function AdminActivitiesTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="paymentType">Type de paiement *</Label>
-              <Select value={selectedPaymentType} onValueChange={setSelectedPaymentType} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un type de paiement" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="free">Gratuit</SelectItem>
-                  <SelectItem value="credit">Crédits</SelectItem>
-                  <SelectItem value="stripe">Stripe</SelectItem>
-                  <SelectItem value="cash">Espèces</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           {error && (
             <div className="text-sm text-destructive mb-4">{error}</div>
@@ -1138,19 +1257,18 @@ export function AdminActivitiesTab() {
                 onClick={() => {
                   setAddUserDialogOpen(false);
                   setSelectedUserId("");
-                  setSelectedPaymentType("free");
                 }}
               >
               Annuler
             </Button>
-            <Button onClick={handleAddUser} disabled={adding || !selectedUserId || !selectedPaymentType}>
+            <Button onClick={handleAddUser} disabled={adding || !selectedUserId}>
               {adding ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Ajout...
                 </>
               ) : (
-                "Ajouter"
+                "ajouter"
               )}
             </Button>
           </DialogFooter>

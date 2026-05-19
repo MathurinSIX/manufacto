@@ -36,8 +36,8 @@ INSERT INTO activity (name, type, nb_credits, description)
 SELECT 'Menuiserie en autonomie encadrée', 'autonomie_encadree', 8, 'Sessions de menuiserie en autonomie avec encadrement renforcé. Parfait pour les débutants qui souhaitent apprendre les techniques de base ou pour les projets nécessitant un suivi plus rapproché. Un encadrant est disponible pour vous guider dans l''utilisation des machines et vous conseiller sur vos réalisations.'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Menuiserie en autonomie encadrée');
 
-INSERT INTO activity (name, type, nb_credits, description) 
-SELECT 'Accompagnement projet menuiserie', 'accompagnement', NULL, 'Séances individuelles d''accompagnement pour vos projets de menuiserie. Bénéficiez d''un suivi personnalisé pour la conception, la planification et la réalisation de vos projets. Idéal pour les projets complexes nécessitant des conseils techniques approfondis ou une aide à la résolution de problèmes spécifiques.'
+INSERT INTO activity (name, type, nb_credits, description)
+SELECT 'Accompagnement projet menuiserie', 'accompagnement', 4, 'Séances individuelles d''accompagnement pour vos projets de menuiserie. Bénéficiez d''un suivi personnalisé pour la conception, la planification et la réalisation de vos projets. Idéal pour les projets complexes nécessitant des conseils techniques approfondis ou une aide à la résolution de problèmes spécifiques.'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Accompagnement projet menuiserie');
 
 -- Couture activities
@@ -63,47 +63,47 @@ INSERT INTO activity (name, type, nb_credits, description)
 SELECT 'Électronique en autonomie', 'autonomie', 5, 'Accédez à l''espace électronique pour réparer, modifier ou créer vos projets électroniques. Utilisez les outils de soudure, composants et équipements de test disponibles. Idéal pour réparer vos appareils, créer des circuits ou apprendre l''électronique de manière autonome.'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Électronique en autonomie');
 
-INSERT INTO activity (name, type, nb_credits, description) 
-SELECT 'Repair Café', 'atelier', NULL, 'Le Repair Café est un atelier collaboratif où vous pouvez réparer vos objets du quotidien avec l''aide de bénévoles expérimentés. Apportez vos appareils électroniques, électroménagers ou autres objets à réparer. Venez apprendre à réparer plutôt que jeter, dans une ambiance conviviale et solidaire.'
+INSERT INTO activity (name, type, nb_credits, description, discipline) 
+SELECT 'Repair Café', 'cours', NULL, 'Le Repair Café est un atelier collaboratif où vous pouvez réparer vos objets du quotidien avec l''aide de bénévoles expérimentés. Apportez vos appareils électroniques, électroménagers ou autres objets à réparer. Venez apprendre à réparer plutôt que jeter, dans une ambiance conviviale et solidaire.', 'electronique'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Repair Café');
 
 -- Ateliers activities - Mercredi (Week 1-4)
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Travail du bois : Découpes et assemblages', 'atelier', 12, 'Apprenez les techniques de base de la menuiserie : découpes précises et assemblages traditionnels. Découvrez comment utiliser les outils manuels et électroportatifs pour réaliser vos premiers projets en bois.', 72
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Travail du bois : Découpes et assemblages', 'cours', 12, 'Apprenez les techniques de base de la menuiserie : découpes précises et assemblages traditionnels. Découvrez comment utiliser les outils manuels et électroportatifs pour réaliser vos premiers projets en bois.', 72, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Travail du bois : Découpes et assemblages');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation à la défonceuse', 'atelier', 12, 'Maîtrisez l''utilisation de la défonceuse, un outil essentiel en menuiserie. Apprenez les techniques de fraisage, de rainurage et de profilage pour donner forme à vos créations en bois.', 72
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation à la défonceuse', 'cours', 12, 'Maîtrisez l''utilisation de la défonceuse, un outil essentiel en menuiserie. Apprenez les techniques de fraisage, de rainurage et de profilage pour donner forme à vos créations en bois.', 72, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation à la défonceuse');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation tapisserie de mobilier', 'atelier', 12, 'Redonnez vie à vos meubles ! Apprenez les techniques de tapisserie traditionnelle : rembourrage, pose de tissus, techniques de finition. Transformez un meuble ancien en pièce unique.', 72
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation tapisserie de mobilier', 'cours', 12, 'Redonnez vie à vos meubles ! Apprenez les techniques de tapisserie traditionnelle : rembourrage, pose de tissus, techniques de finition. Transformez un meuble ancien en pièce unique.', 72, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation tapisserie de mobilier');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Formation au tour à bois', 'atelier', 15, 'Découvrez l''art du tournage sur bois. Apprenez à utiliser le tour à bois pour créer des objets cylindriques : bols, pieds de table, objets décoratifs. Technique précise et créative.', 90
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Formation au tour à bois', 'cours', 15, 'Découvrez l''art du tournage sur bois. Apprenez à utiliser le tour à bois pour créer des objets cylindriques : bols, pieds de table, objets décoratifs. Technique précise et créative.', 90, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Formation au tour à bois');
 
 -- Ateliers activities - Jeudi (Week 1-4)
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation couture / Débutant', 'atelier', 10, 'Premiers pas en couture ! Apprenez les bases : enfiler une machine, faire des points droits, des ourlets. Réalisez votre premier projet simple et repartez avec les fondamentaux.', 50
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation couture / Débutant', 'cours', 10, 'Premiers pas en couture ! Apprenez les bases : enfiler une machine, faire des points droits, des ourlets. Réalisez votre premier projet simple et repartez avec les fondamentaux.', 50, 'couture'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation couture / Débutant');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Créer ta planche à découper', 'atelier', 12, 'Fabriquez votre propre planche à découper en bois massif. Apprenez les techniques de finition alimentaire, de ponçage et d''entretien pour un objet durable et esthétique.', 72
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Créer ta planche à découper', 'cours', 12, 'Fabriquez votre propre planche à découper en bois massif. Apprenez les techniques de finition alimentaire, de ponçage et d''entretien pour un objet durable et esthétique.', 72, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Créer ta planche à découper');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation couture/Intermédiaire', 'atelier', 10, 'Perfectionnez vos compétences en couture. Apprenez des techniques plus avancées : fermetures éclair, poches, manches. Réalisez un projet plus complexe avec l''accompagnement d''un encadrant.', 50
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation couture/Intermédiaire', 'cours', 10, 'Perfectionnez vos compétences en couture. Apprenez des techniques plus avancées : fermetures éclair, poches, manches. Réalisez un projet plus complexe avec l''accompagnement d''un encadrant.', 50, 'couture'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation couture/Intermédiaire');
 
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation à assemblages traditionnels', 'atelier', 12, 'Découvrez les techniques d''assemblage traditionnel en menuiserie : tenons-mortaises, queues d''aronde, mi-bois. Apprenez à créer des assemblages solides et esthétiques sans vis ni clous.', 72
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation à assemblages traditionnels', 'cours', 12, 'Découvrez les techniques d''assemblage traditionnel en menuiserie : tenons-mortaises, queues d''aronde, mi-bois. Apprenez à créer des assemblages solides et esthétiques sans vis ni clous.', 72, 'menuiserie'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation à assemblages traditionnels');
 
 -- Ateliers activities - Samedi (Week 4)
-INSERT INTO activity (name, type, nb_credits, description, price) 
-SELECT 'Initiation au patronage', 'atelier', 15, 'Apprenez à créer vos propres patrons de couture. Découvrez comment prendre les mesures, tracer un patron de base et l''adapter à vos besoins. Base essentielle pour créer vos vêtements sur mesure.', 90
+INSERT INTO activity (name, type, nb_credits, description, price, discipline) 
+SELECT 'Initiation au patronage', 'cours', 15, 'Apprenez à créer vos propres patrons de couture. Découvrez comment prendre les mesures, tracer un patron de base et l''adapter à vos besoins. Base essentielle pour créer vos vêtements sur mesure.', 90, 'couture'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Initiation au patronage');
 
 -- Function to generate sessions for the next 4 weeks

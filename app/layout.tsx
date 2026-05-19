@@ -1,6 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
+import { Suspense } from "react";
+import { Footer } from "@/components/footer";
+import { Navigation } from "@/components/navigation";
+import { PwaRegistration } from "@/components/pwa-registration";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -12,9 +16,28 @@ export const metadata: Metadata = {
   title: "Manufacto Marseille",
   description:
     "Atelier partagé et multidisciplinaire au coeur de Marseille, ouvert à toutes celles et ceux qui veulent faire de leurs mains.",
-  icons: {
-    icon: "/assets/favicon.png",
+  manifest: "/manifest.webmanifest",
+  applicationName: "Manufacto",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Manufacto",
   },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/assets/favicon.png", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4a56dd",
 };
 
 const golosText = localFont({
@@ -26,8 +49,10 @@ const golosText = localFont({
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
   return (
     <html lang="fr" suppressHydrationWarning className={golosText.variable}>
@@ -40,7 +65,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex-1 flex flex-col">{children}</div>
+          <Suspense fallback={null}>
+            <Navigation />
+          </Suspense>
+          <div className="flex-1 flex flex-col">
+            {children}
+            {modal}
+          </div>
+          <Footer />
+          <PwaRegistration />
         </ThemeProvider>
       </body>
     </html>

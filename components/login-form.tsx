@@ -16,7 +16,7 @@ import { useState, useId } from "react";
 interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToSignUp?: () => void;
   onSwitchToForgotPassword?: () => void;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
   redirectTo?: string;
 }
 
@@ -37,6 +37,11 @@ export function LoginForm({
   const router = useRouter();
   const emailId = useId();
   const passwordId = useId();
+  const linkClass =
+    "font-semibold text-[#4a56dd] underline underline-offset-2 transition hover:text-[#2f3bcc]";
+  const inputClass =
+    "h-12 rounded-[14px] border-black/20 bg-white px-4 text-base text-black shadow-none placeholder:text-black/35 focus-visible:ring-[#4a56dd]";
+  const labelClass = "text-base font-semibold leading-none text-black/80";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,11 +57,11 @@ export function LoginForm({
       if (error) throw error;
       // Call onSuccess callback if provided, otherwise redirect
       if (onSuccess) {
-        onSuccess();
+        await onSuccess();
       } else if (redirectTo) {
         router.push(redirectTo);
       } else {
-        router.push("/");
+        router.push("/account");
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Une erreur s'est produite");
@@ -93,36 +98,41 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="border-0 shadow-none">
+      <Card className="border-0 bg-transparent shadow-none">
         <CardContent className="px-0">
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor={emailId}>E-mail</Label>
+                <Label htmlFor={emailId} className={labelClass}>
+                  E-mail
+                </Label>
                 <Input
                   id={emailId}
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="vous@exemple.com"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
                 />
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor={passwordId}>Mot de passe</Label>
+                  <Label htmlFor={passwordId} className={labelClass}>
+                    Mot de passe
+                  </Label>
                   {onSwitchToForgotPassword ? (
                     <button
                       type="button"
                       onClick={onSwitchToForgotPassword}
-                      className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                      className={cn("ml-auto inline-block text-sm", linkClass)}
                     >
                       Mot de passe oublié ?
                     </button>
                   ) : (
                     <Link
                       href="/auth/forgot-password"
-                      className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                      className={cn("ml-auto inline-block text-sm", linkClass)}
                     >
                       Mot de passe oublié ?
                     </Link>
@@ -134,49 +144,55 @@ export function LoginForm({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && (
+                <p className="rounded-[14px] bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {error}
+                </p>
+              )}
               {magicLinkSent && (
-                <p className="text-sm text-green-600">
+                <p className="rounded-[14px] bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
                   Un lien de connexion a été envoyé à votre adresse e-mail. Vérifiez votre boîte de réception.
                 </p>
               )}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="h-12 w-full rounded-[14px] bg-[#4a56dd] text-base font-semibold text-white shadow-none hover:bg-[#2f3bcc]"
+                disabled={isLoading}
+              >
                 {isLoading ? "Connexion..." : "Se connecter"}
               </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">Ou</span>
-                </div>
+              <div className="flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-black/45">
+                <span className="h-px flex-1 bg-black/20" />
+                <span>Ou</span>
+                <span className="h-px flex-1 bg-black/20" />
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full"
+                className="h-12 w-full rounded-[14px] border-black/25 bg-white text-base font-semibold text-black/80 shadow-none hover:bg-black/[0.04] hover:text-black"
                 disabled={isMagicLinkLoading || !email}
                 onClick={handleMagicLink}
               >
                 {isMagicLinkLoading ? "Envoi..." : "Se connecter avec un lien magique"}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <div className="mt-6 text-center text-base text-black/70">
               Vous n&apos;avez pas de compte ?{" "}
               {onSwitchToSignUp ? (
                 <button
                   type="button"
                   onClick={onSwitchToSignUp}
-                  className="underline underline-offset-4 hover:text-primary"
+                  className={linkClass}
                 >
                   S&apos;inscrire
                 </button>
               ) : (
                 <Link
                   href="/auth/sign-up"
-                  className="underline underline-offset-4"
+                  className={linkClass}
                 >
                   S&apos;inscrire
                 </Link>

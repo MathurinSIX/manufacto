@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
@@ -10,6 +10,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,9 +21,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ReservationAuthStep } from "@/components/reservation-auth-step";
+import {
+  scrollableDialogBodyClass,
+  scrollableDialogContentClass,
+} from "@/components/reservation-modal";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { cancelRegistration } from "@/app/account/actions";
+import { cancelRegistration, registerForSession } from "@/app/account/actions";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -194,23 +200,37 @@ type SessionRow = {
 interface ActivitySessionPickerProps {
   activityId?: string;
   activityTitle: string;
+  activityType?: string | null;
+  initialSessionId?: string | null;
+  defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   credits?: number | null;
   price?: number | null;
+  squareProductId?: string | null;
   isLoggedIn?: boolean;
+  backOnClose?: boolean;
 }
 
 export function ActivitySessionPicker({
   activityId,
   activityTitle,
+  activityType,
+  initialSessionId,
+  defaultOpen = false,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   credits,
   price,
+  squareProductId,
   isLoggedIn,
+  backOnClose = false,
 }: ActivitySessionPickerProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
+  const isCours = activityType === "cours";
+  const isDiscoveryPack = activityType === "pack_decouverte";
+  const isFixedSessionActivity =
+    isCours || isDiscoveryPack;
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -228,59 +248,88 @@ export function ActivitySessionPicker({
   const [userId, setUserId] = useState<string | null>(null);
   const [userCredits, setUserCredits] = useState<number>(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasAppliedQuerySession, setHasAppliedQuerySession] = useState(false);
-  const [hasAttemptedQueryOpen, setHasAttemptedQueryOpen] = useState(false);
+  const [appliedInitialSessionId, setAppliedInitialSessionId] = useState<
+    string | null
+  >(null);
+  const [attemptedInitialSessionId, setAttemptedInitialSessionId] = useState<
+    string | null
+  >(null);
   // Map of session_id -> registration_id for user's active registrations
   const [userRegistrations, setUserRegistrations] = useState<Record<string, string>>({});
+  const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const squareCatalogProductId = squareProductId?.trim() || null;
+  const effectiveIsLoggedIn = !!isLoggedIn || !!userId;
+  const normalizedCredits = credits ?? null;
+  const normalizedPrice = price ?? null;
+  const hasSelectedSession = !!selectedSessionId;
+  const isSquareOnlyActivity = isDiscoveryPack;
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setShowAuthStep(false);
+    }
+    if (!nextOpen && backOnClose) {
+      router.back();
+    }
+  };
+
+  const refreshUser = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    const nextUserId = data.user?.id ?? null;
+    setUserId(nextUserId);
+
+    if (!nextUserId) {
+      setUserCredits(0);
+      return null;
+    }
+
+    const { data: creditsData, error } = await supabase
+      .from("credit")
+      .select("amount")
+      .eq("user_id", nextUserId);
+
+    if (error) {
+      console.error("Error fetching credits:", error);
+      setUserCredits(0);
+      return nextUserId;
+    }
+
+    if (creditsData && Array.isArray(creditsData)) {
+      const totalCredits = creditsData.reduce((sum, row) => {
+        let amount = 0;
+        if (row.amount != null) {
+          if (typeof row.amount === "number") {
+            amount = row.amount;
+          } else if (typeof row.amount === "string") {
+            amount = parseFloat(row.amount) || 0;
+          }
+        }
+        return sum + amount;
+      }, 0);
+      setUserCredits(totalCredits);
+    } else {
+      setUserCredits(0);
+    }
+
+    return nextUserId;
+  }, [supabase]);
 
   useEffect(() => {
     let active = true;
     const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
+      const nextUserId = await refreshUser();
       if (!active) return;
-      setUserId(data.user?.id ?? null);
-      
-      // Fetch user credits if logged in
-      if (data.user?.id) {
-        const { data: creditsData, error } = await supabase
-          .from("credit")
-          .select("amount")
-          .eq("user_id", data.user.id);
-        
-        if (!active) return;
-        
-        if (error) {
-          console.error("Error fetching credits:", error);
-          setUserCredits(0);
-        } else if (creditsData && Array.isArray(creditsData)) {
-          const totalCredits = creditsData.reduce((sum, row) => {
-            let amount = 0;
-            if (row.amount != null) {
-              if (typeof row.amount === 'number') {
-                amount = row.amount;
-              } else if (typeof row.amount === 'string') {
-                amount = parseFloat(row.amount) || 0;
-              }
-            }
-            return sum + amount;
-          }, 0);
-          setUserCredits(totalCredits);
-        } else {
-          setUserCredits(0);
-        }
-      } else {
-        setUserCredits(0);
-      }
+      setUserId(nextUserId);
     };
     fetchUser();
     return () => {
       active = false;
     };
-  }, [supabase]);
+  }, [refreshUser]);
 
   useEffect(() => {
     if (!open || !activityId) return;
@@ -398,8 +447,9 @@ export function ActivitySessionPicker({
       setSelectedSessionId(null);
       return;
     }
+    if (isCours) return;
     setSelectedDate((current) => current ?? new Date(sessions[0].start_ts));
-  }, [sessions]);
+  }, [sessions, isCours]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -409,27 +459,37 @@ export function ActivitySessionPicker({
     }
   }, [selectedDate, sessions]);
 
+  const requestedSessionId = initialSessionId ?? searchParams?.get("session");
+
   useEffect(() => {
-    if (hasAppliedQuerySession || !sessions.length) return;
-    const sessionFromQuery = searchParams?.get("session");
-    if (!sessionFromQuery) return;
+    if (
+      !requestedSessionId ||
+      appliedInitialSessionId === requestedSessionId ||
+      !sessions.length
+    ) {
+      return;
+    }
     const matchedSession = sessions.find(
-      (session) => session.id === sessionFromQuery,
+      (session) => session.id === requestedSessionId,
     );
     if (!matchedSession) return;
-    setHasAppliedQuerySession(true);
+    setAppliedInitialSessionId(requestedSessionId);
     setSelectedDate(new Date(matchedSession.start_ts));
     setSelectedSessionId(matchedSession.id);
     setOpen(true);
-  }, [sessions, searchParams, hasAppliedQuerySession, setOpen]);
+  }, [sessions, requestedSessionId, appliedInitialSessionId, setOpen]);
 
   useEffect(() => {
-    if (hasAttemptedQueryOpen || !activityId) return;
-    const sessionFromQuery = searchParams?.get("session");
-    if (!sessionFromQuery) return;
-    setHasAttemptedQueryOpen(true);
+    if (
+      !activityId ||
+      !requestedSessionId ||
+      attemptedInitialSessionId === requestedSessionId
+    ) {
+      return;
+    }
+    setAttemptedInitialSessionId(requestedSessionId);
     setOpen(true);
-  }, [activityId, searchParams, hasAttemptedQueryOpen, setOpen]);
+  }, [activityId, requestedSessionId, attemptedInitialSessionId, setOpen]);
 
   const availableDays = useMemo(() => {
     if (!sessions.length) return new Set<string>();
@@ -440,6 +500,12 @@ export function ActivitySessionPicker({
   }, [sessions]);
 
   const sessionsForSelectedDate = useMemo(() => {
+    if (isCours) {
+      return [...sessions].sort(
+        (a, b) =>
+          new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime(),
+      );
+    }
     if (!selectedDate) return [];
     return sessions
       .filter((session) =>
@@ -449,23 +515,52 @@ export function ActivitySessionPicker({
         (a, b) =>
           new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime(),
       );
-  }, [selectedDate, sessions]);
+  }, [selectedDate, sessions, isCours]);
+
+  const selectedSession = useMemo(
+    () =>
+      selectedSessionId
+        ? sessions.find((session) => session.id === selectedSessionId) ?? null
+        : null,
+    [selectedSessionId, sessions],
+  );
 
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
+    setShowAuthStep(false);
     setSuccessMessage(null);
     setErrorMessage(null);
   };
 
-  const handleRegister = async (paymentType: "credits" | "stripe") => {
-    if (!selectedSessionId) return;
-    if (!userId) {
-      const params = new URLSearchParams();
-      params.set("next", `/activities?session=${selectedSessionId}`);
-      router.push(`/auth/login?${params.toString()}`);
+  const handleAuthRequired = () => {
+    if (!selectedSessionId) {
+      setErrorMessage("Sélectionnez une session avant de réserver.");
       return;
     }
-    
+    setShowAuthStep(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
+  const handleAuthSuccess = async () => {
+    const nextUserId = await refreshUser();
+    if (!nextUserId) {
+      return;
+    }
+    setShowAuthStep(false);
+    setSuccessMessage(
+      "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
+    );
+  };
+
+  const handleRegister = async (paymentType: "credits" | "stripe") => {
+    if (!userId) {
+      handleAuthRequired();
+      return;
+    }
+
+    if (!selectedSessionId) return;
+
     // Prevent double registration
     if (userRegistrations[selectedSessionId]) {
       setErrorMessage("Vous êtes déjà inscrit à cette session.");
@@ -475,23 +570,18 @@ export function ActivitySessionPicker({
     setIsRegistering(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    const { data, error } = await supabase
-      .from("registration")
-      .insert({ session_id: selectedSessionId, user_id: userId, payment_type: paymentType })
-      .select("id")
-      .single();
+    const result = await registerForSession(selectedSessionId, paymentType);
     setIsRegistering(false);
-    if (error) {
-      console.error(error);
-      setErrorMessage("Votre inscription n'a pas pu être enregistrée.");
+    if (result.error) {
+      setErrorMessage(result.error);
       return;
     }
     
     // Update user registrations state
-    if (data?.id) {
+    if (result.registrationId) {
       setUserRegistrations(prev => ({
         ...prev,
-        [selectedSessionId]: data.id,
+        [selectedSessionId]: result.registrationId,
       }));
     }
     
@@ -533,7 +623,7 @@ export function ActivitySessionPicker({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {controlledOpen === undefined && (
         <DialogTrigger asChild>
           <Button
@@ -548,33 +638,62 @@ export function ActivitySessionPicker({
         </DialogTrigger>
       )}
 
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent
+        className={cn(
+          scrollableDialogContentClass,
+          showAuthStep ? "sm:max-w-4xl" : "sm:max-w-3xl",
+        )}
+      >
+        <div className={cn(scrollableDialogBodyClass, "p-6")}>
         <DialogHeader>
           <DialogTitle>Sélectionnez une session</DialogTitle>
           <DialogDescription>
-            Choisissez une date pour {activityTitle}. Les horaires sont affichés
-            en heure locale.
+            {isFixedSessionActivity
+              ? `Choisissez une session pour ${activityTitle}.`
+              : `Choisissez une date pour ${activityTitle}. Les horaires sont affichés en heure locale.`}
           </DialogDescription>
         </DialogHeader>
+
+        {selectedSession ? (
+          <div className="my-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+              Cours sélectionné
+            </p>
+            <p className="mt-1 font-semibold text-foreground">
+              {activityTitle}
+            </p>
+            <p className="mt-1 text-sm capitalize text-muted-foreground">
+              {dateFormatter.format(new Date(selectedSession.start_ts))} ·{" "}
+              {timeFormatter.format(new Date(selectedSession.start_ts))} -{" "}
+              {timeFormatter.format(new Date(selectedSession.end_ts))}
+            </p>
+          </div>
+        ) : null}
 
         {!activityId ? (
           <p className="text-sm text-muted-foreground">
             Cette activité n&apos;est pas encore disponible à la réservation.
           </p>
         ) : (
-          <div className="grid gap-6 md:grid-cols-[320px,1fr]">
-            <div className="rounded-lg border">
-              <SimpleCalendar
-                visibleMonth={visibleMonth}
-                onMonthChange={setVisibleMonth}
-                availableDays={availableDays}
-                selectedDate={selectedDate}
-                onSelect={(date) => {
-                  setSelectedDate(date);
-                  setSelectedSessionId(null);
-                }}
-              />
-            </div>
+          <div
+            className={cn(
+              isCours ? "space-y-4" : "grid gap-6 md:grid-cols-[320px,1fr]",
+            )}
+          >
+            {!isCours ? (
+              <div className="rounded-lg border">
+                <SimpleCalendar
+                  visibleMonth={visibleMonth}
+                  onMonthChange={setVisibleMonth}
+                  availableDays={availableDays}
+                  selectedDate={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    setSelectedSessionId(null);
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="space-y-4">
               {isLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -686,8 +805,9 @@ export function ActivitySessionPicker({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Aucune session prévue pour cette date. Sélectionnez une autre
-                  journée disponible.
+                  {isFixedSessionActivity
+                    ? "Aucune session n'est disponible pour le moment."
+                    : "Aucune session prévue pour cette date. Sélectionnez une autre journée disponible."}
                 </p>
               )}
               {errorMessage && (
@@ -700,8 +820,12 @@ export function ActivitySessionPicker({
           </div>
         )}
 
-        <DialogFooter className="flex-col gap-3 sm:flex-row">
-          {isLoggedIn && selectedSessionId && (
+        {showAuthStep && selectedSessionId && !effectiveIsLoggedIn ? (
+          <ReservationAuthStep onSuccess={handleAuthSuccess} />
+        ) : null}
+
+        <DialogFooter className="mt-4 flex-col gap-3 sm:flex-row">
+          {effectiveIsLoggedIn && selectedSessionId && (
             <>
               {userRegistrations[selectedSessionId] ? (
                 // User is already registered - show cancel button
@@ -716,52 +840,102 @@ export function ActivitySessionPicker({
               ) : (
                 // User is not registered - show register buttons
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  {credits !== null && (
+                  {isSquareOnlyActivity && squareCatalogProductId && (
+                    <SquareCheckoutButton
+                      productId={squareCatalogProductId}
+                      activityId={activityId}
+                      sessionId={selectedSessionId ?? undefined}
+                      reservationStart={selectedSession?.start_ts}
+                      reservationEnd={selectedSession?.end_ts}
+                      isLoggedIn={effectiveIsLoggedIn}
+                      className="w-full sm:w-auto"
+                    >
+                      Payer et réserver
+                    </SquareCheckoutButton>
+                  )}
+                  {!isSquareOnlyActivity && normalizedCredits !== null && (
                     <>
                       <Button
                         variant="default"
                         className="w-full sm:w-auto"
-                        disabled={isRegistering || userCredits < credits}
+                        disabled={isRegistering || userCredits < normalizedCredits}
                         onClick={() => handleRegister("credits")}
                       >
-                        {isRegistering ? "Inscription..." : `Réserver pour ${credits} crédits`}
+                        {isRegistering ? "Inscription..." : `Réserver pour ${normalizedCredits} crédits`}
                       </Button>
-                      {userCredits < credits && (
+                      {userCredits < normalizedCredits && (
                         <p className="text-xs text-destructive">
-                          Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {credits}.
+                          Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {normalizedCredits}.
                         </p>
                       )}
                     </>
                   )}
-                  {price !== null && (
-                    <Button
-                      variant="outline"
+                  {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId && (
+                    <SquareCheckoutButton
+                      productId={squareCatalogProductId}
+                      activityId={activityId}
+                      sessionId={selectedSessionId ?? undefined}
+                      reservationStart={selectedSession?.start_ts}
+                      reservationEnd={selectedSession?.end_ts}
+                      isLoggedIn={effectiveIsLoggedIn}
                       className="w-full sm:w-auto"
-                      disabled={isRegistering}
-                      onClick={() => handleRegister("stripe")}
                     >
-                      {isRegistering ? "Inscription..." : `Réserver pour ${price.toFixed(2)}€`}
-                    </Button>
+                      {`Réserver pour ${normalizedPrice.toFixed(2)}€`}
+                    </SquareCheckoutButton>
                   )}
                 </div>
               )}
             </>
           )}
-          {isLoggedIn && (!credits && !price) && selectedSessionId && !userRegistrations[selectedSessionId] && (
+          {effectiveIsLoggedIn && !isSquareOnlyActivity && (!normalizedCredits && !normalizedPrice) && selectedSessionId && !userRegistrations[selectedSessionId] && (
             <Button
               className="w-full sm:w-auto"
               disabled={isRegistering}
-              onClick={() => handleRegister("stripe")}
+              onClick={() => handleRegister("credits")}
             >
               {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
             </Button>
           )}
-          {!userId && (
-            <p className="text-xs text-muted-foreground">
-              Connectez-vous pour finaliser votre inscription.
-            </p>
-          )}
+          {!effectiveIsLoggedIn && hasSelectedSession && !showAuthStep ? (
+            <div className="flex w-full flex-col gap-2 sm:w-auto">
+              {isSquareOnlyActivity && squareCatalogProductId ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAuthRequired()}
+                >
+                  Payer et réserver
+                </Button>
+              ) : null}
+              {!isSquareOnlyActivity && normalizedCredits !== null ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAuthRequired()}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {`Réserver pour ${normalizedCredits} crédits`}
+                </Button>
+              ) : null}
+              {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAuthRequired()}
+                >
+                  {`Acheter et réserver pour ${normalizedPrice.toFixed(2)}€`}
+                </Button>
+              ) : null}
+              {!isSquareOnlyActivity && normalizedCredits === null && normalizedPrice === null ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAuthRequired()}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  Réserver
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
