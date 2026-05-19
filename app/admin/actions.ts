@@ -94,6 +94,18 @@ async function listAssetImages(directory: string, publicPath: string): Promise<F
   return nestedImages.flat().sort((a, b) => a.label.localeCompare(b.label));
 }
 
+async function countAdminUsers(adminClient: ReturnType<typeof getAdminClient>) {
+  const { data, error } = await adminClient.auth.admin.listUsers();
+  if (error) {
+    return { error: error.message, count: 0 };
+  }
+  let count = 0;
+  for (const u of data.users) {
+    if (u.app_metadata?.role === "admin") count++;
+  }
+  return { count, error: null };
+}
+
 // Check if user is admin
 async function checkAdmin() {
   const supabase = await createClient();
@@ -436,16 +448,12 @@ export async function deleteUser(userId: string) {
   }
 
   if (target.user.app_metadata?.role === "admin") {
-    const { data: allUsers, error: listError } =
-      await adminClient.auth.admin.listUsers();
+    const { count: adminCount, error: countError } =
+      await countAdminUsers(adminClient);
 
-    if (listError) {
-      return { error: listError.message };
+    if (countError) {
+      return { error: countError };
     }
-
-    const adminCount =
-      allUsers?.users?.filter((user) => user.app_metadata?.role === "admin")
-        .length ?? 0;
 
     if (adminCount <= 1) {
       return { error: "Impossible de supprimer le dernier administrateur" };
