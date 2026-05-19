@@ -624,6 +624,14 @@ export function PracticeReservationPicker({
     // Stay on this page with the modal open. Hide the auth step so the
     // "Payer et réserver" button (or credit-based "Réserver" button) is
     // shown again, ready for the user to manually finalize the checkout.
+    //
+    // NOTE: We intentionally do NOT call `router.refresh()` here. The parent
+    // page (e.g. /pratique-libre) wraps its server content in <Suspense> with
+    // `unstable_noStore()`, so a refresh re-suspends the tree and unmounts
+    // this modal mid-flow — which looks like the page "reloads" and closes
+    // the modal a few milliseconds after sign-up. The picker already tracks
+    // the new session via its own `userId` state from `refreshUser()`, so the
+    // server doesn't need to re-render for the checkout button to appear.
     setShowAuthStep(false);
     setErrorMessage(null);
     setSuccessMessage(
@@ -631,7 +639,6 @@ export function PracticeReservationPicker({
         ? "Compte créé. Cliquez sur « Payer et réserver le pack découverte » pour finaliser le paiement."
         : "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
     );
-    router.refresh();
   };
 
   const toggleHourSelection = (key: string) => {
