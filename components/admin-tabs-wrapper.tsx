@@ -16,6 +16,7 @@ const validTabs = [
   "users",
   "courses",
   "free-practice",
+  "discovery-packs",
   "visits",
   "newsletter",
   "square",
@@ -33,7 +34,8 @@ const FREE_PRACTICE_ACTIVITY_TYPES = [
   "cuisson",
 ];
 const FREE_PRACTICE_SESSION_ACTIVITY_TYPES = FREE_PRACTICE_ACTIVITY_TYPES;
-type SessionArea = "courses" | "free-practice";
+const DISCOVERY_PACK_ACTIVITY_TYPES = ["pack_decouverte"];
+type SessionArea = "courses" | "free-practice" | "discovery-packs";
 
 function parseCoursesSubTab(subTab: string | null): CoursesSubTab {
   if (subTab === "sessions") return "sessions";
@@ -52,7 +54,11 @@ export function AdminTabsWrapper() {
 
   const getAddSessionsArea = useCallback((): SessionArea | null => {
     const addSessionsForParam = searchParams.get("addSessionsFor");
-    if (addSessionsForParam === "courses" || addSessionsForParam === "free-practice") {
+    if (
+      addSessionsForParam === "courses" ||
+      addSessionsForParam === "free-practice" ||
+      addSessionsForParam === "discovery-packs"
+    ) {
       return addSessionsForParam;
     }
     if (searchParams.get("tab") === "add-sessions") {
@@ -75,6 +81,13 @@ export function AdminTabsWrapper() {
         tab: "free-practice",
         coursesSubTab: "cours" as CoursesSubTab,
         freePracticeSubTab: "sessions" as FreePracticeSubTab,
+      };
+    }
+    if (addSessionsArea === "discovery-packs") {
+      return {
+        tab: "discovery-packs",
+        coursesSubTab: "cours" as CoursesSubTab,
+        freePracticeSubTab: "pratique-libre" as FreePracticeSubTab,
       };
     }
 
@@ -138,12 +151,16 @@ export function AdminTabsWrapper() {
       if (addSessionsArea === "courses") {
         setActiveTab((current) => current === "courses" ? current : "courses");
         setCoursesSubTab((current) => current === "sessions" ? current : "sessions");
-      } else {
+      } else if (addSessionsArea === "free-practice") {
         setActiveTab((current) =>
           current === "free-practice" ? current : "free-practice",
         );
         setFreePracticeSubTab((current) =>
           current === "sessions" ? current : "sessions",
+        );
+      } else {
+        setActiveTab((current) =>
+          current === "discovery-packs" ? current : "discovery-packs",
         );
       }
       return;
@@ -226,11 +243,15 @@ export function AdminTabsWrapper() {
       setCoursesSubTab("sessions");
       params.set("tab", "courses");
       params.set("subTab", "sessions");
-    } else {
+    } else if (area === "free-practice") {
       setActiveTab("free-practice");
       setFreePracticeSubTab("sessions");
       params.set("tab", "free-practice");
       params.set("subTab", "sessions");
+    } else {
+      setActiveTab("discovery-packs");
+      params.set("tab", "discovery-packs");
+      params.delete("subTab");
     }
 
     syncUrl(params);
@@ -246,9 +267,12 @@ export function AdminTabsWrapper() {
     if (area === "courses") {
       params.set("tab", "courses");
       params.set("subTab", "sessions");
-    } else {
+    } else if (area === "free-practice") {
       params.set("tab", "free-practice");
       params.set("subTab", "sessions");
+    } else {
+      params.set("tab", "discovery-packs");
+      params.delete("subTab");
     }
 
     syncUrl(params);
@@ -256,7 +280,7 @@ export function AdminTabsWrapper() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-3 lg:grid-cols-6">
+      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-4 lg:grid-cols-7">
         <TabsTrigger
           value="users"
           className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
@@ -274,6 +298,12 @@ export function AdminTabsWrapper() {
           className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
         >
           pratique libre
+        </TabsTrigger>
+        <TabsTrigger
+          value="discovery-packs"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          packs découverte
         </TabsTrigger>
         <TabsTrigger
           value="visits"
@@ -385,6 +415,29 @@ export function AdminTabsWrapper() {
             )}
           </TabsContent>
         </Tabs>
+      </TabsContent>
+      <TabsContent value="discovery-packs" className="mt-6">
+        {addSessionsFor === "discovery-packs" ? (
+          <div className="space-y-6">
+            <button
+              type="button"
+              onClick={handleBackToSessions}
+              className="text-sm font-semibold text-[#4a56dd] hover:underline"
+            >
+              retour aux sessions
+            </button>
+            <AdminAddActivitiesTab
+              activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
+              allowManualRepeat
+            />
+          </div>
+        ) : (
+          <AdminActivitiesTab
+            activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
+            title="sessions des packs découverte"
+            onAddSessions={() => handleAddSessions("discovery-packs")}
+          />
+        )}
       </TabsContent>
       <TabsContent value="visits" className="mt-6">
         <AdminVisitsTab />

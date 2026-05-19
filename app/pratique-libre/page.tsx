@@ -174,8 +174,7 @@ const electroniqueOffers: PracticeOfferInput[] = [
 
 const discoveryPacks = [
   {
-    productId: "decouverte-couture",
-    activityName: "Couture en autonomie encadrée",
+    discipline: "couture",
     title: "Pack découverte couture",
     price: "15€",
     line1: "2h de couture en",
@@ -186,8 +185,7 @@ const discoveryPacks = [
     linkClass: "text-[#4a56dd]",
   },
   {
-    productId: "decouverte-menuiserie",
-    activityName: "Menuiserie en autonomie encadrée",
+    discipline: "menuiserie",
     title: "Pack découverte menuiserie",
     price: "30€",
     line1: "2h de menuiserie en",
@@ -198,8 +196,7 @@ const discoveryPacks = [
     linkClass: "text-[#f56800]",
   },
 ] satisfies {
-  productId: string;
-  activityName: PracticeActivityName;
+  discipline: "couture" | "menuiserie";
   title: string;
   price: string;
   line1: string;
@@ -304,6 +301,20 @@ async function PratiqueLibreContent() {
     console.error("Error fetching practice activities", error);
   }
 
+  const { data: discoveryPackActivities, error: discoveryPackError } = await supabase
+    .from("activity")
+    .select("id, discipline, square_product_id")
+    .eq("type", "pack_decouverte")
+    .in(
+      "discipline",
+      discoveryPacks.map((pack) => pack.discipline),
+    )
+    .is("deleted_at", null);
+
+  if (discoveryPackError) {
+    console.error("Error fetching discovery pack activities", discoveryPackError);
+  }
+
   const activities = practiceActivities ?? [];
 
   const activityIdsByName = new Map<PracticeActivityName, string>(
@@ -315,6 +326,12 @@ async function PratiqueLibreContent() {
         activity.name as PracticeActivityName,
         activity.id,
       ]) ?? [],
+  );
+  const discoveryActivityIdsByDiscipline = new Map(
+    (discoveryPackActivities ?? []).map((activity) => [
+      activity.discipline,
+      activity,
+    ]),
   );
 
   const activityIds = [...activityIdsByName.values()];
@@ -407,11 +424,12 @@ async function PratiqueLibreContent() {
             </div>
             <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
               {discoveryPacks.map((pack) => {
-                const reservationActivityId = activityIdsByName.get(pack.activityName);
+                const activity = discoveryActivityIdsByDiscipline.get(pack.discipline);
+                const squareProductId = activity?.square_product_id ?? null;
 
                 return (
                   <div
-                    key={pack.productId}
+                    key={pack.discipline}
                     className={`flex flex-col items-center justify-center rounded-[14px] border px-4 py-3 text-center ${pack.borderClass} ${pack.cardClass}`}
                   >
                     <p className={`text-[34px] leading-none ${pack.priceClass}`}>
@@ -423,17 +441,19 @@ async function PratiqueLibreContent() {
                     <p className="text-lg leading-tight text-black/75">
                       {pack.line2}
                     </p>
-                    {reservationActivityId ? (
+                    {activity && squareProductId ? (
                       <DiscoveryPackReservationButton
-                        activityId={reservationActivityId}
+                        activityId={activity.id}
                         activityTitle={pack.title}
-                        productId={pack.productId}
+                        squareProductId={squareProductId}
                         isLoggedIn={!!user}
                         label="Réserver"
                         className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
                       />
                     ) : (
-                      <p className="mt-2 text-xs text-black/60">Créneaux indisponibles</p>
+                      <p className="mt-2 text-xs text-black/60">
+                        {activity ? "Produit Square manquant" : "Créneaux indisponibles"}
+                      </p>
                     )}
                   </div>
                 );

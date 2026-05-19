@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { NAV_LINKS } from "@/lib/nav-links";
 import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
+import { HashLink } from "@/components/hash-link";
 import { createClient } from "@/lib/supabase/server";
 import { unstable_noStore } from "next/cache";
 
@@ -46,9 +47,9 @@ export async function Navigation() {
               {item.subLinks?.length ? (
                 <div className="invisible absolute left-1/2 top-full z-20 flex min-w-[150px] -translate-x-1/2 flex-col gap-1 rounded-xl bg-white px-4 py-3 text-sm leading-tight text-black/55 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
                   {item.subLinks.map((subLink) => (
-                    <Link key={subLink.href} href={subLink.href} className="hover:text-[#4a56dd]">
+                    <HashLink key={subLink.href} href={subLink.href} className="hover:text-[#4a56dd]">
                       {subLink.label}
-                    </Link>
+                    </HashLink>
                   ))}
                 </div>
               ) : null}

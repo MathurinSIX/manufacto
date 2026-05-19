@@ -227,6 +227,9 @@ export function ActivitySessionPicker({
   backOnClose = false,
 }: ActivitySessionPickerProps) {
   const isCours = activityType === "cours";
+  const isDiscoveryPack = activityType === "pack_decouverte";
+  const isFixedSessionActivity =
+    isCours || isDiscoveryPack;
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -263,6 +266,7 @@ export function ActivitySessionPicker({
   const normalizedCredits = credits ?? null;
   const normalizedPrice = price ?? null;
   const hasSelectedSession = !!selectedSessionId;
+  const isSquareOnlyActivity = isDiscoveryPack;
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (!nextOpen) {
@@ -645,14 +649,14 @@ export function ActivitySessionPicker({
         <DialogHeader>
           <DialogTitle>Sélectionnez une session</DialogTitle>
           <DialogDescription>
-            {isCours
+            {isFixedSessionActivity
               ? `Choisissez une session pour ${activityTitle}.`
               : `Choisissez une date pour ${activityTitle}. Les horaires sont affichés en heure locale.`}
           </DialogDescription>
         </DialogHeader>
 
         {selectedSession ? (
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <div className="my-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">
               Cours sélectionné
             </p>
@@ -802,7 +806,7 @@ export function ActivitySessionPicker({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  {isCours
+                  {isFixedSessionActivity
                     ? "Aucune session n'est disponible pour le moment."
                     : "Aucune session prévue pour cette date. Sélectionnez une autre journée disponible."}
                 </p>
@@ -821,7 +825,7 @@ export function ActivitySessionPicker({
           <ReservationAuthStep onSuccess={handleAuthSuccess} />
         ) : null}
 
-        <DialogFooter className="flex-col gap-3 sm:flex-row">
+        <DialogFooter className="mt-4 flex-col gap-3 sm:flex-row">
           {effectiveIsLoggedIn && selectedSessionId && (
             <>
               {userRegistrations[selectedSessionId] ? (
@@ -837,7 +841,20 @@ export function ActivitySessionPicker({
               ) : (
                 // User is not registered - show register buttons
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  {normalizedCredits !== null && (
+                  {isSquareOnlyActivity && squareCatalogProductId && (
+                    <SquareCheckoutButton
+                      productId={squareCatalogProductId}
+                      activityId={activityId}
+                      sessionId={selectedSessionId ?? undefined}
+                      reservationStart={selectedSession?.start_ts}
+                      reservationEnd={selectedSession?.end_ts}
+                      isLoggedIn={effectiveIsLoggedIn}
+                      className="w-full sm:w-auto"
+                    >
+                      Payer et réserver
+                    </SquareCheckoutButton>
+                  )}
+                  {!isSquareOnlyActivity && normalizedCredits !== null && (
                     <>
                       <Button
                         variant="default"
@@ -854,11 +871,13 @@ export function ActivitySessionPicker({
                       )}
                     </>
                   )}
-                  {normalizedPrice !== null && squareCatalogProductId && (
+                  {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId && (
                     <SquareCheckoutButton
                       productId={squareCatalogProductId}
                       activityId={activityId}
                       sessionId={selectedSessionId ?? undefined}
+                      reservationStart={selectedSession?.start_ts}
+                      reservationEnd={selectedSession?.end_ts}
                       isLoggedIn={effectiveIsLoggedIn}
                       className="w-full sm:w-auto"
                     >
@@ -869,7 +888,7 @@ export function ActivitySessionPicker({
               )}
             </>
           )}
-          {effectiveIsLoggedIn && (!normalizedCredits && !normalizedPrice) && selectedSessionId && !userRegistrations[selectedSessionId] && (
+          {effectiveIsLoggedIn && !isSquareOnlyActivity && (!normalizedCredits && !normalizedPrice) && selectedSessionId && !userRegistrations[selectedSessionId] && (
             <Button
               className="w-full sm:w-auto"
               disabled={isRegistering}
@@ -880,7 +899,15 @@ export function ActivitySessionPicker({
           )}
           {!effectiveIsLoggedIn && hasSelectedSession && !showAuthStep ? (
             <div className="flex w-full flex-col gap-2 sm:w-auto">
-              {normalizedCredits !== null ? (
+              {isSquareOnlyActivity && squareCatalogProductId ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => handleAuthRequired()}
+                >
+                  Payer et réserver
+                </Button>
+              ) : null}
+              {!isSquareOnlyActivity && normalizedCredits !== null ? (
                 <Button
                   className="w-full sm:w-auto"
                   onClick={() => handleAuthRequired()}
@@ -889,7 +916,7 @@ export function ActivitySessionPicker({
                   {`Réserver pour ${normalizedCredits} crédits`}
                 </Button>
               ) : null}
-              {normalizedPrice !== null && squareCatalogProductId ? (
+              {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId ? (
                 <Button
                   className="w-full sm:w-auto"
                   onClick={() => handleAuthRequired()}
@@ -897,7 +924,7 @@ export function ActivitySessionPicker({
                   {`Acheter et réserver pour ${normalizedPrice.toFixed(2)}€`}
                 </Button>
               ) : null}
-              {normalizedCredits === null && normalizedPrice === null ? (
+              {!isSquareOnlyActivity && normalizedCredits === null && normalizedPrice === null ? (
                 <Button
                   className="w-full sm:w-auto"
                   onClick={() => handleAuthRequired()}

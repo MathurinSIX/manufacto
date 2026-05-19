@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-import { PracticeReservationModal } from "@/components/practice-reservation-modal";
+import { ActivitySessionPicker } from "@/components/activity-session-picker";
 
 type DiscoveryPackReservationButtonProps = {
   activityId: string;
   activityTitle: string;
-  productId: string;
+  squareProductId: string;
   isLoggedIn?: boolean;
   className?: string;
   label?: string;
@@ -16,7 +16,7 @@ type DiscoveryPackReservationButtonProps = {
 export function DiscoveryPackReservationButton({
   activityId,
   activityTitle,
-  productId,
+  squareProductId,
   isLoggedIn = false,
   className,
   label = "sélectionner",
@@ -33,13 +33,13 @@ export function DiscoveryPackReservationButton({
         {label}
       </button>
       {open ? (
-        <PracticeReservationModal
+        <ActivitySessionPicker
           open={open}
           onOpenChange={setOpen}
           activityId={activityId}
           activityTitle={activityTitle}
-          squareProductId={productId}
-          fixedHourCount={2}
+          activityType="pack_decouverte"
+          squareProductId={squareProductId}
           isLoggedIn={isLoggedIn}
         />
       ) : null}

@@ -10,6 +10,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import { HashLink } from "@/components/hash-link";
 import { NAV_LINKS } from "@/lib/nav-links";
 
 type MobileNavDrawerProps = {
@@ -43,12 +44,12 @@ export function MobileNavDrawer({ showadminLink = false }: MobileNavDrawerProps)
                   <div className="mt-2 space-y-2 pl-4">
                     {link.subLinks.map((subLink) => (
                       <SheetClose asChild key={subLink.href}>
-                        <Link
+                        <HashLink
                           href={subLink.href}
                           className="block text-sm text-foreground/55 transition-colors hover:text-foreground"
                         >
                           {subLink.label}
-                        </Link>
+                        </HashLink>
                       </SheetClose>
                     ))}
                   </div>

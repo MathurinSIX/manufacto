@@ -37,7 +37,12 @@ type Activity = {
   name: string;
   nb_credits: number | null;
   type: string | null;
+  square_product_id: string | null;
+  discipline: string | null;
 };
+
+const DISCOVERY_PACK_ACTIVITY_TYPE = "pack_decouverte";
+const DISCOVERY_PACK_DISCIPLINE_ORDER = ["couture", "menuiserie"] as const;
 
 type PreviewSession = {
   date: string;
@@ -168,6 +173,9 @@ export function AdminAddActivitiesTab({
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [manualPreview, setManualPreview] = useState<Array<{date: string, start: string, end: string}>>([]);
   const [creatingManual, setCreatingManual] = useState(false);
+  const isDiscoveryPackMode =
+    activityTypes?.length === 1 &&
+    activityTypes[0] === DISCOVERY_PACK_ACTIVITY_TYPE;
 
   useEffect(() => {
     const loadActivities = async () => {
@@ -176,7 +184,7 @@ export function AdminAddActivitiesTab({
         const supabase = createClient();
         const { data, error } = await supabase
           .from("activity")
-          .select("id, name, nb_credits, type")
+          .select("id, name, nb_credits, type, square_product_id, discipline")
           .is("deleted_at", null)
           .order("name");
 
@@ -184,6 +192,15 @@ export function AdminAddActivitiesTab({
           setError(error.message);
         } else {
           const filteredActivities = (data || []).filter((activity) => {
+            if (isDiscoveryPackMode) {
+              return (
+                activity.type === DISCOVERY_PACK_ACTIVITY_TYPE &&
+                DISCOVERY_PACK_DISCIPLINE_ORDER.includes(
+                  activity.discipline as (typeof DISCOVERY_PACK_DISCIPLINE_ORDER)[number],
+                )
+              );
+            }
+
             if (activity.type === "cours") {
               return activityTypes?.includes("cours") ?? false;
             }
@@ -192,7 +209,21 @@ export function AdminAddActivitiesTab({
               ? activity.type ? activityTypes.includes(activity.type) : false
               : true;
           });
-          setActivities(filteredActivities);
+          setActivities(
+            isDiscoveryPackMode
+              ? filteredActivities.sort((a, b) => {
+                  const leftIndex = DISCOVERY_PACK_DISCIPLINE_ORDER.indexOf(
+                    a.discipline as (typeof DISCOVERY_PACK_DISCIPLINE_ORDER)[number],
+                  );
+                  const rightIndex = DISCOVERY_PACK_DISCIPLINE_ORDER.indexOf(
+                    b.discipline as (typeof DISCOVERY_PACK_DISCIPLINE_ORDER)[number],
+                  );
+                  const normalizedLeftIndex = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+                  const normalizedRightIndex = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+                  return normalizedLeftIndex - normalizedRightIndex || a.name.localeCompare(b.name, "fr");
+                })
+              : filteredActivities,
+          );
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -202,7 +233,7 @@ export function AdminAddActivitiesTab({
     };
 
     loadActivities();
-  }, [activityTypes]);
+  }, [activityTypes, isDiscoveryPackMode]);
 
   // Sync repeat interval with duration when duration changes (if repeat interval is empty)
   useEffect(() => {

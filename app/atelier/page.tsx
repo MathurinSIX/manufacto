@@ -81,8 +81,7 @@ const courseCards = [
 
 const discoveryPacks = [
   {
-    productId: "decouverte-couture",
-    activityName: "Couture en autonomie encadrée",
+    discipline: "couture",
     title: "Pack découverte couture",
     price: "15€",
     line1: "2h de couture en",
@@ -93,8 +92,7 @@ const discoveryPacks = [
     linkClass: "text-[#4a56dd]",
   },
   {
-    productId: "decouverte-menuiserie",
-    activityName: "Menuiserie en autonomie encadrée",
+    discipline: "menuiserie",
     title: "Pack découverte menuiserie",
     price: "30€",
     line1: "2h de menuiserie en",
@@ -130,15 +128,16 @@ async function DiscoveryPackBanner() {
 
   const { data: activities } = await supabase
     .from("activity")
-    .select("id, name")
+    .select("id, discipline, square_product_id")
+    .eq("type", "pack_decouverte")
     .in(
-      "name",
-      discoveryPacks.map((pack) => pack.activityName),
+      "discipline",
+      discoveryPacks.map((pack) => pack.discipline),
     )
     .is("deleted_at", null);
 
-  const activityIdsByName = new Map(
-    (activities ?? []).map((activity) => [activity.name, activity.id]),
+  const activityIdsByDiscipline = new Map(
+    (activities ?? []).map((activity) => [activity.discipline, activity]),
   );
   const products = await loadSquareProducts(supabase);
   const mappedProductIds = new Set(
@@ -167,12 +166,15 @@ async function DiscoveryPackBanner() {
           </div>
           <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
             {discoveryPacks.map((pack) => {
-              const reservationActivityId = activityIdsByName.get(pack.activityName);
-              const hasSquareMapping = mappedProductIds.has(pack.productId);
+              const activity = activityIdsByDiscipline.get(pack.discipline);
+              const squareProductId = activity?.square_product_id ?? null;
+              const hasSquareMapping = squareProductId
+                ? mappedProductIds.has(squareProductId)
+                : false;
 
               return (
                 <div
-                  key={pack.productId}
+                  key={pack.discipline}
                   className={`flex flex-col items-center justify-center rounded-[14px] border px-4 py-3 text-center ${pack.borderClass} ${pack.cardClass}`}
                 >
                   <p className={`text-[34px] leading-none ${pack.priceClass}`}>
@@ -184,20 +186,22 @@ async function DiscoveryPackBanner() {
                   <p className="text-lg leading-tight text-black/75">
                     {pack.line2}
                   </p>
-                  {reservationActivityId && hasSquareMapping ? (
+                  {activity && squareProductId && hasSquareMapping ? (
                     <DiscoveryPackReservationButton
-                      activityId={reservationActivityId}
+                      activityId={activity.id}
                       activityTitle={pack.title}
-                      productId={pack.productId}
+                      squareProductId={squareProductId}
                       isLoggedIn={!!user}
                       label="Réserver"
                       className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
                     />
                   ) : (
                     <p className="mt-2 text-xs text-black/60">
-                      {reservationActivityId
-                        ? "Paiement indisponible"
-                        : "Créneaux indisponibles"}
+                      {!activity
+                        ? "Créneaux indisponibles"
+                        : !squareProductId
+                          ? "Produit Square manquant"
+                          : "Paiement indisponible"}
                     </p>
                   )}
                 </div>

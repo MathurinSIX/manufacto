@@ -5,16 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 
 const DISCOVERY_PACKS = [
   {
-    productId: "decouverte-couture",
-    activityName: "Couture en autonomie encadrée",
+    discipline: "couture",
     title: "Pack découverte couture",
     price: "15€",
     line1: "2h de couture en",
     line2: "autonomie encadrée",
   },
   {
-    productId: "decouverte-menuiserie",
-    activityName: "Menuiserie en autonomie encadrée",
+    discipline: "menuiserie",
     title: "Pack découverte menuiserie",
     price: "30€",
     line1: "2h de menuiserie en",
@@ -72,42 +70,44 @@ export async function AtelierDiscoveryPackGrid() {
 
   const { data: activities } = await supabase
     .from("activity")
-    .select("id, name")
+    .select("id, discipline, square_product_id")
+    .eq("type", "pack_decouverte")
     .in(
-      "name",
-      DISCOVERY_PACKS.map((pack) => pack.activityName),
+      "discipline",
+      DISCOVERY_PACKS.map((pack) => pack.discipline),
     )
     .is("deleted_at", null);
 
-  const activityIdByName = new Map(
-    (activities ?? []).map((activity) => [activity.name, activity.id]),
+  const activityIdByDiscipline = new Map(
+    (activities ?? []).map((activity) => [activity.discipline, activity]),
   );
 
   return (
     <div className="grid gap-2 md:grid-cols-2">
       {DISCOVERY_PACKS.map((pack) => {
-        const activityId = activityIdByName.get(pack.activityName);
+        const activity = activityIdByDiscipline.get(pack.discipline);
+        const squareProductId = activity?.square_product_id ?? null;
 
         return (
           <div
-            key={pack.productId}
+            key={pack.discipline}
             className="flex min-h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#4a56dd]/70 bg-[#fff8f0] p-3 text-center"
           >
             <p className="text-[34px] leading-none">{pack.price}</p>
             <p className="text-lg font-semibold leading-none">{pack.line1}</p>
             <p className="text-lg leading-none">{pack.line2}</p>
-            {activityId ? (
+            {activity && squareProductId ? (
               <DiscoveryPackReservationButton
-                activityId={activityId}
+                activityId={activity.id}
                 activityTitle={pack.title}
-                productId={pack.productId}
+                squareProductId={squareProductId}
                 isLoggedIn={!!user}
                 label="Acheter"
                 className={discoveryCheckoutButtonClassName}
               />
             ) : (
               <p className="mt-3 text-xs leading-snug text-black/50">
-                Créneaux indisponibles
+                {activity ? "Produit Square manquant" : "Créneaux indisponibles"}
               </p>
             )}
           </div>

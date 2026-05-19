@@ -133,20 +133,9 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
         }
 
-        // `discoveryHours` is the number of consecutive reservation hours
-        // included in the pack. It is NOT the same as `credits`, which is the
-        // number of credits granted to the buyer post-payment (e.g. 6 credits
-        // for 2h of menuiserie encadrée at 3 credits/h). Fall back to
-        // `credits` only when `discoveryHours` is not set, to stay backwards
-        // compatible with packs configured before this field was added.
-        const expectedHours = catalogProduct.discoveryHours ?? catalogProduct.credits;
-        const expectedDurationMs = expectedHours * 60 * 60 * 1000;
-
         if (
           !UUID_RE.test(normalizedSessionId) ||
-          !hasValidReservationWindow ||
-          reservationEndDate.getTime() - reservationStartDate.getTime() !==
-            expectedDurationMs
+          !hasValidReservationWindow
         ) {
           return NextResponse.json(
             { error: "Sélectionnez un créneau avant de payer" },

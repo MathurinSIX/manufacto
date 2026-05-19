@@ -919,6 +919,9 @@ export async function createActivity(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/atelier");
+  revalidatePath("/pratique-libre");
+  revalidatePath("/cours");
   return { activity: data, error: null };
 }
 
@@ -970,6 +973,9 @@ export async function updateActivity(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/atelier");
+  revalidatePath("/pratique-libre");
+  revalidatePath("/cours");
   return { activity: data[0], error: null };
 }
 
