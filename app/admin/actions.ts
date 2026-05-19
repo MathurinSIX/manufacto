@@ -319,7 +319,7 @@ export async function unsubscribeNewsletterSubscription(subscriptionId: string) 
 
 // Get all users
 export async function getAllUsers() {
-  await checkAdmin();
+  const currentUser = await checkAdmin();
   const adminClient = getAdminClient();
   const supabase = await createClient();
   
@@ -361,7 +361,106 @@ export async function getAllUsers() {
     credits: creditsMap[user.id] || 0,
   })) || [];
   
-  return { users: usersWithCredits, error: null };
+  return {
+    users: usersWithCredits,
+    currentUserId: currentUser.id,
+    error: null,
+  };
+}
+
+// Update a user profile
+export async function updateUser(
+  userId: string,
+  data: {
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  },
+) {
+  await checkAdmin();
+  const adminClient = getAdminClient();
+
+  const email = data.email.trim();
+  if (!email) {
+    return { error: "L'email est requis", user: null };
+  }
+
+  const { data: existing, error: fetchError } =
+    await adminClient.auth.admin.getUserById(userId);
+
+  if (fetchError || !existing.user) {
+    return {
+      error: fetchError?.message ?? "Utilisateur introuvable",
+      user: null,
+    };
+  }
+
+  const user_metadata = {
+    ...existing.user.user_metadata,
+    first_name: data.first_name?.trim() || undefined,
+    last_name: data.last_name?.trim() || undefined,
+  };
+
+  const { data: updated, error } = await adminClient.auth.admin.updateUserById(
+    userId,
+    {
+      email,
+      user_metadata,
+    },
+  );
+
+  if (error) {
+    console.error("Error updating user:", error);
+    return { error: error.message, user: null };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/users/${userId}`);
+  return { user: updated.user, error: null };
+}
+
+// Delete a user
+export async function deleteUser(userId: string) {
+  const currentUser = await checkAdmin();
+  const adminClient = getAdminClient();
+
+  if (currentUser.id === userId) {
+    return { error: "Vous ne pouvez pas supprimer votre propre compte" };
+  }
+
+  const { data: target, error: fetchError } =
+    await adminClient.auth.admin.getUserById(userId);
+
+  if (fetchError || !target.user) {
+    return { error: fetchError?.message ?? "Utilisateur introuvable" };
+  }
+
+  if (target.user.app_metadata?.role === "admin") {
+    const { data: allUsers, error: listError } =
+      await adminClient.auth.admin.listUsers();
+
+    if (listError) {
+      return { error: listError.message };
+    }
+
+    const adminCount =
+      allUsers?.users?.filter((user) => user.app_metadata?.role === "admin")
+        .length ?? 0;
+
+    if (adminCount <= 1) {
+      return { error: "Impossible de supprimer le dernier administrateur" };
+    }
+  }
+
+  const { error } = await adminClient.auth.admin.deleteUser(userId);
+
+  if (error) {
+    console.error("Error deleting user:", error);
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return { error: null };
 }
 
 // Add credit to a user
