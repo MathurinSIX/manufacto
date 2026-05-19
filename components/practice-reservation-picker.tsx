@@ -436,12 +436,6 @@ export function PracticeReservationPicker({
         ),
       );
 
-      if (userId) {
-        await fetchMyRegistrations(userId, sessionIds);
-      } else {
-        setMyRegistrations([]);
-      }
-
       setIsLoading(false);
     };
 
@@ -449,7 +443,27 @@ export function PracticeReservationPicker({
     return () => {
       ignore = true;
     };
-  }, [activityId, supabase, userId]);
+    // Sessions and global registrations do NOT depend on the current user, so
+    // we deliberately omit `userId` from the deps. Re-fetching them when the
+    // user signs up in the middle of the modal would blank the entire picker
+    // (including their currently-selected hours) behind the loading spinner.
+  }, [activityId, supabase]);
+
+  // Fetch the signed-in user's own registrations whenever they (or the
+  // available sessions) change, without toggling the global `isLoading` flag.
+  // This keeps the rest of the picker (selected hours, success message,
+  // checkout button) visible while we refresh per-user data after sign-up.
+  useEffect(() => {
+    const sessionIds = sessions.map((session) => session.id);
+    if (!userId || !sessionIds.length) {
+      setMyRegistrations([]);
+      return;
+    }
+    void fetchMyRegistrations(userId, sessionIds);
+    // `fetchMyRegistrations` is a stable closure over `supabase`, which is
+    // already memoized, so it does not need to be in the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, sessions]);
 
   const sessionsByDay = useMemo(() => {
     const map = new Map<string, SessionRow[]>();
@@ -602,79 +616,22 @@ export function PracticeReservationPicker({
     setSuccessMessage(null);
   };
 
-  const startSquareCheckout = useCallback(
-    async (params: {
-      productId: string;
-      sessionId: string;
-      reservationStart: string;
-      reservationEnd: string;
-    }) => {
-      setIsRegistering(true);
-      setErrorMessage(null);
-      try {
-        const response = await fetch("/api/square/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId: params.productId,
-            activityId,
-            sessionId: params.sessionId,
-            reservationStart: params.reservationStart,
-            reservationEnd: params.reservationEnd,
-          }),
-        });
-        const payload = (await response.json()) as {
-          url?: string;
-          error?: string;
-        };
-        if (!response.ok || !payload.url) {
-          throw new Error(payload.error ?? "Paiement indisponible");
-        }
-        window.location.href = payload.url;
-      } catch (checkoutError) {
-        setIsRegistering(false);
-        setErrorMessage(
-          checkoutError instanceof Error
-            ? checkoutError.message
-            : "Paiement indisponible",
-        );
-      }
-    },
-    [activityId],
-  );
-
   const handleAuthSuccess = async () => {
     const nextUserId = await refreshUser();
     if (!nextUserId) {
       return;
     }
+    // Stay on this page with the modal open. Hide the auth step so the
+    // "Payer et réserver" button (or credit-based "Réserver" button) is
+    // shown again, ready for the user to manually finalize the checkout.
     setShowAuthStep(false);
-    router.refresh();
-
-    // For discovery / Square-backed reservations the user already pressed
-    // "Payer et réserver" before the auth step, so resume the checkout
-    // automatically instead of forcing a second click on the modal.
-    if (
-      isSquareReservation &&
-      squareProductId &&
-      checkoutSessionId &&
-      checkoutStartIso &&
-      checkoutEndIso &&
-      hasRequiredHourCount
-    ) {
-      setSuccessMessage("Compte créé, redirection vers le paiement…");
-      await startSquareCheckout({
-        productId: squareProductId,
-        sessionId: checkoutSessionId,
-        reservationStart: checkoutStartIso,
-        reservationEnd: checkoutEndIso,
-      });
-      return;
-    }
-
+    setErrorMessage(null);
     setSuccessMessage(
-      "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
+      isSquareReservation
+        ? "Compte créé. Cliquez sur « Payer et réserver le pack découverte » pour finaliser le paiement."
+        : "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
     );
+    router.refresh();
   };
 
   const toggleHourSelection = (key: string) => {

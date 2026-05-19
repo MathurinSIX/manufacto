@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     const redirectPath = user
       ? "/account/square/return"
       : activityId
-        ? `/cours`
+        ? "/cours"
         : "/pratique-libre";
 
     const adminClientForBuyer = user ? getAdminClient() : null;
