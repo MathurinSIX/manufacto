@@ -34,8 +34,6 @@ export function SignUpForm({
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
   const router = useRouter();
   const firstNameId = useId();
   const lastNameId = useId();
@@ -72,31 +70,15 @@ export function SignUpForm({
         throw new Error(data.error || "Une erreur s'est produite");
       }
 
-      // Email verification is disabled, so log the user in immediately to
-      // establish the client-side session, then trigger onSuccess / redirect.
+      // Email verification is disabled, so sign the user in immediately to
+      // establish the client-side Supabase session, mirroring the login flow.
       const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      if (signInError) throw signInError;
 
-      if (signInError) {
-        // Fallback: confirmation may still be required for this account.
-        setSuccess(true);
-        setNeedsEmailConfirmation(true);
-        if (onSuccess) {
-          setTimeout(() => {
-            onSuccess();
-          }, 2000);
-        } else {
-          setTimeout(() => {
-            router.push("/auth/sign-up-success");
-          }, 2000);
-        }
-        return;
-      }
-
-      setSuccess(true);
       if (onSuccess) {
         onSuccess();
       } else if (redirectTo) {
@@ -183,24 +165,12 @@ export function SignUpForm({
                   {error}
                 </p>
               )}
-              {success && (
-                <div className="rounded-[14px] border border-green-200 bg-green-50 p-4">
-                  <p className="text-sm font-semibold text-green-800">
-                    Compte créé avec succès !
-                  </p>
-                  <p className="mt-1 text-sm text-green-700">
-                    {needsEmailConfirmation
-                      ? "Veuillez vérifier votre e-mail pour confirmer votre compte avant de vous connecter."
-                      : "Connexion en cours..."}
-                  </p>
-                </div>
-              )}
               <Button
                 type="submit"
                 className="h-12 w-full rounded-[14px] bg-[#4a56dd] text-base font-semibold text-white shadow-none hover:bg-[#2f3bcc]"
-                disabled={isLoading || success}
+                disabled={isLoading}
               >
-                {isLoading ? "Création du compte..." : success ? "Compte créé" : "S'inscrire"}
+                {isLoading ? "Création du compte..." : "S'inscrire"}
               </Button>
             </div>
             <div className="mt-6 text-center text-base text-black/70">
