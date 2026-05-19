@@ -16,7 +16,7 @@ import { useState, useId } from "react";
 interface LoginFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToSignUp?: () => void;
   onSwitchToForgotPassword?: () => void;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
   redirectTo?: string;
 }
 
@@ -57,7 +57,7 @@ export function LoginForm({
       if (error) throw error;
       // Call onSuccess callback if provided, otherwise redirect
       if (onSuccess) {
-        onSuccess();
+        await onSuccess();
       } else if (redirectTo) {
         router.push(redirectTo);
       } else {

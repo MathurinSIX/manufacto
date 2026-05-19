@@ -551,7 +551,6 @@ export function ActivitySessionPicker({
     setSuccessMessage(
       "Vous êtes connecté. Vous pouvez maintenant finaliser votre réservation.",
     );
-    router.refresh();
   };
 
   const handleRegister = async (paymentType: "credits" | "stripe") => {

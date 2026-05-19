@@ -7,6 +7,8 @@ type HashLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   href: string;
 };
 
+const PENDING_HASH_KEY = "manufacto:pending-hash";
+
 export const HashLink = React.forwardRef<HTMLAnchorElement, HashLinkProps>(
   ({ href, onClick, target, ...props }, ref) => {
     const pathname = usePathname();
@@ -33,6 +35,15 @@ export const HashLink = React.forwardRef<HTMLAnchorElement, HashLinkProps>(
 
       event.preventDefault();
       const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+      window.sessionStorage.setItem(
+        PENDING_HASH_KEY,
+        JSON.stringify({
+          pathname: url.pathname,
+          search: url.search,
+          hash: url.hash,
+          createdAt: Date.now(),
+        }),
+      );
 
       if (url.pathname === pathname) {
         const oldUrl = window.location.href;

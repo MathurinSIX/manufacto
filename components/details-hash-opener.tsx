@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 
+const PENDING_HASH_KEY = "manufacto:pending-hash";
+
+type PendingHash = {
+  pathname: string;
+  search: string;
+  hash: string;
+  createdAt: number;
+};
+
 export function DetailsHashOpener() {
   useEffect(() => {
     let retryTimeout: number | null = null;
@@ -16,6 +25,31 @@ export function DetailsHashOpener() {
       if (animationFrame) {
         window.cancelAnimationFrame(animationFrame);
         animationFrame = null;
+      }
+    };
+
+    const restorePendingHash = () => {
+      if (window.location.hash) return;
+
+      const pendingValue = window.sessionStorage.getItem(PENDING_HASH_KEY);
+      if (!pendingValue) return;
+
+      try {
+        const pendingHash = JSON.parse(pendingValue) as PendingHash;
+        window.sessionStorage.removeItem(PENDING_HASH_KEY);
+
+        if (
+          pendingHash.pathname !== window.location.pathname ||
+          pendingHash.search !== window.location.search ||
+          !pendingHash.hash ||
+          Date.now() - pendingHash.createdAt > 10_000
+        ) {
+          return;
+        }
+
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${pendingHash.hash}`);
+      } catch {
+        window.sessionStorage.removeItem(PENDING_HASH_KEY);
       }
     };
 
@@ -53,6 +87,7 @@ export function DetailsHashOpener() {
       openWhenReady();
     };
 
+    restorePendingHash();
     openFromHash();
     window.addEventListener("hashchange", openFromHash);
     return () => {

@@ -17,7 +17,7 @@ import { buildLoginUrl } from "@/lib/auth-redirect";
 
 interface SignUpFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToLogin?: () => void;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
   redirectTo?: string;
 }
 
@@ -80,7 +80,7 @@ export function SignUpForm({
       if (signInError) throw signInError;
 
       if (onSuccess) {
-        onSuccess();
+        await onSuccess();
       } else if (redirectTo) {
         router.push(redirectTo);
       } else {
