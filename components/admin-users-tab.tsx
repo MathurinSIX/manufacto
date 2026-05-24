@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
 import { Plus, Loader2, Coins, Shield, ShieldOff, Pencil, Trash2 } from "lucide-react";
 
 const PARIS_TIMEZONE = "Europe/Paris";
+const USERS_PER_PAGE = 20;
 
 const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
   timeZone: PARIS_TIMEZONE,
@@ -44,6 +46,20 @@ type User = {
   created_at: string;
   credits?: number;
 };
+
+function normalizeSearchValue(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getUserDisplayName(user: User) {
+  return user.user_metadata?.first_name && user.user_metadata?.last_name
+    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+    : user.user_metadata?.first_name || user.user_metadata?.last_name || "-";
+}
 
 export function AdminUsersTab() {
   const [users, setUsers] = useState<User[]>([]);
@@ -67,6 +83,8 @@ export function AdminUsersTab() {
   const [editUserEmail, setEditUserEmail] = useState("");
   const [editUserFirstName, setEditUserFirstName] = useState("");
   const [editUserLastName, setEditUserLastName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -89,6 +107,37 @@ export function AdminUsersTab() {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = normalizeSearchValue(searchQuery);
+
+    if (!normalizedQuery) {
+      return users;
+    }
+
+    return users.filter((user) => {
+      const firstName = user.user_metadata?.first_name ?? "";
+      const lastName = user.user_metadata?.last_name ?? "";
+      const fullName = `${firstName} ${lastName}`;
+      return normalizeSearchValue(fullName).includes(normalizedQuery);
+    });
+  }, [searchQuery, users]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * USERS_PER_PAGE;
+    return filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE);
+  }, [currentPage, filteredUsers]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +295,7 @@ export function AdminUsersTab() {
               <DialogHeader>
                 <DialogTitle>nouvel utilisateur</DialogTitle>
                 <DialogDescription>
-                  Créez un nouveau compte utilisateur. Un email d'invitation sera envoyé pour définir le mot de passe.
+                  Créez un nouveau compte utilisateur. Un email d&apos;invitation sera envoyé pour définir le mot de passe.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -300,6 +349,17 @@ export function AdminUsersTab() {
         </Dialog>
       </div>
 
+      <div className="flex flex-col gap-2 sm:max-w-sm">
+        <Label htmlFor="userSearch">Rechercher par nom</Label>
+        <Input
+          id="userSearch"
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Nom ou prénom"
+        />
+      </div>
+
       {error && !loading && (
         <div className="text-sm text-destructive p-4 bg-destructive/10 rounded-md">
           {error}
@@ -320,17 +380,15 @@ export function AdminUsersTab() {
               </tr>
             </thead>
             <tbody>
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-4 text-center text-muted-foreground">
-                    Aucun utilisateur trouvé
+                    {searchQuery ? "Aucun utilisateur ne correspond à cette recherche" : "Aucun utilisateur trouvé"}
                   </td>
                 </tr>
               ) : (
-                users.map((user) => {
-                  const name = user.user_metadata?.first_name && user.user_metadata?.last_name
-                    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-                    : user.user_metadata?.first_name || user.user_metadata?.last_name || "-";
+                paginatedUsers.map((user) => {
+                  const name = getUserDisplayName(user);
                   const isAdmin = user.app_metadata?.role === "admin";
                   
                   return (
@@ -473,6 +531,14 @@ export function AdminUsersTab() {
           </table>
         </div>
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        itemsPerPage={USERS_PER_PAGE}
+        totalItems={filteredUsers.length}
+      />
 
       {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

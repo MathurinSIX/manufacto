@@ -582,14 +582,14 @@ export async function createUser(email: string, metadata?: { first_name?: string
     return { error: error.message, user: null };
   }
   
-  // Send invitation email to the user so they can set their password
+  // Send invitation email to the user so they can set their password.
+  // The actual link in the email is controlled by the custom invite template
+  // at supabase/templates/invite.html, which routes the user through our
+  // /auth/confirm route so the session cookie is set on the app's domain.
   if (data.user) {
-    const inviteRedirectUrl = new URL("/auth/confirm", getSiteUrl());
-    inviteRedirectUrl.searchParams.set("next", "/auth/update-password");
-
     const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: metadata,
-      redirectTo: inviteRedirectUrl.toString(),
+      redirectTo: `${getSiteUrl()}/auth/update-password`,
     });
     
     if (inviteError) {
