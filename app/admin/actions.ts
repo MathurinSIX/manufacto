@@ -35,6 +35,18 @@ const PRACTICE_ACTIVITY_TYPES = new Set([
   "cuisson",
 ]);
 
+function getSiteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
+}
+
 type FrontendAssetImage = {
   path: string;
   label: string;
@@ -572,8 +584,12 @@ export async function createUser(email: string, metadata?: { first_name?: string
   
   // Send invitation email to the user so they can set their password
   if (data.user) {
+    const inviteRedirectUrl = new URL("/auth/confirm", getSiteUrl());
+    inviteRedirectUrl.searchParams.set("next", "/auth/update-password");
+
     const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: metadata,
+      redirectTo: inviteRedirectUrl.toString(),
     });
     
     if (inviteError) {

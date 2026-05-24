@@ -1051,6 +1051,35 @@ type SquarePurchaseRow = {
   status: string;
 };
 
+async function isSquarePaymentAlreadyClaimed({
+  supabase,
+  purchaseId,
+  paymentId,
+}: {
+  supabase: SupabaseAdminClient;
+  purchaseId: string;
+  paymentId?: string | null;
+}) {
+  if (!paymentId) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("square_purchase")
+    .select("id")
+    .eq("square_payment_id", paymentId)
+    .neq("id", purchaseId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error checking duplicate Square payment claim:", error);
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
 function getLatestActiveRegistrationIds(
   registrationIds: string[],
   statuses: { registration_id: string; status: string; created_at: string }[] | null,
@@ -1278,6 +1307,21 @@ async function fulfillCourseSquarePurchase({
     return;
   }
 
+  if (
+    await isSquarePaymentAlreadyClaimed({
+      supabase,
+      purchaseId: claimedPurchase.id,
+      paymentId: paymentId ?? claimedPurchase.square_payment_id,
+    })
+  ) {
+    await supabase
+      .from("square_purchase")
+      .update({ status: "failed" })
+      .eq("id", claimedPurchase.id)
+      .eq("status", "processing");
+    return;
+  }
+
   try {
     await registerUserForCourseSession({
       userId: claimedPurchase.user_id,
@@ -1363,6 +1407,26 @@ export async function fulfillSquarePurchase({
     paymentCustomerId = payment.customer_id?.trim() || null;
     const amountCents = payment.total_money?.amount;
     const buyerEmail = payment.buyer_email_address?.trim().toLowerCase();
+
+    const { data: existingPaymentPurchase, error: existingPaymentError } =
+      await supabase
+        .from("square_purchase")
+        .select("id")
+        .eq("square_payment_id", paymentId)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingPaymentError) {
+      console.error(
+        "Error checking existing Square payment fulfillment:",
+        existingPaymentError,
+      );
+      return;
+    }
+
+    if (existingPaymentPurchase) {
+      return;
+    }
 
     if (amountCents && buyerEmail) {
       const { data: usersList, error: usersError } = await supabase.auth.admin.listUsers({
@@ -1463,6 +1527,21 @@ export async function fulfillSquarePurchase({
   }
 
   if (!claimedPurchase) {
+    return;
+  }
+
+  if (
+    await isSquarePaymentAlreadyClaimed({
+      supabase,
+      purchaseId: claimedPurchase.id,
+      paymentId: paymentId ?? claimedPurchase.square_payment_id,
+    })
+  ) {
+    await supabase
+      .from("square_purchase")
+      .update({ status: "failed" })
+      .eq("id", claimedPurchase.id)
+      .eq("status", "processing");
     return;
   }
 

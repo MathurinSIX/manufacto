@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { AuthModal } from "@/components/auth-modal";
 import { Button, type ButtonProps } from "@/components/ui/button";
@@ -38,14 +38,20 @@ export function SquareCheckoutButton({
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(isLoggedIn);
+  const checkoutInFlightRef = useRef(false);
   const buttonVariant = variant === "button" ? "default" : variant;
 
   async function startCheckout(options?: { skipAuthCheck?: boolean }) {
+    if (checkoutInFlightRef.current) {
+      return;
+    }
+
     if (!options?.skipAuthCheck && !isAuthenticated) {
       setAuthOpen(true);
       return;
     }
 
+    checkoutInFlightRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -71,6 +77,8 @@ export function SquareCheckoutButton({
       if (response.status === 401) {
         setIsAuthenticated(false);
         setAuthOpen(true);
+        checkoutInFlightRef.current = false;
+        setLoading(false);
         return;
       }
 
@@ -85,6 +93,7 @@ export function SquareCheckoutButton({
           ? checkoutError.message
           : "Paiement indisponible",
       );
+      checkoutInFlightRef.current = false;
       setLoading(false);
     }
   }
