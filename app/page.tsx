@@ -1,11 +1,12 @@
 import { LandingPage } from "@/components/landing-page";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 interface RootPageProps {
   searchParams: Promise<{ code?: string; token_hash?: string; type?: string; next?: string }>;
 }
 
-export default async function RootPage({ searchParams }: RootPageProps) {
+async function HandleSearchParams({ searchParams }: RootPageProps) {
   const params = await searchParams;
 
   if (params?.code) {
@@ -31,5 +32,16 @@ export default async function RootPage({ searchParams }: RootPageProps) {
     redirect(`/auth/confirm?${confirmParams.toString()}`);
   }
 
-  return <LandingPage />;
+  return null;
+}
+
+export default function RootPage({ searchParams }: RootPageProps) {
+  return (
+    <>
+      <Suspense fallback={null}>
+        <HandleSearchParams searchParams={searchParams} />
+      </Suspense>
+      <LandingPage />
+    </>
+  );
 }
