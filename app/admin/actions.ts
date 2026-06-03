@@ -15,6 +15,7 @@ import {
   getSquareEnvironment,
   getSquareEnvironmentLabel,
 } from "@/lib/square/environment";
+import { ensureSquareCustomerForUser } from "@/lib/square/server";
 import {
   addParisCalendarDays,
   formatParisDate,
@@ -595,6 +596,15 @@ export async function createUser(email: string, metadata?: { first_name?: string
     if (inviteError) {
       console.error("Error sending invitation:", inviteError);
       // User is created but invitation failed - still return success
+    }
+
+    try {
+      await ensureSquareCustomerForUser({
+        supabase: adminClient,
+        userId: data.user.id,
+      });
+    } catch (squareError) {
+      console.error("Error creating Square customer for new user:", squareError);
     }
   }
   

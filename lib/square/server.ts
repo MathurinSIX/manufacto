@@ -616,6 +616,156 @@ async function createSquareCustomer({
   return payload.customer.id;
 }
 
+const ALREADY_EXISTS_HINTS = [
+  "user already registered",
+  "email already registered",
+  "already exists",
+  "already registered",
+  "user already exists",
+  "duplicate key value",
+];
+
+function isAlreadyExistsError(message: string) {
+  const lower = message.toLowerCase();
+  return ALREADY_EXISTS_HINTS.some((hint) => lower.includes(hint));
+}
+
+async function findSupabaseUserIdByEmail(
+  supabase: SupabaseAdminClient,
+  emailAddress: string,
+): Promise<string | null> {
+  const normalizedEmail = emailAddress.trim().toLowerCase();
+  let page = 1;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+
+    if (error) {
+      console.error("Error listing Supabase users for Square sync:", error);
+      return null;
+    }
+
+    const match = data.users.find((authUser) => {
+      const email = (authUser as { email?: string }).email;
+      return email?.trim().toLowerCase() === normalizedEmail;
+    });
+
+    if (match) {
+      return match.id;
+    }
+
+    if (data.users.length < 1000) {
+      return null;
+    }
+
+    page += 1;
+  }
+}
+
+type SquareCustomerProfile = {
+  id?: string;
+  reference_id?: string;
+  email_address?: string;
+  given_name?: string;
+  family_name?: string;
+};
+
+export async function retrieveSquareCustomer(
+  customerId: string,
+): Promise<SquareCustomerProfile | null> {
+  try {
+    const response = await fetch(
+      `${getSquareApiBaseUrl()}/v2/customers/${customerId}`,
+      { headers: getSquareHeaders() },
+    );
+    const payload = (await response.json()) as {
+      customer?: SquareCustomerProfile;
+      errors?: { detail?: string }[];
+    };
+
+    if (!response.ok || !payload.customer) {
+      console.error(
+        "Square customer lookup failed:",
+        payload.errors?.map((error) => error.detail).join(", "),
+      );
+      return null;
+    }
+
+    return payload.customer;
+  } catch (error) {
+    console.error("Square customer lookup threw:", error);
+    return null;
+  }
+}
+
+export async function syncSquareCustomerToBackend(
+  customer: SquareCustomerProfile,
+) {
+  const squareCustomerId = customer.id?.trim();
+  const emailAddress = customer.email_address?.trim();
+
+  if (!squareCustomerId || !emailAddress) {
+    return;
+  }
+
+  const supabase = getAdminClient();
+  const referenceId = customer.reference_id?.trim();
+
+  if (referenceId) {
+    const { data: linkedUser } = await supabase.auth.admin.getUserById(referenceId);
+    if (linkedUser?.user) {
+      return;
+    }
+  }
+
+  let userId = await findSupabaseUserIdByEmail(supabase, emailAddress);
+
+  if (!userId) {
+    const metadata: Record<string, string> = {};
+    const givenName = customer.given_name?.trim();
+    const familyName = customer.family_name?.trim();
+    if (givenName) metadata.first_name = givenName;
+    if (familyName) metadata.last_name = familyName;
+
+    const { data: createdUser, error: createError } =
+      await supabase.auth.admin.createUser({
+        email: emailAddress,
+        email_confirm: false,
+        user_metadata: metadata,
+      });
+
+    if (createError) {
+      if (isAlreadyExistsError(createError.message)) {
+        userId = await findSupabaseUserIdByEmail(supabase, emailAddress);
+      } else {
+        console.error("Error creating Supabase user from Square customer:", createError);
+        return;
+      }
+    } else if (createdUser.user) {
+      userId = createdUser.user.id;
+
+      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        emailAddress,
+        {
+          data: metadata,
+          redirectTo: `${getSiteUrl()}/auth/update-password`,
+        },
+      );
+
+      if (inviteError) {
+        console.error("Error inviting Supabase user from Square customer:", inviteError);
+      }
+    }
+  }
+
+  if (userId) {
+    await updateSquareCustomerReferenceId(squareCustomerId, userId);
+  }
+}
+
 async function updateSquareCustomerReferenceId(
   customerId: string,
   referenceId: string,

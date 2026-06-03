@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import {
   fulfillSquarePurchase,
   linkSquareSubscriptionFromWebhook,
+  retrieveSquareCustomer,
   retrieveSquarePayment,
+  syncSquareCustomerToBackend,
   syncSquareSubscriptionStatusFromWebhook,
   verifySquareWebhookSignature,
 } from "@/lib/square/server";
@@ -10,6 +12,7 @@ import {
 type SquareWebhookPayload = {
   type?: string;
   data?: {
+    id?: string;
     object?: {
       payment?: {
         id?: string;
@@ -21,6 +24,13 @@ type SquareWebhookPayload = {
         customer_id?: string;
         status?: string;
       };
+      customer?: {
+        id?: string;
+        reference_id?: string;
+        email_address?: string;
+        given_name?: string;
+        family_name?: string;
+      };
     };
   };
 };
@@ -30,6 +40,19 @@ function acknowledgeSquareWebhook() {
 }
 
 async function handleSquareWebhook(payload: SquareWebhookPayload) {
+  if (payload.type === "customer.created") {
+    const customer =
+      payload.data?.object?.customer ??
+      (payload.data?.id
+        ? await retrieveSquareCustomer(payload.data.id)
+        : null);
+
+    if (customer) {
+      await syncSquareCustomerToBackend(customer);
+    }
+    return;
+  }
+
   if (payload.type === "subscription.created") {
     const subscription = payload.data?.object?.subscription;
     if (subscription) {
