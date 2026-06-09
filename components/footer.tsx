@@ -61,8 +61,8 @@ export function Footer() {
 
         <div className="space-y-3 font-medium leading-normal">
           <div className="space-y-1 text-[#454545]">
-            <a href="mailto:contact@manufacto-marseille.com" className="block hover:text-black">
-              contact@manufacto-marseille.com
+            <a href="mailto:contact@manufacto-marseille.fr" className="block hover:text-black">
+              contact@manufacto-marseille.fr
             </a>
             <a href="tel:+33743461214" className="block hover:text-black">
               07 43 46 12 14

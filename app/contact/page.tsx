@@ -53,10 +53,10 @@ export default function ContactPage() {
 
               <MarketingBody className="mt-8 space-y-0">
                 <Link
-                  href="mailto:contact@manufacto-marseille.com"
+                  href="mailto:contact@manufacto-marseille.fr"
                   className="block hover:text-black"
                 >
-                  contact@manufacto-marseille.com
+                  contact@manufacto-marseille.fr
                 </Link>
                 <Link
                   href="tel:+33743461214"
