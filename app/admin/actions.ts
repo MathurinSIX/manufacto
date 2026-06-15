@@ -2,7 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import {
+  createClient as createAdminClient,
+  type User,
+} from "@supabase/supabase-js";
 import { readdir } from "fs/promises";
 import path from "path";
 import { listSquareCatalogVariations } from "@/lib/square/catalog-api";
@@ -15,11 +18,17 @@ import {
   getSquareEnvironment,
   getSquareEnvironmentLabel,
 } from "@/lib/square/environment";
-import { ensureSquareCustomerForUser } from "@/lib/square/server";
+import {
+  inviteNewUserByEmail,
+  isAlreadyExistsError,
+  sendAccountAccessEmail,
+} from "@/lib/auth/invite-user";
+import { syncSupabaseUserToSquare } from "@/lib/square/server";
 import {
   addParisCalendarDays,
   formatParisDate,
   getParisMondayDate,
+  isSameParisDay,
   parseParisDateTime,
 } from "@/lib/paris-time";
 const ASSET_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
@@ -74,11 +83,102 @@ function getAdminClient() {
 }
 
 const AUTH_USERS_PAGE_SIZE = 1000;
+const SUPABASE_PAGE_SIZE = 1000;
+const SUPABASE_IN_CHUNK_SIZE = 200;
+
+async function fetchAllSupabaseRows<T>(
+  fetchPage: (range: { from: number; to: number }) => Promise<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>,
+): Promise<{ data: T[]; error: string | null }> {
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await fetchPage({ from, to });
+
+    if (error) {
+      return { data: rows, error: error.message };
+    }
+
+    const page = data ?? [];
+    rows.push(...page);
+
+    if (page.length < SUPABASE_PAGE_SIZE) {
+      break;
+    }
+
+    from += SUPABASE_PAGE_SIZE;
+  }
+
+  return { data: rows, error: null };
+}
+
+function chunkValues<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function formatRegisteredUserName(user?: {
+  email?: string;
+  user_metadata?: {
+    first_name?: string;
+    last_name?: string;
+  };
+}) {
+  const firstName = user?.user_metadata?.first_name?.trim();
+  const lastName = user?.user_metadata?.last_name?.trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  }
+
+  return firstName || lastName || user?.email || "Unknown";
+}
+
+function getActiveRegistrationIds(
+  registrationIds: string[],
+  statuses: Array<{
+    registration_id: string;
+    status: string;
+    created_at: string;
+  }>,
+) {
+  const activeRegistrationIds = new Set<string>();
+
+  if (!statuses.length) {
+    for (const id of registrationIds) {
+      activeRegistrationIds.add(id);
+    }
+    return activeRegistrationIds;
+  }
+
+  const seenRegistrations = new Set<string>();
+  for (const status of statuses) {
+    if (!seenRegistrations.has(status.registration_id)) {
+      seenRegistrations.add(status.registration_id);
+      if (status.status !== "CANCELLED") {
+        activeRegistrationIds.add(status.registration_id);
+      }
+    }
+  }
+
+  for (const id of registrationIds) {
+    if (!seenRegistrations.has(id)) {
+      activeRegistrationIds.add(id);
+    }
+  }
+
+  return activeRegistrationIds;
+}
 
 async function listAllAuthUsers(adminClient: ReturnType<typeof getAdminClient>) {
-  const allUsers: Awaited<
-    ReturnType<typeof adminClient.auth.admin.listUsers>
-  >["data"]["users"] = [];
+  const allUsers: User[] = [];
   let page = 1;
 
   while (true) {
@@ -89,6 +189,10 @@ async function listAllAuthUsers(adminClient: ReturnType<typeof getAdminClient>) 
 
     if (error) {
       return { users: allUsers, error: error.message };
+    }
+
+    if (!data?.users) {
+      break;
     }
 
     allUsers.push(...data.users);
@@ -376,7 +480,6 @@ export async function unsubscribeNewsletterSubscription(subscriptionId: string) 
 export async function getAllUsers() {
   const currentUser = await checkAdmin();
   const adminClient = getAdminClient();
-  const supabase = await createClient();
   
   const { users: allUsers, error } = await listAllAuthUsers(adminClient);
   
@@ -385,17 +488,19 @@ export async function getAllUsers() {
     return { error, users: [] };
   }
   
-  // Get credits for all users
+  // Get credits for all users (service role bypasses RLS for reliable admin reads)
   const userIds = allUsers.map(u => u.id);
   const creditsMap: Record<string, number> = {};
   
   if (userIds.length > 0) {
-    const { data: creditsData } = await supabase
+    const { data: creditsData, error: creditsError } = await adminClient
       .from("credit")
       .select("user_id, amount")
       .in("user_id", userIds);
     
-    if (creditsData) {
+    if (creditsError) {
+      console.error("Error fetching user credits:", creditsError);
+    } else if (creditsData) {
       creditsData.forEach((credit) => {
         const userId = credit.user_id;
         const amount = typeof credit.amount === "number" 
@@ -467,6 +572,15 @@ export async function updateUser(
   if (error) {
     console.error("Error updating user:", error);
     return { error: error.message, user: null };
+  }
+
+  try {
+    await syncSupabaseUserToSquare({
+      supabase: adminClient,
+      userId,
+    });
+  } catch (squareError) {
+    console.error("Error syncing Square customer after user update:", squareError);
   }
 
   revalidatePath("/admin");
@@ -547,6 +661,7 @@ export async function addCreditToUser(userId: string, amount: number, paymentTyp
   }
   
   revalidatePath("/admin");
+  revalidatePath(`/admin/users/${userId}`);
   return { credit: data, error: null };
 }
 
@@ -600,46 +715,61 @@ export async function removeUserAdmin(userId: string) {
 export async function createUser(email: string, metadata?: { first_name?: string; last_name?: string }) {
   await checkAdmin();
   const adminClient = getAdminClient();
-  
-  // Create user without password - they will receive an invitation email to set their password
-  const { data, error } = await adminClient.auth.admin.createUser({
-    email,
-    email_confirm: false, // They need to confirm via invitation
-    user_metadata: metadata,
-  });
-  
-  if (error) {
-    console.error("Error creating user:", error);
-    return { error: error.message, user: null };
-  }
-  
-  // Send invitation email to the user so they can set their password.
-  // The actual link in the email is controlled by the custom invite template
-  // at supabase/templates/invite.html, which routes the user through our
-  // /auth/confirm route so the session cookie is set on the app's domain.
-  if (data.user) {
-    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: metadata,
-      redirectTo: `${getSiteUrl()}/auth/update-password`,
-    });
-    
-    if (inviteError) {
-      console.error("Error sending invitation:", inviteError);
-      // User is created but invitation failed - still return success
-    }
+  const redirectTo = `${getSiteUrl()}/auth/update-password`;
 
+  // inviteUserByEmail creates the account and sends the invitation email.
+  // Do not call createUser first — the user would already exist and the invite
+  // email would fail silently.
+  const result = await inviteNewUserByEmail(adminClient, email, {
+    data: metadata,
+    redirectTo,
+  });
+
+  if (result.error) {
+    console.error("Error inviting user:", result.error);
+    if (isAlreadyExistsError(result.error)) {
+      return {
+        error: "Un compte avec cet e-mail existe déjà.",
+        user: null,
+      };
+    }
+    return { error: result.error, user: null };
+  }
+
+  if (result.user) {
     try {
-      await ensureSquareCustomerForUser({
+      await syncSupabaseUserToSquare({
         supabase: adminClient,
-        userId: data.user.id,
+        userId: result.user.id,
       });
     } catch (squareError) {
       console.error("Error creating Square customer for new user:", squareError);
     }
   }
-  
+
   revalidatePath("/admin");
-  return { user: data.user, error: null };
+  return { user: result.user, error: null };
+}
+
+export async function resendUserInvitation(userId: string) {
+  await checkAdmin();
+  const adminClient = getAdminClient();
+
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+  if (error || !data.user?.email) {
+    return { error: error?.message ?? "Utilisateur introuvable" };
+  }
+
+  const result = await sendAccountAccessEmail(
+    data.user.email,
+    `${getSiteUrl()}/auth/update-password`,
+  );
+
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  return { error: null };
 }
 
 // Get all activities with sessions
@@ -655,73 +785,136 @@ export async function getAllActivitiesWithSessions() {
   if (activitiesError) {
     return { error: activitiesError.message, activities: [] };
   }
-  
-  // Get all sessions
-  const { data: sessions, error: sessionsError } = await supabase
-    .from("session")
-    .select("id, start_ts, end_ts, activity_id, max_registrations")
-    .order("start_ts");
+
+  type SessionRow = {
+    id: string;
+    start_ts: string;
+    end_ts: string;
+    activity_id: string;
+    max_registrations: number | null;
+  };
+
+  const {
+    data: sessions,
+    error: sessionsError,
+  } = await fetchAllSupabaseRows<SessionRow>(async ({ from, to }) => {
+    const { data, error } = await supabase
+      .from("session")
+      .select("id, start_ts, end_ts, activity_id, max_registrations")
+      .order("start_ts")
+      .range(from, to);
+
+    return { data, error };
+  });
   
   if (sessionsError) {
-    return { error: sessionsError.message, activities: [] };
+    return { error: sessionsError, activities: [] };
   }
-  
-  // Get all registrations
-  const { data: registrations, error: registrationsError } = await supabase
-    .from("registration")
-    .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts");
+
+  type RegistrationRow = {
+    id: string;
+    user_id: string;
+    session_id: string | null;
+    reserved_start_ts: string | null;
+    reserved_end_ts: string | null;
+  };
+
+  const {
+    data: registrations,
+    error: registrationsError,
+  } = await fetchAllSupabaseRows<RegistrationRow>(async ({ from, to }) => {
+    const { data, error } = await supabase
+      .from("registration")
+      .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts")
+      .range(from, to);
+
+    return { data, error };
+  });
   
   if (registrationsError) {
-    return { error: registrationsError.message, activities: [] };
+    return { error: registrationsError, activities: [] };
   }
 
-  const { data: publicSubscriptions, error: publicSubscriptionsError } =
-    await supabase
-      .from("public_session_subscription")
-      .select("id, session_id, name, phone, created_at")
-      .order("created_at", { ascending: true });
+  const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+  const referencedSessionIds = [
+    ...new Set(
+      registrations
+        .map((registration) => registration.session_id)
+        .filter((sessionId): sessionId is string =>
+          Boolean(sessionId && !sessionsById.has(sessionId)),
+        ),
+    ),
+  ];
 
-  if (publicSubscriptionsError) {
-    return { error: publicSubscriptionsError.message, activities: [] };
-  }
-  
-  // Get all registration statuses to filter out cancelled ones
-  const registrationIds = registrations?.map(r => r.id) || [];
-  const activeRegistrationIds = new Set<string>();
-  
-  if (registrationIds.length > 0) {
-    const { data: statuses } = await supabase
-      .from("registration_status")
-      .select("registration_id, status, created_at")
-      .in("registration_id", registrationIds)
-      .order("created_at", { ascending: false });
-    
-    if (statuses) {
-      // Get the latest status for each registration
-      const seenRegistrations = new Set<string>();
-      for (const status of statuses) {
-        if (!seenRegistrations.has(status.registration_id)) {
-          seenRegistrations.add(status.registration_id);
-          // Only include non-cancelled registrations
-          if (status.status !== "CANCELLED") {
-            activeRegistrationIds.add(status.registration_id);
-          }
-        }
+  if (referencedSessionIds.length > 0) {
+    for (const sessionIdChunk of chunkValues(referencedSessionIds, SUPABASE_IN_CHUNK_SIZE)) {
+      const { data: missingSessions, error: missingSessionsError } = await supabase
+        .from("session")
+        .select("id, start_ts, end_ts, activity_id, max_registrations")
+        .in("id", sessionIdChunk);
+
+      if (missingSessionsError) {
+        return { error: missingSessionsError.message, activities: [] };
       }
-      
-      // Also include registrations that don't have any status (new registrations)
-      for (const id of registrationIds) {
-        if (!seenRegistrations.has(id)) {
-          activeRegistrationIds.add(id);
-        }
-      }
-    } else {
-      // If no statuses, include all registrations
-      for (const id of registrationIds) {
-        activeRegistrationIds.add(id);
+
+      for (const session of missingSessions ?? []) {
+        sessions.push(session);
+        sessionsById.set(session.id, session);
       }
     }
   }
+
+  const {
+    data: publicSubscriptions,
+    error: publicSubscriptionsError,
+  } = await fetchAllSupabaseRows<{
+    id: string;
+    session_id: string;
+    name: string;
+    phone: string;
+    created_at: string;
+  }>(async ({ from, to }) => {
+    const { data, error } = await supabase
+      .from("public_session_subscription")
+      .select("id, session_id, name, phone, created_at")
+      .order("created_at", { ascending: true })
+      .range(from, to);
+
+    return { data, error };
+  });
+
+  if (publicSubscriptionsError) {
+    return { error: publicSubscriptionsError, activities: [] };
+  }
+  
+  const registrationIds = registrations.map((registration) => registration.id);
+  const statuses: Array<{
+    registration_id: string;
+    status: string;
+    created_at: string;
+  }> = [];
+
+  for (const registrationIdChunk of chunkValues(
+    registrationIds,
+    SUPABASE_IN_CHUNK_SIZE,
+  )) {
+    const { data: statusChunk, error: statusesError } = await supabase
+      .from("registration_status")
+      .select("registration_id, status, created_at")
+      .in("registration_id", registrationIdChunk)
+      .order("created_at", { ascending: false });
+
+    if (statusesError) {
+      return { error: statusesError.message, activities: [] };
+    }
+
+    statuses.push(...(statusChunk ?? []));
+  }
+
+  const activeRegistrationIds = getActiveRegistrationIds(
+    registrationIds,
+    statuses,
+  );
   
   // Get user details for registrations
   const adminClient = getAdminClient();
@@ -730,7 +923,7 @@ export async function getAllActivitiesWithSessions() {
   
   // Group sessions by activity and date
   const activitiesWithSessions = activities?.map(activity => {
-    const activitySessions = sessions?.filter(s => s.activity_id === activity.id) || [];
+    const activitySessions = sessions.filter(s => s.activity_id === activity.id);
     
     // Group by date
     const sessionsByDate: Record<string, typeof activitySessions> = {};
@@ -745,23 +938,21 @@ export async function getAllActivitiesWithSessions() {
     // Add registrations to each session (only non-cancelled)
     const sessionsWithRegistrations = Object.entries(sessionsByDate).map(([date, dateSessions]) => {
       const sessionsWithRegs = dateSessions.map(session => {
-        const sessionRegistrations = registrations?.filter(r => 
+        const sessionRegistrations = registrations.filter(r => 
           r.session_id === session.id && activeRegistrationIds.has(r.id)
-        ) || [];
+        );
         const registeredUsers = sessionRegistrations.map(reg => {
           const user = usersMap.get(reg.user_id);
           return {
             registrationId: reg.id,
             userId: reg.user_id,
             email: user?.email || "Unknown",
-            name: user?.user_metadata?.first_name && user?.user_metadata?.last_name
-              ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-              : user?.email || "Unknown",
+            name: formatRegisteredUserName(user),
             reservedStartTs: reg.reserved_start_ts,
             reservedEndTs: reg.reserved_end_ts,
           };
         });
-        const publicRegisteredUsers = (publicSubscriptions ?? [])
+        const publicRegisteredUsers = publicSubscriptions
           .filter((subscription) => subscription.session_id === session.id)
           .map((subscription) => ({
             id: subscription.id,
@@ -798,14 +989,50 @@ export async function getAllActivitiesWithSessions() {
   return { activities: activitiesWithSessions, error: null };
 }
 
+function toCreditAmount(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const parsed = parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getAdminEnrollmentRequiredCredits(
+  nbCredits: number,
+  startTs: string,
+  endTs: string,
+  isPracticeActivity: boolean,
+): number {
+  if (nbCredits <= 0) {
+    return 0;
+  }
+
+  if (!isPracticeActivity) {
+    return nbCredits;
+  }
+
+  const durationHours =
+    (new Date(endTs).getTime() - new Date(startTs).getTime()) / (60 * 60 * 1000);
+
+  if (durationHours <= 0) {
+    return 0;
+  }
+
+  return nbCredits * durationHours;
+}
+
 // Add user to activity session
-export async function addUserToSession(sessionId: string, userId: string, paymentType: string) {
+export async function addUserToSession(
+  sessionId: string,
+  userId: string,
+  deductCredits: boolean,
+) {
   await checkAdmin();
   const supabase = await createClient();
 
   const { data: session, error: sessionError } = await supabase
     .from("session")
-    .select("id, start_ts, end_ts, activity:activity_id(type)")
+    .select("id, start_ts, end_ts, activity:activity_id(type, nb_credits)")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -813,10 +1040,50 @@ export async function addUserToSession(sessionId: string, userId: string, paymen
     return { error: sessionError?.message ?? "Session introuvable", registration: null };
   }
 
+  const now = Date.now();
+  const sessionEnd = new Date(session.end_ts);
+  const isFinished = sessionEnd.getTime() <= now;
+
+  if (isFinished && !isSameParisDay(session.start_ts)) {
+    return {
+      error:
+        "Cette session est terminée. L'ajout rétroactif n'est possible que le jour même.",
+      registration: null,
+    };
+  }
+
   const activity = Array.isArray(session.activity)
     ? session.activity[0]
     : session.activity;
   const isPracticeActivity = PRACTICE_ACTIVITY_TYPES.has(activity?.type ?? "");
+  const requiredCredits = getAdminEnrollmentRequiredCredits(
+    toCreditAmount(activity?.nb_credits),
+    session.start_ts,
+    session.end_ts,
+    isPracticeActivity,
+  );
+  const paymentType = deductCredits && requiredCredits > 0 ? "credits" : "admin";
+
+  if (deductCredits && requiredCredits > 0) {
+    const { data: credits, error: creditsError } = await supabase
+      .from("credit")
+      .select("amount")
+      .eq("user_id", userId);
+
+    if (creditsError) {
+      return { error: "Impossible de vérifier les crédits de l'utilisateur", registration: null };
+    }
+
+    const availableCredits =
+      credits?.reduce((total, credit) => total + toCreditAmount(credit.amount), 0) ?? 0;
+
+    if (availableCredits < requiredCredits) {
+      return {
+        error: `Crédits insuffisants. L'utilisateur a ${availableCredits} crédit${availableCredits !== 1 ? "s" : ""} et il en faut ${requiredCredits}.`,
+        registration: null,
+      };
+    }
+  }
   
   // Check if registration already exists
   const { data: existing } = await supabase
@@ -827,11 +1094,7 @@ export async function addUserToSession(sessionId: string, userId: string, paymen
     .maybeSingle();
   
   if (existing) {
-    return { error: "User already registered for this session", registration: null };
-  }
-  
-  if (!paymentType) {
-    return { error: "Le type de paiement est requis", registration: null };
+    return { error: "Cet utilisateur est déjà inscrit à cette session", registration: null };
   }
   
   const { data, error } = await supabase
@@ -864,6 +1127,10 @@ export async function addUserToSession(sessionId: string, userId: string, paymen
     });
   
   revalidatePath("/admin");
+  if (paymentType === "credits") {
+    revalidatePath("/account");
+    revalidatePath(`/admin/users/${userId}`);
+  }
   return { registration: data, error: null };
 }
 

@@ -7,7 +7,10 @@ import {
   MarketingSectionTitle,
 } from "@/components/marketing";
 import { CourseGrid } from "./course-layout";
-import { getCoursesFromDb } from "./course-data";
+import {
+  buildCourseDurationMinutesByActivityId,
+  getCoursesFromDb,
+} from "./course-data";
 
 async function CoursContent() {
   unstable_noStore();
@@ -15,8 +18,9 @@ async function CoursContent() {
 
   const { data: futureSessions, error: sessionsError } = await supabase
     .from("session")
-    .select("activity_id")
-    .gte("start_ts", new Date().toISOString());
+    .select("activity_id, start_ts, end_ts")
+    .gte("start_ts", new Date().toISOString())
+    .order("start_ts", { ascending: true });
 
   if (sessionsError) {
     console.error("Error fetching future course sessions", sessionsError);
@@ -38,7 +42,15 @@ async function CoursContent() {
     console.error("Error fetching activities", error);
   }
 
-  const courses = getCoursesFromDb(data);
+  const durationByActivityId = buildCourseDurationMinutesByActivityId(
+    futureSessions ?? [],
+  );
+  const courses = getCoursesFromDb(
+    data?.map((activity) => ({
+      ...activity,
+      durationMinutes: durationByActivityId.get(activity.id) ?? null,
+    })),
+  );
 
   return (
     <MarketingPageContainer className="pb-[360px] md:pb-[760px]">

@@ -1,6 +1,21 @@
 export const PARIS_TIMEZONE = "Europe/Paris";
 
+/** Weeks ahead admins can schedule (0 = current week). ~3 months. */
+export const MAX_FUTURE_WEEK_OFFSET = 12;
+
+/** Weeks in the past available as copy sources in admin scheduling. */
+export const MAX_PAST_WEEK_OFFSET = 8;
+
 const HOUR_MS = 60 * 60 * 1000;
+
+export function getPastWeekOffsets(): number[] {
+  return Array.from({ length: MAX_PAST_WEEK_OFFSET }, (_, i) => -(i + 1));
+}
+
+/** Week offsets from previous week through MAX_FUTURE_WEEK_OFFSET. */
+export function getScheduleWeekOffsets(): number[] {
+  return Array.from({ length: MAX_FUTURE_WEEK_OFFSET + 2 }, (_, i) => i - 1);
+}
 
 const parisPartsFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: PARIS_TIMEZONE,
@@ -51,6 +66,14 @@ export function getParisHour(date: Date): number {
 export function formatParisDate(date: Date): string {
   const { year, month, day } = getParisParts(date);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function isSameParisDay(
+  left: Date | string,
+  right: Date = new Date(),
+): boolean {
+  const leftDate = typeof left === "string" ? new Date(left) : left;
+  return formatParisDate(leftDate) === formatParisDate(right);
 }
 
 export function formatParisTime(date: Date): string {

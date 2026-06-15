@@ -15,7 +15,6 @@ import { OfferCardTabs } from "@/components/offer-card-tabs";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
 import { DetailsHashOpener } from "@/components/details-hash-opener";
 import {
-  formatPracticeScheduleFromSessions,
   stripPracticeScheduleFromDetail,
 } from "@/lib/format-practice-schedule";
 import { createClient } from "@/lib/supabase/server";
@@ -334,41 +333,9 @@ async function PratiqueLibreContent() {
     ]),
   );
 
-  const activityIds = [...activityIdsByName.values()];
-  const sessionsByActivityId = new Map<
-    string,
-    { start_ts: string; end_ts: string }[]
-  >();
-
-  if (activityIds.length > 0) {
-    const { data: sessions, error: sessionsError } = await supabase
-      .from("session")
-      .select("activity_id, start_ts, end_ts")
-      .in("activity_id", activityIds)
-      .gte("end_ts", new Date().toISOString())
-      .order("start_ts", { ascending: true });
-
-    if (sessionsError) {
-      console.error("Error fetching practice sessions", sessionsError);
-    }
-
-    for (const session of sessions ?? []) {
-      const existing = sessionsByActivityId.get(session.activity_id) ?? [];
-      existing.push({
-        start_ts: session.start_ts,
-        end_ts: session.end_ts,
-      });
-      sessionsByActivityId.set(session.activity_id, existing);
-    }
-  }
-
   const withActivityIds = (offers: PracticeOfferInput[]) =>
     offers.map((offer) => {
       const activityId = activityIdsByName.get(offer.activityName);
-      const activitySessions = activityId
-        ? (sessionsByActivityId.get(activityId) ?? [])
-        : [];
-
       const activity = activities?.find((row) => row.id === activityId);
 
       return {
@@ -380,10 +347,6 @@ async function PratiqueLibreContent() {
         activityId,
         activityCredits: activity?.nb_credits ?? null,
         reservable: offer.reservable !== false,
-        schedule:
-          offer.reservable === false
-            ? null
-            : formatPracticeScheduleFromSessions(activitySessions),
       };
     });
 

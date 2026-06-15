@@ -40,7 +40,7 @@ function acknowledgeSquareWebhook() {
 }
 
 async function handleSquareWebhook(payload: SquareWebhookPayload) {
-  if (payload.type === "customer.created") {
+  if (payload.type === "customer.created" || payload.type === "customer.updated") {
     const customer =
       payload.data?.object?.customer ??
       (payload.data?.id

@@ -18,7 +18,7 @@ import {
   updateSession,
   deleteSession,
 } from "@/app/admin/actions";
-import { Loader2, Plus, X, ChevronLeft, ChevronRight, Users, Pencil, Calendar, Trash2 } from "lucide-react";
+import { Loader2, Plus, X, ChevronLeft, ChevronRight, Users, Pencil, Calendar, Trash2, Search } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   formatParisTime,
   getParisHour,
   getParisMondayDate,
+  isSameParisDay,
   PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
@@ -55,7 +56,8 @@ const PRACTICE_ACTIVITY_FILTER_ALL = "__all__";
 
 type User = {
   id: string;
-  email: string;
+  email?: string;
+  credits?: number;
   user_metadata?: {
     first_name?: string;
     last_name?: string;
@@ -97,6 +99,82 @@ function toPracticeReservationSlots(
     reservedStartTs: user.reservedStartTs,
     reservedEndTs: user.reservedEndTs,
   }));
+}
+
+function getEnrollmentRequiredCredits(
+  nbCredits: number | null | undefined,
+  startTs: string,
+  endTs: string,
+  isPracticeActivity: boolean,
+): number {
+  const normalizedCredits = Number(nbCredits ?? 0);
+  if (!Number.isFinite(normalizedCredits) || normalizedCredits <= 0) {
+    return 0;
+  }
+
+  if (!isPracticeActivity) {
+    return normalizedCredits;
+  }
+
+  const durationHours =
+    (new Date(endTs).getTime() - new Date(startTs).getTime()) / (60 * 60 * 1000);
+
+  if (durationHours <= 0) {
+    return 0;
+  }
+
+  return normalizedCredits * durationHours;
+}
+
+function normalizeSearchValue(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getUserSearchText(user: User): string {
+  const firstName = user.user_metadata?.first_name ?? "";
+  const lastName = user.user_metadata?.last_name ?? "";
+  return `${firstName} ${lastName} ${getUserDisplayName(user)} ${user.email}`.trim();
+}
+
+function getUserDisplayName(user: User): string {
+  const firstName = user.user_metadata?.first_name?.trim();
+  const lastName = user.user_metadata?.last_name?.trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  }
+
+  return firstName || lastName || user.email;
+}
+
+function isSessionFinished(session: Pick<SessionWithUsers, "end_ts">): boolean {
+  return new Date(session.end_ts).getTime() <= Date.now();
+}
+
+function canAdminAddUserToSession(
+  session: SessionWithUsers,
+  isPracticeView: boolean,
+): boolean {
+  if (isSessionFinished(session) && isSameParisDay(session.start_ts)) {
+    return true;
+  }
+
+  if (session.max_registrations == null) {
+    return true;
+  }
+
+  const publicCount = session.publicRegisteredUsers?.length || 0;
+  const totalCount = (session.registeredUsers?.length || 0) + publicCount;
+
+  if (isPracticeView) {
+    return !getPracticeSessionCapacity(session).areAllHoursFull;
+  }
+
+  return totalCount < session.max_registrations;
 }
 
 function getPracticeSessionCapacity(session: SessionWithUsers) {
@@ -303,7 +381,9 @@ export function AdminActivitiesTab({
   const [selectedSession, setSelectedSession] = useState<SessionWithUsers | null>(null);
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [creditDeductionDialogOpen, setCreditDeductionDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -360,6 +440,53 @@ export function AdminActivitiesTab({
       ),
     })).filter((group) => group.activities.length > 0);
   }, [activities, isPracticeView]);
+
+  const selectedActivity = useMemo(() => {
+    if (!selectedSession) {
+      return null;
+    }
+    return activities.find((activity) => activity.id === selectedSession.activity_id) ?? null;
+  }, [activities, selectedSession]);
+
+  const selectedUser = useMemo(
+    () => allUsers.find((user) => user.id === selectedUserId) ?? null,
+    [allUsers, selectedUserId],
+  );
+
+  const requiredCredits = useMemo(() => {
+    if (!selectedSession || !selectedActivity) {
+      return 0;
+    }
+
+    return getEnrollmentRequiredCredits(
+      selectedActivity.nb_credits,
+      selectedSession.start_ts,
+      selectedSession.end_ts,
+      PRACTICE_ACTIVITY_TYPES.has(selectedActivity.type ?? ""),
+    );
+  }, [selectedActivity, selectedSession]);
+
+  const availableUsersForSession = useMemo(() => {
+    if (!selectedSession) {
+      return allUsers;
+    }
+
+    return allUsers.filter(
+      (user) =>
+        !selectedSession.registeredUsers.some((registeredUser) => registeredUser.userId === user.id),
+    );
+  }, [allUsers, selectedSession]);
+
+  const filteredUsersForAdd = useMemo(() => {
+    const normalizedQuery = normalizeSearchValue(userSearchQuery);
+    if (!normalizedQuery) {
+      return availableUsersForSession;
+    }
+
+    return availableUsersForSession.filter((user) =>
+      normalizeSearchValue(getUserSearchText(user)).includes(normalizedQuery),
+    );
+  }, [availableUsersForSession, userSearchQuery]);
 
   const loadData = async () => {
     setLoading(true);
@@ -563,19 +690,25 @@ export function AdminActivitiesTab({
     }
   };
 
-  const handleAddUser = async () => {
+  const resetAddUserFlow = () => {
+    setAddUserDialogOpen(false);
+    setCreditDeductionDialogOpen(false);
+    setSelectedUserId("");
+    setUserSearchQuery("");
+  };
+
+  const handleAddUser = async (deductCredits: boolean) => {
     if (!selectedSession || !selectedUserId) return;
 
     setAdding(true);
     setError(null);
 
     try {
-      const result = await addUserToSession(selectedSession.id, selectedUserId, "admin");
+      const result = await addUserToSession(selectedSession.id, selectedUserId, deductCredits);
       if (result.error) {
         setError(result.error);
       } else {
-        setAddUserDialogOpen(false);
-        setSelectedUserId("");
+        resetAddUserFlow();
         await loadData();
       }
     } catch (err) {
@@ -583,6 +716,25 @@ export function AdminActivitiesTab({
     } finally {
       setAdding(false);
     }
+  };
+
+  const handlePrepareAddUser = () => {
+    if (!selectedSession || !selectedUserId) return;
+
+    if (requiredCredits > 0) {
+      setCreditDeductionDialogOpen(true);
+      return;
+    }
+
+    void handleAddUser(false);
+  };
+
+  const handleOpenAddUser = (session: SessionWithUsers) => {
+    setSelectedSession(session);
+    setSelectedUserId("");
+    setUserSearchQuery("");
+    setError(null);
+    setAddUserDialogOpen(true);
   };
 
   const handleDeleteSession = async (session: SessionWithUsers) => {
@@ -887,6 +1039,15 @@ export function AdminActivitiesTab({
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  onClick={() => handleOpenAddUser(session)}
+                                  disabled={!canAdminAddUserToSession(session, isPracticeView)}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Ajouter un inscrit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   onClick={() => {
                                     setSelectedSession(session);
                                     setUsersDialogOpen(true);
@@ -1092,6 +1253,11 @@ export function AdminActivitiesTab({
               {isPracticeView
                 ? "gérer les utilisateurs inscrits sur ce créneau d'ouverture"
                 : "gérer les utilisateurs inscrits à cette session"}
+              {selectedSession && isSessionFinished(selectedSession) && isSameParisDay(selectedSession.start_ts) ? (
+                <span className="mt-2 block text-amber-700 dark:text-amber-400">
+                  Session terminée — vous pouvez encore ajouter un participant oublié aujourd&apos;hui et déduire ses crédits.
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1125,22 +1291,16 @@ export function AdminActivitiesTab({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setAddUserDialogOpen(true)}
-                disabled={(() => {
-                  if (!selectedSession || selectedSession.max_registrations == null) {
-                    return false;
-                  }
-
-                  const publicCount = selectedSession.publicRegisteredUsers?.length || 0;
-                  const totalCount =
-                    (selectedSession.registeredUsers?.length || 0) + publicCount;
-
-                  if (isPracticeView) {
-                    return getPracticeSessionCapacity(selectedSession).areAllHoursFull;
-                  }
-
-                  return totalCount >= selectedSession.max_registrations;
-                })()}
+                onClick={() => {
+                  setSelectedUserId("");
+                  setUserSearchQuery("");
+                  setAddUserDialogOpen(true);
+                }}
+                disabled={
+                  selectedSession
+                    ? !canAdminAddUserToSession(selectedSession, isPracticeView)
+                    : true
+                }
               >
                 <Plus className="h-4 w-4 mr-2" />
                 ajouter un utilisateur
@@ -1201,7 +1361,17 @@ export function AdminActivitiesTab({
       </Dialog>
 
       {/* Add User Dialog */}
-      <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+      <Dialog
+        open={addUserDialogOpen}
+        onOpenChange={(open) => {
+          setAddUserDialogOpen(open);
+          if (!open) {
+            setSelectedUserId("");
+            setUserSearchQuery("");
+            setError(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
           <DialogTitle>
@@ -1213,63 +1383,172 @@ export function AdminActivitiesTab({
               {isPracticeView
                 ? "L'ajout manuel inscrit l'utilisateur sur tout le créneau d'ouverture."
                 : "Sélectionnez un utilisateur à ajouter à cette session"}
+              {selectedSession && isSessionFinished(selectedSession) && isSameParisDay(selectedSession.start_ts) ? (
+                <span className="mt-2 block text-amber-700 dark:text-amber-400">
+                  Ajout rétroactif autorisé aujourd&apos;hui, même si la session est terminée ou complète.
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="user">Utilisateur *</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un utilisateur" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allUsers
-                    .filter(
-                      (user) =>
-                        !selectedSession?.registeredUsers.some(
-                          (ru) => ru.userId === user.id
-                        )
-                    )
-                    .map((user) => {
-                      const name =
-                        user.user_metadata?.first_name && user.user_metadata?.last_name
-                          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-                          : user.user_metadata?.first_name ||
-                            user.user_metadata?.last_name ||
-                            user.email;
-                      return (
-                        <SelectItem key={user.id} value={user.id}>
-                          {name} ({user.email})
-                        </SelectItem>
-                      );
-                    })}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="user-search">Utilisateur *</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="user-search"
+                  value={userSearchQuery}
+                  onChange={(event) => setUserSearchQuery(event.target.value)}
+                  placeholder="Rechercher par nom ou e-mail..."
+                  className="pl-9"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="max-h-56 overflow-y-auto rounded-md border">
+                {filteredUsersForAdd.length > 0 ? (
+                  filteredUsersForAdd.map((user) => {
+                    const name = getUserDisplayName(user);
+                    const creditsLabel =
+                      typeof user.credits === "number"
+                        ? `${user.credits} crédit${user.credits !== 1 ? "s" : ""}`
+                        : null;
+
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => setSelectedUserId(user.id)}
+                        className={cn(
+                          "flex w-full flex-col items-start gap-0.5 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/50",
+                          selectedUserId === user.id && "bg-primary/10",
+                        )}
+                      >
+                        <span className="font-medium">{name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {user.email}
+                          {creditsLabel ? ` · ${creditsLabel}` : ""}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    {userSearchQuery
+                      ? "Aucun utilisateur ne correspond à cette recherche"
+                      : "Aucun utilisateur disponible"}
+                  </p>
+                )}
+              </div>
             </div>
+            {requiredCredits > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Cette session coûte {requiredCredits} crédit{requiredCredits !== 1 ? "s" : ""}.
+                Vous pourrez choisir de les déduire ou non à l&apos;étape suivante.
+              </p>
+            ) : null}
           </div>
-          {error && (
+          {error && !creditDeductionDialogOpen ? (
             <div className="text-sm text-destructive mb-4">{error}</div>
-          )}
+          ) : null}
           <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setAddUserDialogOpen(false);
-                  setSelectedUserId("");
-                }}
+                onClick={resetAddUserFlow}
               >
               Annuler
             </Button>
-            <Button onClick={handleAddUser} disabled={adding || !selectedUserId}>
+            <Button onClick={handlePrepareAddUser} disabled={adding || !selectedUserId}>
               {adding ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Ajout...
                 </>
               ) : (
-                "ajouter"
+                "Continuer"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credit Deduction Dialog */}
+      <Dialog
+        open={creditDeductionDialogOpen}
+        onOpenChange={(open) => {
+          setCreditDeductionDialogOpen(open);
+          if (!open) {
+            setError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Déduire les crédits ?</DialogTitle>
+            <DialogDescription>
+              {selectedUser
+                ? `Inscription de ${getUserDisplayName(selectedUser)} à ${selectedSession?.activity_name ?? "cette session"}.`
+                : "Choisissez si les crédits doivent être déduits du compte utilisateur."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border p-4 space-y-2">
+              <p className="text-sm">
+                Coût de la session :{" "}
+                <span className="font-medium">
+                  {requiredCredits} crédit{requiredCredits !== 1 ? "s" : ""}
+                </span>
+              </p>
+              <p className="text-sm">
+                Solde de l&apos;utilisateur :{" "}
+                <span className="font-medium">
+                  {selectedUser?.credits ?? 0} crédit
+                  {(selectedUser?.credits ?? 0) !== 1 ? "s" : ""}
+                </span>
+              </p>
+            </div>
+            {error ? (
+              <div className="text-sm text-destructive">{error}</div>
+            ) : null}
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <Button
+              onClick={() => handleAddUser(true)}
+              disabled={
+                adding ||
+                (selectedUser?.credits ?? 0) < requiredCredits
+              }
+              className="w-full"
+            >
+              {adding ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Inscription...
+                </>
+              ) : (
+                `Déduire ${requiredCredits} crédit${requiredCredits !== 1 ? "s" : ""}`
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAddUser(false)}
+              disabled={adding}
+              className="w-full"
+            >
+              Inscrire sans déduire
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setCreditDeductionDialogOpen(false);
+                setError(null);
+              }}
+              disabled={adding}
+              className="w-full"
+            >
+              Retour
             </Button>
           </DialogFooter>
         </DialogContent>

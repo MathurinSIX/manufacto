@@ -1,4 +1,5 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { syncSupabaseUserToSquare } from "@/lib/square/server";
 import { NextResponse } from "next/server";
 
 const ALREADY_EXISTS_HINTS = [
@@ -75,6 +76,17 @@ export async function POST(request: Request) {
         { error: createError.message },
         { status: 400 },
       );
+    }
+
+    if (createdUser?.user?.id) {
+      try {
+        await syncSupabaseUserToSquare({
+          supabase: adminClient,
+          userId: createdUser.user.id,
+        });
+      } catch (squareError) {
+        console.error("Error syncing Square customer for new user:", squareError);
+      }
     }
 
     return NextResponse.json(

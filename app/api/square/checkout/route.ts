@@ -5,9 +5,9 @@ import { resolveSquareSubscriptionFromItemVariation } from "@/lib/square/catalog
 import {
   createSquareCatalogPaymentLink,
   createSquareSubscriptionPaymentLink,
-  ensureSquareCustomerForUser,
   getAdminClient,
   getSiteUrl,
+  syncSupabaseUserToSquare,
 } from "@/lib/square/server";
 
 const UUID_RE =
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     const adminClientForBuyer = user ? getAdminClient() : null;
     const squareCustomerId =
       user && adminClientForBuyer
-        ? await ensureSquareCustomerForUser({
+        ? await syncSupabaseUserToSquare({
             supabase: adminClientForBuyer,
             userId: user.id,
           })

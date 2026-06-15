@@ -18,13 +18,14 @@ import {
 import {
   getAllUsers,
   createUser,
+  resendUserInvitation,
   addCreditToUser,
   makeUserAdmin,
   removeUserAdmin,
   updateUser,
   deleteUser,
 } from "@/app/admin/actions";
-import { Plus, Loader2, Coins, Shield, ShieldOff, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Coins, Shield, ShieldOff, Pencil, Trash2, Mail } from "lucide-react";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const USERS_PER_PAGE = 20;
@@ -76,6 +77,7 @@ export function AdminUsersTab() {
   const [addingCredit, setAddingCredit] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFirstName, setNewUserFirstName] = useState("");
@@ -502,6 +504,39 @@ export function AdminUsersTab() {
                               <Shield className="h-4 w-4" />
                             </Button>
                           )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="Renvoyer l'invitation"
+                            aria-label="Renvoyer l'invitation"
+                            disabled={resendingUserId === user.id}
+                            onClick={async () => {
+                              setError(null);
+                              setResendingUserId(user.id);
+                              try {
+                                const result = await resendUserInvitation(user.id);
+                                if (result.error) {
+                                  setError(result.error);
+                                }
+                              } catch (err) {
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Une erreur s'est produite",
+                                );
+                              } finally {
+                                setResendingUserId(null);
+                              }
+                            }}
+                          >
+                            {resendingUserId === user.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Mail className="h-4 w-4" />
+                            )}
+                          </Button>
                           <Button
                             type="button"
                             size="icon"

@@ -13,6 +13,7 @@ import {
 } from "@/components/marketing";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
+  buildCourseDurationMinutesByActivityId,
   formatCredits,
   formatPrice,
   getCourseBySlug,
@@ -59,18 +60,41 @@ async function getCourses() {
   unstable_noStore();
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("activity")
-    .select("id, name, description, image_url, nb_credits, price, square_product_id, level, audience, discipline")
-    .eq("type", "cours")
-    .is("deleted_at", null)
-    .order("name");
+  const [{ data, error }, { data: futureSessions, error: sessionsError }] =
+    await Promise.all([
+      supabase
+        .from("activity")
+        .select(
+          "id, name, description, image_url, nb_credits, price, square_product_id, level, audience, discipline",
+        )
+        .eq("type", "cours")
+        .is("deleted_at", null)
+        .order("name"),
+      supabase
+        .from("session")
+        .select("activity_id, start_ts, end_ts")
+        .gte("start_ts", new Date().toISOString())
+        .order("start_ts", { ascending: true }),
+    ]);
 
   if (error) {
     console.error("Error fetching activities", error);
   }
 
-  return getCoursesFromDb(data);
+  if (sessionsError) {
+    console.error("Error fetching course session durations", sessionsError);
+  }
+
+  const durationByActivityId = buildCourseDurationMinutesByActivityId(
+    futureSessions ?? [],
+  );
+
+  return getCoursesFromDb(
+    data?.map((activity) => ({
+      ...activity,
+      durationMinutes: durationByActivityId.get(activity.id) ?? null,
+    })),
+  );
 }
 
 async function getUpcomingSessions(activityId: string): Promise<CourseSession[]> {

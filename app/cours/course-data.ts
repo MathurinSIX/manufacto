@@ -28,6 +28,7 @@ export type DbCourse = {
   level: string | null;
   audience: string | null;
   discipline: string | null;
+  durationMinutes?: number | null;
 };
 
 export const DEFAULT_COURSE_IMAGE = "/assets/homepage/Vector.jpg";
@@ -89,6 +90,50 @@ export function formatCredits(credits: number | null) {
   return `${credits} crédit${credits !== 1 ? "s" : ""}`;
 }
 
+export function getSessionDurationMinutes(startTs: string, endTs: string): number {
+  return Math.round(
+    (new Date(endTs).getTime() - new Date(startTs).getTime()) / 60_000,
+  );
+}
+
+export function formatCourseDurationMinutes(minutes: number): string | null {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return null;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (remainder === 0) {
+    return `${hours}h`;
+  }
+
+  if (hours === 0) {
+    return `${remainder} min`;
+  }
+
+  return `${hours}h${remainder.toString().padStart(2, "0")}`;
+}
+
+export function buildCourseDurationMinutesByActivityId(
+  sessions: Array<{ activity_id: string; start_ts: string; end_ts: string }>,
+): Map<string, number> {
+  const durations = new Map<string, number>();
+
+  for (const session of sessions) {
+    if (durations.has(session.activity_id)) {
+      continue;
+    }
+
+    const minutes = getSessionDurationMinutes(session.start_ts, session.end_ts);
+    if (minutes > 0) {
+      durations.set(session.activity_id, minutes);
+    }
+  }
+
+  return durations;
+}
+
 export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
   if (!data?.length) {
     return [];
@@ -108,7 +153,8 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
       price: activity.price,
       squareProductId: activity.square_product_id,
       credits: activity.nb_credits,
-      duration: "3h",
+      duration:
+        formatCourseDurationMinutes(activity.durationMinutes ?? 0) ?? "",
       level: activity.level,
       audience: activity.audience,
       description: activity.description || DEFAULT_COURSE_DESCRIPTION,

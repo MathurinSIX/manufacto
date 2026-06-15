@@ -324,6 +324,8 @@ export async function registerForSession(
   revalidatePath("/account");
   revalidatePath("/cours");
   revalidatePath("/reserver");
+  revalidatePath("/admin");
+  revalidatePath(`/admin/users/${user.id}`);
 
   return { error: null, registrationId: data.id };
 }
@@ -617,6 +619,8 @@ export async function registerForPracticeReservation(
   revalidatePath("/account");
   revalidatePath("/cours");
   revalidatePath("/reserver");
+  revalidatePath("/admin");
+  revalidatePath(`/admin/users/${user.id}`);
 
   return {
     error: null as string | null,

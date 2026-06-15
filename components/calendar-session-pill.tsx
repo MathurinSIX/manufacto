@@ -59,7 +59,10 @@ export function CalendarSessionPill({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const time = timeFormatter.format(new Date(session.start_ts));
+  const start = new Date(session.start_ts);
+  const end = new Date(session.end_ts);
+  const time = timeFormatter.format(start);
+  const endTime = timeFormatter.format(end);
   const title = stripDisciplinePrefix(session.activityName, session.discipline);
   const palette = session.discipline
     ? COURSE_DISCIPLINE_COLORS[session.discipline]
@@ -82,9 +85,11 @@ export function CalendarSessionPill({
           "group/pill block w-full rounded-md border text-left font-medium leading-tight transition hover:brightness-95",
           compact ? "px-1 py-0.5 text-[10px]" : "px-1.5 py-1 text-[11px]",
         )}
-        title={`Réserver — ${time} ${title}`}
+        title={`Réserver — ${time} – ${endTime} ${title}`}
       >
-        <span className="block font-semibold tabular-nums">{time}</span>
+        <span className="block font-semibold tabular-nums">
+          {time} – {endTime}
+        </span>
         <span
           className={cn(
             "mt-0.5 break-words leading-snug",

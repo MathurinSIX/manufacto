@@ -499,7 +499,7 @@ type SquareUserIdentity = {
   familyName: string | null;
 };
 
-async function loadUserSquareIdentity(
+export async function loadUserSquareIdentity(
   supabase: SupabaseAdminClient,
   userId: string,
 ): Promise<SquareUserIdentity> {
@@ -665,7 +665,7 @@ async function findSupabaseUserIdByEmail(
   }
 }
 
-type SquareCustomerProfile = {
+export type SquareCustomerProfile = {
   id?: string;
   reference_id?: string;
   email_address?: string;
@@ -701,6 +701,156 @@ export async function retrieveSquareCustomer(
   }
 }
 
+async function mergeSupabaseProfileFromSquare(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  customer: SquareCustomerProfile,
+) {
+  const { data } = await supabase.auth.admin.getUserById(userId);
+  const user = data?.user;
+  if (!user) {
+    return;
+  }
+
+  const metadata = { ...(user.user_metadata ?? {}) };
+  let changed = false;
+
+  if (!metadata.first_name && customer.given_name?.trim()) {
+    metadata.first_name = customer.given_name.trim();
+    changed = true;
+  }
+  if (!metadata.last_name && customer.family_name?.trim()) {
+    metadata.last_name = customer.family_name.trim();
+    changed = true;
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  const { error } = await supabase.auth.admin.updateUserById(userId, {
+    user_metadata: metadata,
+  });
+
+  if (error) {
+    console.error("Error merging Square profile into Supabase user:", error);
+  }
+}
+
+export async function updateSquareCustomerProfile({
+  customerId,
+  emailAddress,
+  givenName,
+  familyName,
+  referenceId,
+}: {
+  customerId: string;
+  emailAddress?: string | null;
+  givenName?: string | null;
+  familyName?: string | null;
+  referenceId?: string | null;
+}) {
+  const body: Record<string, string> = {};
+
+  if (referenceId?.trim()) {
+    body.reference_id = referenceId.trim();
+  }
+  if (emailAddress?.trim()) {
+    body.email_address = emailAddress.trim();
+  }
+  if (givenName?.trim()) {
+    body.given_name = givenName.trim();
+  }
+  if (familyName?.trim()) {
+    body.family_name = familyName.trim();
+  }
+
+  if (Object.keys(body).length === 0) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${getSquareApiBaseUrl()}/v2/customers/${customerId}`,
+      {
+        method: "PUT",
+        headers: getSquareHeaders(),
+        body: JSON.stringify(body),
+      },
+    );
+    const payload = (await response.json()) as {
+      errors?: { detail?: string }[];
+    };
+
+    if (!response.ok) {
+      console.error(
+        "Failed to update Square customer profile:",
+        payload.errors?.map((error) => error.detail).join(", "),
+      );
+    }
+  } catch (error) {
+    console.error("Failed to update Square customer profile:", error);
+  }
+}
+
+export async function listSquareCustomers(): Promise<SquareCustomerProfile[]> {
+  const customers: SquareCustomerProfile[] = [];
+  let cursor: string | undefined;
+
+  while (true) {
+    const body: Record<string, unknown> = {
+      limit: 100,
+      query: {
+        sort: {
+          field: "CREATED_AT",
+          order: "ASC",
+        },
+      },
+    };
+
+    if (cursor) {
+      body.cursor = cursor;
+    }
+
+    try {
+      const response = await fetch(
+        `${getSquareApiBaseUrl()}/v2/customers/search`,
+        {
+          method: "POST",
+          headers: getSquareHeaders(),
+          body: JSON.stringify(body),
+        },
+      );
+      const payload = (await response.json()) as {
+        customers?: SquareCustomerProfile[];
+        cursor?: string;
+        errors?: { detail?: string }[];
+      };
+
+      if (!response.ok) {
+        console.error(
+          "Square customer listing failed:",
+          payload.errors?.map((error) => error.detail).join(", "),
+        );
+        break;
+      }
+
+      customers.push(...(payload.customers ?? []));
+
+      if (!payload.cursor) {
+        break;
+      }
+
+      cursor = payload.cursor;
+    } catch (error) {
+      console.error("Square customer listing threw:", error);
+      break;
+    }
+  }
+
+  return customers;
+}
+
 export async function syncSquareCustomerToBackend(
   customer: SquareCustomerProfile,
 ) {
@@ -717,6 +867,18 @@ export async function syncSquareCustomerToBackend(
   if (referenceId) {
     const { data: linkedUser } = await supabase.auth.admin.getUserById(referenceId);
     if (linkedUser?.user) {
+      await updateSquareCustomerProfile({
+        customerId: squareCustomerId,
+        referenceId,
+        emailAddress,
+        givenName: customer.given_name,
+        familyName: customer.family_name,
+      });
+      await mergeSupabaseProfileFromSquare(
+        supabase,
+        referenceId,
+        customer,
+      );
       return;
     }
   }
@@ -730,55 +892,49 @@ export async function syncSquareCustomerToBackend(
     if (givenName) metadata.first_name = givenName;
     if (familyName) metadata.last_name = familyName;
 
-    const { data: createdUser, error: createError } =
-      await supabase.auth.admin.createUser({
-        email: emailAddress,
-        email_confirm: false,
-        user_metadata: metadata,
+    const { data: invitedUser, error: inviteError } =
+      await supabase.auth.admin.inviteUserByEmail(emailAddress, {
+        data: metadata,
+        redirectTo: `${getSiteUrl()}/auth/update-password`,
       });
 
-    if (createError) {
-      if (isAlreadyExistsError(createError.message)) {
+    if (inviteError) {
+      if (isAlreadyExistsError(inviteError.message)) {
         userId = await findSupabaseUserIdByEmail(supabase, emailAddress);
       } else {
-        console.error("Error creating Supabase user from Square customer:", createError);
+        console.error("Error inviting Supabase user from Square customer:", inviteError);
         return;
       }
-    } else if (createdUser.user) {
-      userId = createdUser.user.id;
-
-      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        emailAddress,
-        {
-          data: metadata,
-          redirectTo: `${getSiteUrl()}/auth/update-password`,
-        },
-      );
-
-      if (inviteError) {
-        console.error("Error inviting Supabase user from Square customer:", inviteError);
-      }
+    } else if (invitedUser.user) {
+      userId = invitedUser.user.id;
     }
+  } else {
+    await mergeSupabaseProfileFromSquare(supabase, userId, customer);
   }
 
   if (userId) {
-    await updateSquareCustomerReferenceId(squareCustomerId, userId);
+    await updateSquareCustomerProfile({
+      customerId: squareCustomerId,
+      referenceId: userId,
+      emailAddress,
+      givenName: customer.given_name,
+      familyName: customer.family_name,
+    });
   }
 }
 
 async function updateSquareCustomerReferenceId(
   customerId: string,
   referenceId: string,
+  identity?: SquareUserIdentity,
 ) {
-  try {
-    await fetch(`${getSquareApiBaseUrl()}/v2/customers/${customerId}`, {
-      method: "PUT",
-      headers: getSquareHeaders(),
-      body: JSON.stringify({ reference_id: referenceId }),
-    });
-  } catch (error) {
-    console.error("Failed to backfill Square customer reference_id:", error);
-  }
+  await updateSquareCustomerProfile({
+    customerId,
+    referenceId,
+    emailAddress: identity?.emailAddress,
+    givenName: identity?.givenName,
+    familyName: identity?.familyName,
+  });
 }
 
 export async function ensureSquareCustomerForUser({
@@ -792,6 +948,8 @@ export async function ensureSquareCustomerForUser({
     return null;
   }
 
+  const identity = await loadUserSquareIdentity(supabase, userId);
+
   const { data: priorPurchase } = await supabase
     .from("square_purchase")
     .select("square_customer_id")
@@ -803,21 +961,23 @@ export async function ensureSquareCustomerForUser({
 
   if (priorPurchase?.square_customer_id) {
     const cached = priorPurchase.square_customer_id as string;
-    void updateSquareCustomerReferenceId(cached, userId);
-    return cached;
+    const existingCustomer = await retrieveSquareCustomer(cached);
+    if (existingCustomer) {
+      void updateSquareCustomerReferenceId(cached, userId, identity);
+      return cached;
+    }
   }
 
   const byReference = await searchSquareCustomerByReferenceId(userId);
   if (byReference) {
+    void updateSquareCustomerReferenceId(byReference, userId, identity);
     return byReference;
   }
-
-  const identity = await loadUserSquareIdentity(supabase, userId);
 
   if (identity.emailAddress) {
     const existing = await searchSquareCustomerByEmail(identity.emailAddress);
     if (existing) {
-      void updateSquareCustomerReferenceId(existing, userId);
+      void updateSquareCustomerReferenceId(existing, userId, identity);
       return existing;
     }
   }
@@ -837,6 +997,30 @@ export async function ensureSquareCustomerForUser({
     console.error("Failed to create Square customer for user:", error);
     return null;
   }
+}
+
+export async function syncSupabaseUserToSquare({
+  supabase,
+  userId,
+}: {
+  supabase: SupabaseAdminClient;
+  userId: string;
+}): Promise<string | null> {
+  const customerId = await ensureSquareCustomerForUser({ supabase, userId });
+  if (!customerId) {
+    return null;
+  }
+
+  const identity = await loadUserSquareIdentity(supabase, userId);
+  await updateSquareCustomerProfile({
+    customerId,
+    referenceId: userId,
+    emailAddress: identity.emailAddress,
+    givenName: identity.givenName ?? "Manufacto",
+    familyName: identity.familyName ?? "Client",
+  });
+
+  return customerId;
 }
 
 async function attachCustomerToSquareOrder({

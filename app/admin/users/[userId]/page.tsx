@@ -97,7 +97,6 @@ async function UserAccountContent({
 
   const { userId } = await params;
 
-  // Get the target user's information using admin client
   const adminClient = getAdminClient();
   const { data: { user: targetUser }, error: userError } = await adminClient.auth.admin.getUserById(userId);
 
@@ -108,7 +107,7 @@ async function UserAccountContent({
   const now = new Date().toISOString();
 
   // Fetch registrations with session and activity details for the target user
-  const { data: registrations, error: registrationsError } = await supabase
+  const { data: registrations, error: registrationsError } = await adminClient
     .from("registration")
     .select(`
       id,
@@ -135,7 +134,7 @@ async function UserAccountContent({
   
   if (registrationIds.length > 0) {
     // Get the latest status for each registration
-    const { data: statuses } = await supabase
+    const { data: statuses } = await adminClient
       .from("registration_status")
       .select("registration_id, status, created_at")
       .in("registration_id", registrationIds)
@@ -182,7 +181,7 @@ async function UserAccountContent({
       .filter((id): id is string => !!id);
     
     if (sessionIds.length > 0) {
-      const { data: sessionsData } = await supabase
+      const { data: sessionsData } = await adminClient
         .from("session")
         .select(`
           id,
@@ -257,7 +256,7 @@ async function UserAccountContent({
     }) || [];
 
   // Fetch credit history
-  const { data: creditHistory, error: creditError } = await supabase
+  const { data: creditHistory, error: creditError } = await adminClient
     .from("credit")
     .select("id, amount, created_at")
     .eq("user_id", userId)
@@ -266,7 +265,7 @@ async function UserAccountContent({
   // Fetch registration_status linked to these credits
   const creditIds = creditHistory?.map((c) => c.id) || [];
   const { data: registrationStatusesWithCredits } = creditIds.length > 0
-    ? await supabase
+    ? await adminClient
         .from("registration_status")
         .select(`
           id,

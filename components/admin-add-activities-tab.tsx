@@ -27,6 +27,8 @@ import {
   formatParisTime,
   getParisMondayDate,
   getParisWeekdayIndex,
+  getPastWeekOffsets,
+  getScheduleWeekOffsets,
   PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
@@ -502,7 +504,7 @@ export function AdminAddActivitiesTab({
                 <SelectValue placeholder="Sélectionner une semaine" />
               </SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 8 }, (_, i) => -(i + 1)).map((offset) => (
+                {getPastWeekOffsets().map((offset) => (
                   <SelectItem key={offset} value={offset.toString()}>
                     {getWeekLabel(offset)}
                   </SelectItem>
@@ -524,7 +526,7 @@ export function AdminAddActivitiesTab({
                 <SelectValue placeholder="Sélectionner une semaine" />
               </SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 8 }, (_, i) => i - 1).map((offset) => (
+                {getScheduleWeekOffsets().map((offset) => (
                   <SelectItem key={offset} value={offset.toString()}>
                     {getWeekLabel(offset)}
                   </SelectItem>
@@ -627,7 +629,7 @@ export function AdminAddActivitiesTab({
                   <SelectValue placeholder="Sélectionner une semaine" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 8 }, (_, i) => i - 1).map((offset) => (
+                  {getScheduleWeekOffsets().map((offset) => (
                     <SelectItem key={offset} value={offset.toString()}>
                       {getWeekLabel(offset)}
                     </SelectItem>
