@@ -73,6 +73,36 @@ function getAdminClient() {
   );
 }
 
+const AUTH_USERS_PAGE_SIZE = 1000;
+
+async function listAllAuthUsers(adminClient: ReturnType<typeof getAdminClient>) {
+  const allUsers: Awaited<
+    ReturnType<typeof adminClient.auth.admin.listUsers>
+  >["data"]["users"] = [];
+  let page = 1;
+
+  while (true) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: AUTH_USERS_PAGE_SIZE,
+    });
+
+    if (error) {
+      return { users: allUsers, error: error.message };
+    }
+
+    allUsers.push(...data.users);
+
+    if (data.users.length < AUTH_USERS_PAGE_SIZE) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return { users: allUsers, error: null };
+}
+
 async function listAssetImages(directory: string, publicPath: string): Promise<FrontendAssetImage[]> {
   let entries;
 
@@ -108,12 +138,12 @@ async function listAssetImages(directory: string, publicPath: string): Promise<F
 }
 
 async function countAdminUsers(adminClient: ReturnType<typeof getAdminClient>) {
-  const { data, error } = await adminClient.auth.admin.listUsers();
+  const { users, error } = await listAllAuthUsers(adminClient);
   if (error) {
-    return { error: error.message, count: 0 };
+    return { error, count: 0 };
   }
   let count = 0;
-  for (const u of data.users) {
+  for (const u of users) {
     if (u.app_metadata?.role === "admin") count++;
   }
   return { count, error: null };
@@ -348,15 +378,15 @@ export async function getAllUsers() {
   const adminClient = getAdminClient();
   const supabase = await createClient();
   
-  const { data, error } = await adminClient.auth.admin.listUsers();
+  const { users: allUsers, error } = await listAllAuthUsers(adminClient);
   
   if (error) {
     console.error("Error fetching users:", error);
-    return { error: error.message, users: [] };
+    return { error, users: [] };
   }
   
   // Get credits for all users
-  const userIds = data.users?.map(u => u.id) || [];
+  const userIds = allUsers.map(u => u.id);
   const creditsMap: Record<string, number> = {};
   
   if (userIds.length > 0) {
@@ -381,10 +411,10 @@ export async function getAllUsers() {
   }
   
   // Add credits to each user
-  const usersWithCredits = data.users?.map(user => ({
+  const usersWithCredits = allUsers.map(user => ({
     ...user,
     credits: creditsMap[user.id] || 0,
-  })) || [];
+  }));
   
   return {
     users: usersWithCredits,
@@ -695,8 +725,8 @@ export async function getAllActivitiesWithSessions() {
   
   // Get user details for registrations
   const adminClient = getAdminClient();
-  const { data: usersData } = await adminClient.auth.admin.listUsers();
-  const usersMap = new Map(usersData?.users?.map(u => [u.id, u] as [string, typeof u]) || []);
+  const { users: allUsers } = await listAllAuthUsers(adminClient);
+  const usersMap = new Map(allUsers.map(u => [u.id, u] as [string, typeof u]));
   
   // Group sessions by activity and date
   const activitiesWithSessions = activities?.map(activity => {
