@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
 import { PwaRegistration } from "@/components/pwa-registration";
 import "./globals.css";
 
@@ -76,6 +77,7 @@ export default function RootLayout({
           </div>
           <Footer />
           <PwaRegistration />
+          <AuthRecoveryRedirect />
         </ThemeProvider>
       </body>
     </html>

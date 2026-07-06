@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function UpdatePasswordForm({
   className,
@@ -19,7 +19,24 @@ export function UpdatePasswordForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (sessionError) {
+        setError(sessionError.message);
+      } else if (!data.session) {
+        setError(
+          "Lien invalide ou expiré. Veuillez demander un nouvel e-mail de réinitialisation.",
+        );
+      }
+
+      setIsReady(true);
+    });
+  }, []);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +74,11 @@ export function UpdatePasswordForm({
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || !isReady}
+              >
                 {isLoading ? "Enregistrement..." : "Enregistrer le nouveau mot de passe"}
               </Button>
             </div>

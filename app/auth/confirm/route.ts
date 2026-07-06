@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/account";
+  const next =
+    searchParams.get("next") ??
+    (type === "recovery" ? "/auth/update-password" : "/account");
 
   const supabase = await createClient();
 
