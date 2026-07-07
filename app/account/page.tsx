@@ -186,6 +186,7 @@ async function AccountContent() {
       session_id,
       reserved_start_ts,
       reserved_end_ts,
+      participant_count,
       session:session_id (
         id,
         start_ts,

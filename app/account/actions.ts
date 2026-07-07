@@ -8,6 +8,10 @@ import {
 import { parseSquarePaymentId } from "@/lib/format-payment-type";
 import { getAdminClient, refundSquarePayment, retrieveSquarePayment } from "@/lib/square/server";
 import { getPracticeHourlyCounts } from "@/lib/practice-capacity";
+import {
+  clampParticipantCount,
+  sumParticipantCount,
+} from "@/lib/participant-count";
 import { revalidatePath } from "next/cache";
 
 const UUID_RE =
@@ -32,8 +36,14 @@ type RegistrationRow = {
   user_id: string;
   reserved_start_ts: string | null;
   reserved_end_ts: string | null;
+  participant_count?: number | null;
 };
 
+import {
+  canUserCancelRegistration,
+  getRegistrationStartTime,
+  USER_CANCELLATION_DEADLINE_ERROR,
+} from "@/lib/cancellation-policy";
 import {
   ACCOMPAGNEMENT_ACTIVITY_TYPE,
   getMinPracticeReservationHours,
@@ -103,7 +113,9 @@ export async function registerForSession(
   sessionId: string,
   paymentType: PaymentType,
   reservation?: { start: string; end: string },
+  participantCountInput = 1,
 ) {
+  const participantCount = clampParticipantCount(participantCountInput);
   const supabase = await createClient();
   const {
     data: { user },
@@ -195,7 +207,7 @@ export async function registerForSession(
 
   const { data: registrations, error: registrationsError } = await supabase
     .from("registration")
-    .select("id, user_id, reserved_start_ts, reserved_end_ts")
+    .select("id, user_id, reserved_start_ts, reserved_end_ts, participant_count")
     .eq("session_id", sessionId);
 
   if (registrationsError) {
@@ -254,10 +266,11 @@ export async function registerForSession(
         activeRegistrations.map((registration) => ({
           reservedStartTs: registration.reserved_start_ts,
           reservedEndTs: registration.reserved_end_ts,
+          participantCount: registration.participant_count,
         })),
       );
       const isAnyHourFull = Array.from(counts.values()).some(
-        (count) => count >= session.max_registrations!,
+        (count) => count + participantCount > session.max_registrations!,
       );
 
       if (isAnyHourFull) {
@@ -267,7 +280,8 @@ export async function registerForSession(
   } else {
     if (
       session.max_registrations !== null &&
-      activeRegistrations.length >= session.max_registrations
+      sumParticipantCount(activeRegistrations) + participantCount >
+        session.max_registrations
     ) {
       return { error: "Cette session est complète.", registrationId: null };
     }
@@ -279,7 +293,8 @@ export async function registerForSession(
         ? (reservationEnd.getTime() - reservationStart.getTime()) /
           (60 * 60 * 1000)
         : 1;
-    const requiredCredits = toNumber(activity?.nb_credits) * durationHours;
+    const requiredCredits =
+      toNumber(activity?.nb_credits) * durationHours * participantCount;
 
     if (requiredCredits > 0) {
       const { data: credits, error: creditsError } = await supabase
@@ -310,6 +325,7 @@ export async function registerForSession(
       session_id: sessionId,
       user_id: user.id,
       payment_type: paymentType,
+      participant_count: participantCount,
       reserved_start_ts: isPracticeActivity ? reservationStart!.toISOString() : null,
       reserved_end_ts: isPracticeActivity ? reservationEnd!.toISOString() : null,
     })
@@ -353,7 +369,9 @@ type SessionWithActivity = {
 export async function registerForPracticeReservation(
   blocks: PracticeReservationBlock[],
   paymentType: PaymentType,
+  participantCountInput = 1,
 ) {
+  const participantCount = clampParticipantCount(participantCountInput);
   const supabase = await createClient();
   const {
     data: { user },
@@ -493,7 +511,7 @@ export async function registerForPracticeReservation(
 
   const { data: existingRegistrations, error: registrationsError } = await supabase
     .from("registration")
-    .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts")
+    .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count")
     .in("session_id", sessionIds);
 
   if (registrationsError) {
@@ -554,10 +572,11 @@ export async function registerForPracticeReservation(
       sessionRegistrations.map((registration) => ({
         reservedStartTs: registration.reserved_start_ts,
         reservedEndTs: registration.reserved_end_ts,
+        participantCount: registration.participant_count,
       })),
     );
     const isAnyHourFull = Array.from(counts.values()).some(
-      (count) => count >= session.max_registrations!,
+      (count) => count + participantCount > session.max_registrations!,
     );
     if (isAnyHourFull) {
       return {
@@ -568,7 +587,8 @@ export async function registerForPracticeReservation(
   }
 
   if (paymentType === "credits") {
-    const requiredCredits = toNumber(firstActivity.nb_credits) * totalDurationHours;
+    const requiredCredits =
+      toNumber(firstActivity.nb_credits) * totalDurationHours * participantCount;
     if (requiredCredits > 0) {
       const { data: credits, error: creditsError } = await supabase
         .from("credit")
@@ -602,6 +622,7 @@ export async function registerForPracticeReservation(
         session_id: block.sessionId,
         user_id: user.id,
         payment_type: paymentType,
+        participant_count: participantCount,
         reserved_start_ts: block.start.toISOString(),
         reserved_end_ts: block.end.toISOString(),
       })),
@@ -666,6 +687,18 @@ export async function cancelRegistration(registrationId: string) {
   const session = Array.isArray(registration.session)
     ? registration.session[0]
     : registration.session;
+  const registrationStart = getRegistrationStartTime(
+    registration.reserved_start_ts,
+    session?.start_ts ?? null,
+  );
+
+  if (
+    registrationStart &&
+    !canUserCancelRegistration(registrationStart)
+  ) {
+    return { error: USER_CANCELLATION_DEADLINE_ERROR };
+  }
+
   const refundableStart = registration.reserved_start_ts ?? session?.start_ts ?? null;
   const refundableStartTs = refundableStart
     ? new Date(refundableStart).getTime()

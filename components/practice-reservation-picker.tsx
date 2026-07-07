@@ -9,8 +9,10 @@ import {
   registerForSession,
 } from "@/app/account/actions";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
+import { canUserCancelRegistration } from "@/lib/cancellation-policy";
 import { ReservationAuthStep } from "@/components/reservation-auth-step";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
+import { ParticipantCountSelector } from "@/components/participant-count-selector";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -30,6 +32,10 @@ import {
   getMinPracticeReservationHours,
 } from "@/lib/practice-reservation";
 import { cn } from "@/lib/utils";
+import {
+  getParticipantCount,
+  maxSelectableCount,
+} from "@/lib/participant-count";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -60,6 +66,7 @@ type RegistrationRow = {
   session_id: string;
   reserved_start_ts: string | null;
   reserved_end_ts: string | null;
+  participant_count?: number | null;
 };
 
 type RegistrationStatusRow = {
@@ -228,7 +235,9 @@ function countRegistrationsForHour(registrations: RegistrationRow[], hour: Date)
     }
     const reservationStart = new Date(registration.reserved_start_ts).getTime();
     const reservationEnd = new Date(registration.reserved_end_ts).getTime();
-    return reservationStart < end && reservationEnd > start ? count + 1 : count;
+    return reservationStart < end && reservationEnd > start
+      ? count + getParticipantCount(registration)
+      : count;
   }, 0);
 }
 
@@ -256,6 +265,7 @@ export function PracticeReservationPicker({
   const [userId, setUserId] = useState<string | null>(null);
   const [userCredits, setUserCredits] = useState(0);
   const [showAuthStep, setShowAuthStep] = useState(false);
+  const [participantCount, setParticipantCount] = useState(1);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -400,7 +410,7 @@ export function PracticeReservationPicker({
       const { data: registrationData, error: registrationsError } =
         await supabase
           .from("registration")
-          .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts")
+          .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count")
           .in("session_id", sessionIds);
 
       if (ignore) return;
@@ -526,7 +536,7 @@ export function PracticeReservationPicker({
           disabled:
             hour.getTime() <= now ||
             bookedByMe ||
-            (available !== null && available <= 0),
+            (available !== null && available < participantCount),
           available,
           bookedByMe,
         });
@@ -536,7 +546,7 @@ export function PracticeReservationPicker({
     return options.sort(
       (left, right) => new Date(left.iso).getTime() - new Date(right.iso).getTime(),
     );
-  }, [sessionsForSelectedDay, registrations, myRegistrations, userId]);
+  }, [sessionsForSelectedDay, registrations, myRegistrations, userId, participantCount]);
 
   const isSquareReservation = Boolean(squareProductId);
   const isAccompagnement = activityType === ACCOMPAGNEMENT_ACTIVITY_TYPE;
@@ -581,8 +591,29 @@ export function PracticeReservationPicker({
   );
 
   const selectedHourCount = selectedHourKeys.length;
-  const totalCredits = (credits ?? 0) * selectedHourCount;
-  const hasFullHour = selectedHourChecks.some((check) => check.isFull);
+  const minAvailableAcrossSelection = useMemo(() => {
+    if (!selectedHourChecks.length) {
+      return null;
+    }
+    const finiteValues = selectedHourChecks
+      .map((check) => check.available)
+      .filter((value): value is number => value !== null);
+    if (!finiteValues.length) {
+      return null;
+    }
+    return Math.min(...finiteValues);
+  }, [selectedHourChecks]);
+  const maxParticipantsForSelection = maxSelectableCount(minAvailableAcrossSelection);
+  const totalCredits = (credits ?? 0) * selectedHourCount * participantCount;
+  const hasFullHour = selectedHourChecks.some(
+    (check) => check.available !== null && check.available < participantCount,
+  );
+  useEffect(() => {
+    if (participantCount > maxParticipantsForSelection) {
+      setParticipantCount(Math.max(1, maxParticipantsForSelection));
+    }
+  }, [maxParticipantsForSelection, participantCount]);
+
   const hasEnoughCredits = totalCredits <= 0 || userCredits >= totalCredits;
   const hasRequiredHourCount = isAccompagnement
     ? selectedHourCount >= 1
@@ -735,10 +766,15 @@ export function PracticeReservationPicker({
         }
 
         const hourEnd = new Date(hourStart.getTime() + HOUR_MS);
-        const result = await registerForSession(option.sessionId, "credits", {
-          start: option.iso,
-          end: hourEnd.toISOString(),
-        });
+        const result = await registerForSession(
+          option.sessionId,
+          "credits",
+          {
+            start: option.iso,
+            end: hourEnd.toISOString(),
+          },
+          participantCount,
+        );
 
         if (result.error) {
           setIsRegistering(false);
@@ -770,6 +806,7 @@ export function PracticeReservationPicker({
           end: block.endIso,
         })),
         "credits",
+        participantCount,
       );
 
       if (result.error) {
@@ -923,17 +960,24 @@ export function PracticeReservationPicker({
                       {timeFormatter.format(start)} - {timeFormatter.format(end)}
                     </p>
                   </div>
-                  <CancelRegistrationButton
-                    registrationId={registration.id}
-                    onCancelled={() => {
-                      if (userId) {
-                        void fetchMyRegistrations(
-                          userId,
-                          sessions.map((session) => session.id),
-                        );
-                      }
-                    }}
-                  />
+                  {canUserCancelRegistration(start) ? (
+                    <CancelRegistrationButton
+                      registrationId={registration.id}
+                      startTs={registration.reserved_start_ts}
+                      onCancelled={() => {
+                        if (userId) {
+                          void fetchMyRegistrations(
+                            userId,
+                            sessions.map((session) => session.id),
+                          );
+                        }
+                      }}
+                    />
+                  ) : (
+                    <p className="text-xs text-black/55 text-right max-w-[12rem]">
+                      Annulation impossible (moins de 48 h)
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -1098,6 +1142,14 @@ export function PracticeReservationPicker({
         />
       ) : null}
 
+      {hasSelectedHours && !showAuthStep ? (
+        <ParticipantCountSelector
+          value={participantCount}
+          onChange={setParticipantCount}
+          max={maxParticipantsForSelection}
+        />
+      ) : null}
+
       {isSquareReservation ? (
         !effectiveIsLoggedIn && !showAuthStep ? (
           <Button
@@ -1122,18 +1174,22 @@ export function PracticeReservationPicker({
             sessionId={checkoutSessionId}
             reservationStart={checkoutStartIso}
             reservationEnd={checkoutEndIso}
+            participantCount={participantCount}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
             disabled={
               isRegistering ||
               !hasSelectableHours ||
               selectedHourCount === 0 ||
               hasFullHour ||
-              !hasRequiredHourCount
+              !hasRequiredHourCount ||
+              maxParticipantsForSelection < 1
             }
           >
             {reservationRuleMessage
               ? `Choisir ${minHourCount} heures consécutives`
-              : "Payer et réserver le pack découverte"}
+              : participantCount > 1
+                ? `Payer et réserver (${participantCount} personnes)`
+                : "Payer et réserver le pack découverte"}
           </SquareCheckoutButton>
         ) : (
           <Button className="w-full" disabled>
@@ -1151,7 +1207,8 @@ export function PracticeReservationPicker({
               selectedHourCount === 0 ||
               hasFullHour ||
               !hasRequiredHourCount ||
-              !hasEnoughCredits
+              !hasEnoughCredits ||
+              maxParticipantsForSelection < 1
             }
             onClick={handleRegister}
           >
@@ -1163,8 +1220,12 @@ export function PracticeReservationPicker({
             {selectedHourCount > 0
               ? `Réserver ${selectedHourCount} heure${selectedHourCount > 1 ? "s" : ""}${
                   totalCredits > 0
-                    ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}`
-                    : ""
+                    ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}${
+                        participantCount > 1 ? ` (${participantCount} personnes)` : ""
+                      }`
+                    : participantCount > 1
+                      ? ` (${participantCount} personnes)`
+                      : ""
                 }`
               : isAccompagnement
                 ? "Choisir au moins une heure"
@@ -1188,8 +1249,12 @@ export function PracticeReservationPicker({
           {selectedHourCount > 0
             ? `Réserver ${selectedHourCount} heure${selectedHourCount > 1 ? "s" : ""}${
                 totalCredits > 0
-                  ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}`
-                  : ""
+                  ? ` pour ${totalCredits} crédit${totalCredits > 1 ? "s" : ""}${
+                      participantCount > 1 ? ` (${participantCount} personnes)` : ""
+                    }`
+                  : participantCount > 1
+                    ? ` (${participantCount} personnes)`
+                    : ""
               }`
             : isAccompagnement
               ? "Choisir au moins une heure"

@@ -826,8 +826,9 @@ async function PratiqueLibreContent() {
             </summary>
             <div className="mt-5 max-w-[1120px] text-base leading-normal text-black/75">
               <p>
-                Vous pouvez annuler votre réservation jusqu&apos;à 24h avant. Passé
-                ce délai, 50% de vos crédits seront débités.
+                L&apos;annulation en ligne n&apos;est possible que plus de 48
+                heures avant le début de votre créneau. Contactez l&apos;atelier
+                pour toute demande de dernière minute.
               </p>
             </div>
           </details>

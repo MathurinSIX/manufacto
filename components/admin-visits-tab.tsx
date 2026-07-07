@@ -14,6 +14,7 @@ import {
 } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getParticipantCount, sumParticipantCount } from "@/lib/participant-count";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -55,6 +56,7 @@ type VisitSubscription = {
   name: string;
   phone: string;
   created_at: string;
+  participant_count?: number | null;
 };
 
 type VisitSession = {
@@ -423,9 +425,10 @@ export function AdminVisitsTab() {
   const renderSession = (session: VisitSession) => {
     const start = new Date(session.start_ts);
     const end = new Date(session.end_ts);
+    const bookedCount = sumParticipantCount(session.subscriptions);
     const isFull =
       session.max_registrations !== null &&
-      session.subscriptions.length >= session.max_registrations;
+      bookedCount >= session.max_registrations;
 
     return (
       <article key={session.id} className="rounded-[16px] border border-black/10 p-5">
@@ -445,8 +448,7 @@ export function AdminVisitsTab() {
               {timeFormatter.format(start)} - {timeFormatter.format(end)}
             </p>
             <p className="mt-1 text-sm text-black/65">
-              {session.subscriptions.length} inscrit
-              {session.subscriptions.length > 1 ? "s" : ""}
+              {bookedCount} personne{bookedCount > 1 ? "s" : ""}
               {session.max_registrations !== null
                 ? ` / ${session.max_registrations} places`
                 : ""}
@@ -479,7 +481,12 @@ export function AdminVisitsTab() {
                   className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between"
                 >
                   <div>
-                    <p className="font-medium text-black">{subscription.name}</p>
+                    <p className="font-medium text-black">
+                      {subscription.name}
+                      {getParticipantCount(subscription) > 1
+                        ? ` · ${getParticipantCount(subscription)} personnes`
+                        : ""}
+                    </p>
                     <p className="text-sm text-black/65">
                       {subscription.phone.trim()
                         ? subscription.phone

@@ -9,6 +9,7 @@ import {
   getSiteUrl,
   syncSupabaseUserToSquare,
 } from "@/lib/square/server";
+import { clampParticipantCount } from "@/lib/participant-count";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,7 +20,12 @@ type CheckoutBody = {
   sessionId?: string;
   reservationStart?: string;
   reservationEnd?: string;
+  participantCount?: number;
 };
+
+function isBookingProductKind(kind: string) {
+  return kind === "course" || kind === "discovery";
+}
 
 function buildPurchaseContextColumns({
   activityId,
@@ -48,8 +54,10 @@ function buildPurchaseContextColumns({
 
 export async function POST(request: Request) {
   try {
-    const { productId, activityId, sessionId, reservationStart, reservationEnd } =
+    const { productId, activityId, sessionId, reservationStart, reservationEnd, participantCount: participantCountInput } =
       (await request.json()) as CheckoutBody;
+
+    const participantCount = clampParticipantCount(participantCountInput ?? 1);
 
     if (!productId?.trim()) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 400 });
@@ -209,11 +217,15 @@ export async function POST(request: Request) {
       }
 
       if (catalogProduct.catalogObjectId) {
+        const checkoutQuantity = isBookingProductKind(catalogProduct.kind)
+          ? participantCount
+          : 1;
         const paymentLink = await createSquareCatalogPaymentLink({
           catalogObjectId: catalogProduct.catalogObjectId,
           buyer,
           siteUrl,
           redirectPath,
+          quantity: checkoutQuantity,
           paymentNote: `Manufacto ${catalogProduct.name} (${catalogProduct.id})${
             user?.id ? ` for ${user.id}` : ""
           }`,
@@ -225,7 +237,7 @@ export async function POST(request: Request) {
             user_id: user.id,
             product_id: catalogProduct.id,
             product_kind: catalogProduct.kind,
-            amount_cents: catalogProduct.amountCents,
+            amount_cents: catalogProduct.amountCents * checkoutQuantity,
             credits: catalogProduct.credits,
             currency: "EUR",
             status: "pending",
@@ -234,6 +246,9 @@ export async function POST(request: Request) {
             square_order_id: paymentLink.orderId,
             square_customer_id: squareCustomerId,
             idempotency_key: paymentLink.idempotencyKey,
+            ...(isBookingProductKind(catalogProduct.kind)
+              ? { participant_count: checkoutQuantity }
+              : {}),
             ...purchaseContextColumns,
           });
 
@@ -287,6 +302,7 @@ export async function POST(request: Request) {
       buyer,
       siteUrl,
       redirectPath,
+      quantity: participantCount,
       paymentNote: [
         "Manufacto cours",
         normalizedProductId,
@@ -312,6 +328,7 @@ export async function POST(request: Request) {
       square_order_id: paymentLink.orderId,
       square_customer_id: squareCustomerId,
       idempotency_key: paymentLink.idempotencyKey,
+      participant_count: participantCount,
       ...purchaseContextColumns,
     });
 

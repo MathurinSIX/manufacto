@@ -2,7 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
+import { canUserCancelRegistration } from "@/lib/cancellation-policy";
 import { formatPaymentTypeLabel } from "@/lib/format-payment-type";
+import { getParticipantCount } from "@/lib/participant-count";
 import { Pagination } from "@/components/ui/pagination";
 
 const PARIS_TIMEZONE = "Europe/Paris";
@@ -42,6 +44,7 @@ interface Registration {
   session_id: string | null;
   reserved_start_ts?: string | null;
   reserved_end_ts?: string | null;
+  participant_count?: number | null;
   session?: Session | Session[] | null;
 }
 
@@ -134,7 +137,9 @@ export function UpcomingReservationsList({
 
           const latestStatus = registrationStatusMap[reg.id];
           const isCancelled = latestStatus && latestStatus.status === "CANCELLED";
-          const canCancel = !isCancelled; // Show cancel button if not cancelled
+          const participantCount = getParticipantCount(reg);
+          const canCancel =
+            !isCancelled && canUserCancelRegistration(startDate);
 
           return (
             <div
@@ -143,6 +148,11 @@ export function UpcomingReservationsList({
             >
               <div>
                 <p className="font-medium">{activityName}</p>
+                {participantCount > 1 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {participantCount} personnes
+                  </p>
+                ) : null}
                 <p className="text-sm text-muted-foreground">
                   {dateFormatter.format(startDate)}
                 </p>
@@ -161,9 +171,18 @@ export function UpcomingReservationsList({
                   </p>
                 )}
               </div>
-              {canCancel && (
-                <CancelRegistrationButton registrationId={reg.id} />
-              )}
+              {canCancel ? (
+                <CancelRegistrationButton
+                  registrationId={reg.id}
+                  startTs={startDate}
+                  participantCount={participantCount}
+                />
+              ) : null}
+              {!isCancelled && !canCancel ? (
+                <p className="text-xs text-muted-foreground text-right max-w-[12rem]">
+                  Annulation impossible (moins de 48 h)
+                </p>
+              ) : null}
             </div>
           );
         })}

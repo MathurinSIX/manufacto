@@ -6,15 +6,14 @@ import { unstable_noStore } from "next/cache";
 import { ActivitySessionPicker } from "@/components/activity-session-picker";
 import { PracticeReservationPicker } from "@/components/practice-reservation-picker";
 import { VisitSessionList } from "@/components/visit-session-list";
+import { VisitSubscriptionForm } from "@/components/visit-subscription-form";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   MarketingPageContainer,
   MarketingPageHeader,
 } from "@/components/marketing";
 import { createClient } from "@/lib/supabase/server";
-import { createSessionSubscription } from "./actions";
+import { sumParticipantCount } from "@/lib/participant-count";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -78,6 +77,8 @@ function errorMessage(code?: string) {
       return "Merci d'indiquer votre nom.";
     case "session":
       return "Ce créneau n'est plus disponible.";
+    case "full":
+      return "Il ne reste pas assez de places pour ce nombre de personnes.";
     case "server":
       return "Votre inscription n'a pas pu être enregistrée. Réessayez dans un instant.";
     default:
@@ -126,6 +127,23 @@ async function SimpleReservationPanel({
   });
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
+
+  let visitAvailableSpots: number | null = null;
+  if (selectedSession) {
+    if (selectedSession.max_registrations === null) {
+      visitAvailableSpots = null;
+    } else {
+      const { data: subscriptions } = await supabase
+        .from("public_session_subscription")
+        .select("participant_count")
+        .eq("session_id", selectedSession.id);
+      const booked = sumParticipantCount(subscriptions ?? []);
+      visitAvailableSpots = Math.max(
+        0,
+        selectedSession.max_registrations - booked,
+      );
+    }
+  }
 
   return (
     <MarketingPageContainer className={isModal ? "px-0 pb-0 pt-0 md:pb-0 md:pt-0" : "pb-24"}>
@@ -191,33 +209,16 @@ async function SimpleReservationPanel({
           ) : null}
 
           {!sp.success ? (
-            <form action={createSessionSubscription} className="mt-5 space-y-4">
-              <input
-                type="hidden"
-                name="session_id"
-                value={selectedSession?.id ?? ""}
+            selectedSession ? (
+              <VisitSubscriptionForm
+                sessionId={selectedSession.id}
+                availableSpots={visitAvailableSpots}
               />
-              <div className="space-y-2">
-                <Label htmlFor="name">Nom *</Label>
-                <Input id="name" name="name" autoComplete="name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Téléphone</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!selectedSession}
-              >
-                Confirmer l&apos;inscription
-              </Button>
-            </form>
+            ) : (
+              <p className="mt-5 text-sm text-black/60">
+                Sélectionnez un créneau pour continuer.
+              </p>
+            )
           ) : null}
         </div>
       </div>

@@ -314,7 +314,7 @@ export async function getVisitManagementData() {
   const { data: subscriptions, error: subscriptionsError } = sessionIds.length
     ? await supabase
         .from("public_session_subscription")
-        .select("id, session_id, name, phone, created_at")
+        .select("id, session_id, name, phone, created_at, participant_count")
         .in("session_id", sessionIds)
         .order("created_at", { ascending: true })
     : { data: [], error: null };

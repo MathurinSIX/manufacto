@@ -8,6 +8,11 @@ import {
   searchSquareSubscriptionsForCustomer,
 } from "@/lib/square/subscriptions";
 import type { SquareProduct } from "@/lib/square/products";
+import {
+  clampParticipantCount,
+  getParticipantCount,
+  sumParticipantCount,
+} from "@/lib/participant-count";
 
 export { getSquareApiBaseUrl };
 
@@ -111,12 +116,14 @@ export async function createSquareCatalogPaymentLink({
   siteUrl,
   redirectPath = "/account/square/return",
   paymentNote,
+  quantity = 1,
 }: {
   catalogObjectId: string;
   buyer: BuyerInfo;
   siteUrl: string;
   redirectPath?: string;
   paymentNote?: string;
+  quantity?: number;
 }) {
   const accessToken = process.env.SQUARE_ACCESS_TOKEN;
   const locationId = process.env.SQUARE_LOCATION_ID;
@@ -126,12 +133,13 @@ export async function createSquareCatalogPaymentLink({
   }
 
   const idempotencyKey = crypto.randomUUID();
+  const normalizedQuantity = String(Math.max(1, Math.min(5, Math.trunc(quantity))));
   const orderBody: Record<string, unknown> = {
     location_id: locationId,
     line_items: [
       {
         catalog_object_id: catalogObjectId,
-        quantity: "1",
+        quantity: normalizedQuantity,
       },
     ],
   };
@@ -1442,6 +1450,7 @@ type SquarePurchaseRow = {
   activity_id?: string | null;
   reserved_start_ts?: string | null;
   reserved_end_ts?: string | null;
+  participant_count?: number | null;
   square_order_id?: string | null;
   square_payment_id?: string | null;
   square_customer_id?: string | null;
@@ -1508,12 +1517,15 @@ async function registerUserForCourseSession({
   sessionId,
   squarePaymentId,
   reservation,
+  participantCount: participantCountInput = 1,
 }: {
   userId: string;
   sessionId: string;
   squarePaymentId?: string | null;
   reservation?: { start: string; end: string } | null;
+  participantCount?: number;
 }) {
+  const participantCount = clampParticipantCount(participantCountInput);
   const supabase = getAdminClient();
 
   const { data: session, error: sessionError } = await supabase
@@ -1552,7 +1564,7 @@ async function registerUserForCourseSession({
 
   const { data: registrations, error: registrationsError } = await supabase
     .from("registration")
-    .select("id, user_id, reserved_start_ts, reserved_end_ts")
+    .select("id, user_id, reserved_start_ts, reserved_end_ts, participant_count")
     .eq("session_id", sessionId);
 
   if (registrationsError) {
@@ -1616,18 +1628,19 @@ async function registerUserForCourseSession({
           const registrationStart = new Date(registration.reserved_start_ts).getTime();
           const registrationEnd = new Date(registration.reserved_end_ts).getTime();
           return registrationStart < hourEnd && registrationEnd > hour
-            ? count + 1
+            ? count + getParticipantCount(registration)
             : count;
         }, 0);
 
-        if (registeredCount >= session.max_registrations) {
+        if (registeredCount + participantCount > session.max_registrations) {
           throw new Error("Ce créneau est complet sur au moins une heure");
         }
       }
     }
   } else if (
     session.max_registrations !== null &&
-    activeRegistrations.length >= session.max_registrations
+    sumParticipantCount(activeRegistrations) + participantCount >
+      session.max_registrations
   ) {
     throw new Error("Cette session est complète");
   }
@@ -1640,6 +1653,7 @@ async function registerUserForCourseSession({
     session_id: sessionId,
     user_id: userId,
     payment_type: paymentType,
+    participant_count: participantCount,
     reserved_start_ts: reservationStart?.toISOString() ?? null,
     reserved_end_ts: reservationEnd?.toISOString() ?? null,
   });
@@ -1724,6 +1738,7 @@ async function fulfillCourseSquarePurchase({
       userId: claimedPurchase.user_id,
       sessionId: claimedPurchase.session_id,
       squarePaymentId: paymentId ?? claimedPurchase.square_payment_id,
+      participantCount: claimedPurchase.participant_count ?? 1,
       reservation:
         claimedPurchase.reserved_start_ts && claimedPurchase.reserved_end_ts
           ? {

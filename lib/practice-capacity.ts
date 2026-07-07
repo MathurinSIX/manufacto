@@ -1,8 +1,11 @@
+import { getParticipantCount, sumParticipantCount } from "@/lib/participant-count";
+
 const HOUR_MS = 60 * 60 * 1000;
 
 export type PracticeReservationSlot = {
   reservedStartTs?: string | null;
   reservedEndTs?: string | null;
+  participantCount?: number | null;
 };
 
 export function getPracticeHourStarts(sessionStart: Date, sessionEnd: Date): number[] {
@@ -32,7 +35,7 @@ export function countRegistrationsOverlappingHour(
     const reservationStart = new Date(registration.reservedStartTs).getTime();
     const reservationEnd = new Date(registration.reservedEndTs).getTime();
     return reservationStart < hourEndMs && reservationEnd > hourStartMs
-      ? count + 1
+      ? count + getParticipantCount({ participant_count: registration.participantCount })
       : count;
   }, 0);
 }
@@ -80,6 +83,10 @@ export function getPracticeCapacitySummary(
     peakHourCount,
     isAnyHourFull,
     areAllHoursFull,
-    totalReservations: registrations.length,
+    totalReservations: sumParticipantCount(
+      registrations.map((registration) => ({
+        participant_count: registration.participantCount,
+      })),
+    ),
   };
 }

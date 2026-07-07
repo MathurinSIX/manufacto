@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
+import { ParticipantCountSelector } from "@/components/participant-count-selector";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,11 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { cancelRegistration, registerForSession } from "@/app/account/actions";
+import {
+  getParticipantCount,
+  maxSelectableCount,
+} from "@/lib/participant-count";
+import { canUserCancelRegistration } from "@/lib/cancellation-policy";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -254,8 +260,11 @@ export function ActivitySessionPicker({
   const [attemptedInitialSessionId, setAttemptedInitialSessionId] = useState<
     string | null
   >(null);
-  // Map of session_id -> registration_id for user's active registrations
-  const [userRegistrations, setUserRegistrations] = useState<Record<string, string>>({});
+  // Map of session_id -> registration info for user's active registrations
+  const [userRegistrations, setUserRegistrations] = useState<
+    Record<string, { id: string; participantCount: number }>
+  >({});
+  const [participantCount, setParticipantCount] = useState(1);
   const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
@@ -357,7 +366,7 @@ export function ActivitySessionPicker({
         const sessionIds = data.map(s => s.id);
         const { data: registrations } = await supabase
           .from("registration")
-          .select("id, session_id, user_id")
+          .select("id, session_id, user_id, participant_count")
           .in("session_id", sessionIds);
         
         // Get active registrations (not cancelled)
@@ -390,14 +399,17 @@ export function ActivitySessionPicker({
         }
         
         // Fetch user's registrations if logged in
-        const userRegMap: Record<string, string> = {};
+        const userRegMap: Record<string, { id: string; participantCount: number }> = {};
         if (userId && registrations) {
           const userRegs = registrations.filter(
             reg => reg.user_id === userId && activeRegistrationIds.has(reg.id)
           );
           userRegs.forEach(reg => {
             if (reg.session_id) {
-              userRegMap[reg.session_id] = reg.id;
+              userRegMap[reg.session_id] = {
+                id: reg.id,
+                participantCount: getParticipantCount(reg),
+              };
             }
           });
         }
@@ -409,7 +421,8 @@ export function ActivitySessionPicker({
         const registrationCounts: Record<string, number> = {};
         registrations?.forEach(reg => {
           if (reg.session_id && activeRegistrationIds.has(reg.id)) {
-            registrationCounts[reg.session_id] = (registrationCounts[reg.session_id] || 0) + 1;
+            registrationCounts[reg.session_id] =
+              (registrationCounts[reg.session_id] || 0) + getParticipantCount(reg);
           }
         });
         
@@ -525,8 +538,28 @@ export function ActivitySessionPicker({
     [selectedSessionId, sessions],
   );
 
+  const selectedSessionAvailableSpots = useMemo(() => {
+    if (!selectedSession || selectedSession.max_registrations === null) {
+      return null;
+    }
+    const registeredCount = selectedSession.registrationCount ?? 0;
+    return Math.max(0, selectedSession.max_registrations - registeredCount);
+  }, [selectedSession]);
+
+  const maxParticipantsForSelection = maxSelectableCount(selectedSessionAvailableSpots);
+  const totalCredits = (normalizedCredits ?? 0) * participantCount;
+  const totalPrice =
+    normalizedPrice !== null ? normalizedPrice * participantCount : null;
+
+  useEffect(() => {
+    if (participantCount > maxParticipantsForSelection) {
+      setParticipantCount(Math.max(1, maxParticipantsForSelection));
+    }
+  }, [maxParticipantsForSelection, participantCount]);
+
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
+    setParticipantCount(1);
     setShowAuthStep(false);
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -570,7 +603,12 @@ export function ActivitySessionPicker({
     setIsRegistering(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    const result = await registerForSession(selectedSessionId, paymentType);
+    const result = await registerForSession(
+      selectedSessionId,
+      paymentType,
+      undefined,
+      participantCount,
+    );
     setIsRegistering(false);
     if (result.error) {
       setErrorMessage(result.error);
@@ -579,9 +617,12 @@ export function ActivitySessionPicker({
     
     // Update user registrations state
     if (result.registrationId) {
-      setUserRegistrations(prev => ({
+      setUserRegistrations((prev) => ({
         ...prev,
-        [selectedSessionId]: result.registrationId,
+        [selectedSessionId]: {
+          id: result.registrationId!,
+          participantCount,
+        },
       }));
     }
     
@@ -591,18 +632,23 @@ export function ActivitySessionPicker({
 
   const handleCancel = async () => {
     if (!selectedSessionId) return;
-    const registrationId = userRegistrations[selectedSessionId];
-    if (!registrationId) return;
-    
-    if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
+    const registration = userRegistrations[selectedSessionId];
+    if (!registration) return;
+
+    const cancelLabel =
+      registration.participantCount > 1
+        ? `Annuler la réservation pour ${registration.participantCount} personnes ?`
+        : "Êtes-vous sûr de vouloir annuler cette réservation ?";
+
+    if (!confirm(cancelLabel)) {
       return;
     }
-    
+
     setIsCancelling(true);
     setErrorMessage(null);
     setSuccessMessage(null);
-    
-    const result = await cancelRegistration(registrationId);
+
+    const result = await cancelRegistration(registration.id);
     
     if (result.error) {
       setErrorMessage(result.error);
@@ -712,21 +758,27 @@ export function ActivitySessionPicker({
                       : null;
                     const isFull = session.max_registrations !== null && registeredCount >= session.max_registrations;
                     const isUserRegistered = !!userRegistrations[session.id];
-                    const registrationId = userRegistrations[session.id];
-                    
+                    const userRegistration = userRegistrations[session.id];
+                    const canCancelRegistration = canUserCancelRegistration(start);
+
                     const handleCancelThisSession = async (e: React.MouseEvent) => {
                       e.stopPropagation();
-                      if (!registrationId) return;
-                      
-                      if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
+                      if (!userRegistration) return;
+
+                      const cancelLabel =
+                        userRegistration.participantCount > 1
+                          ? `Annuler la réservation pour ${userRegistration.participantCount} personnes ?`
+                          : "Êtes-vous sûr de vouloir annuler cette réservation ?";
+
+                      if (!confirm(cancelLabel)) {
                         return;
                       }
-                      
+
                       setIsCancelling(true);
                       setErrorMessage(null);
                       setSuccessMessage(null);
-                      
-                      const result = await cancelRegistration(registrationId);
+
+                      const result = await cancelRegistration(userRegistration.id);
                       
                       if (result.error) {
                         setErrorMessage(result.error);
@@ -786,17 +838,27 @@ export function ActivitySessionPicker({
                             </p>
                           )}
                         </button>
-                        {isUserRegistered && (
+                        {isUserRegistered && userRegistration && (
                           <div className="mt-3 flex items-center justify-between">
-                            <span className="text-xs font-medium text-primary">Inscrit</span>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={isCancelling}
-                              onClick={handleCancelThisSession}
-                            >
-                              {isCancelling ? "Annulation..." : "Annuler"}
-                            </Button>
+                            <span className="text-xs font-medium text-primary">
+                              {userRegistration.participantCount > 1
+                                ? `Inscrit · ${userRegistration.participantCount} personnes`
+                                : "Inscrit"}
+                            </span>
+                            {canCancelRegistration ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={isCancelling}
+                                onClick={handleCancelThisSession}
+                              >
+                                {isCancelling ? "Annulation..." : "Annuler"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Annulation impossible (moins de 48 h)
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -825,20 +887,38 @@ export function ActivitySessionPicker({
         ) : null}
 
         <DialogFooter className="mt-4 flex-col gap-3 sm:flex-row">
+          {effectiveIsLoggedIn &&
+            selectedSessionId &&
+            !userRegistrations[selectedSessionId] && (
+              <ParticipantCountSelector
+                value={participantCount}
+                onChange={setParticipantCount}
+                max={maxParticipantsForSelection}
+                className="w-full sm:mr-auto"
+              />
+            )}
           {effectiveIsLoggedIn && selectedSessionId && (
             <>
               {userRegistrations[selectedSessionId] ? (
-                // User is already registered - show cancel button
-                <Button
-                  variant="destructive"
-                  className="w-full sm:w-auto"
-                  disabled={isCancelling}
-                  onClick={handleCancel}
-                >
-                  {isCancelling ? "Annulation..." : "Annuler l'inscription"}
-                </Button>
+                canUserCancelRegistration(new Date(selectedSession!.start_ts)) ? (
+                  <Button
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                    disabled={isCancelling}
+                    onClick={handleCancel}
+                  >
+                    {isCancelling
+                      ? "Annulation..."
+                      : userRegistrations[selectedSessionId].participantCount > 1
+                        ? `Annuler (${userRegistrations[selectedSessionId].participantCount} personnes)`
+                        : "Annuler l'inscription"}
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Annulation impossible (moins de 48 h)
+                  </p>
+                )
               ) : (
-                // User is not registered - show register buttons
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
                   {isSquareOnlyActivity && squareCatalogProductId && (
                     <SquareCheckoutButton
@@ -847,10 +927,14 @@ export function ActivitySessionPicker({
                       sessionId={selectedSessionId ?? undefined}
                       reservationStart={selectedSession?.start_ts}
                       reservationEnd={selectedSession?.end_ts}
+                      participantCount={participantCount}
                       isLoggedIn={effectiveIsLoggedIn}
+                      disabled={maxParticipantsForSelection < 1}
                       className="w-full sm:w-auto"
                     >
-                      Payer et réserver
+                      {participantCount > 1
+                        ? `Payer et réserver (${participantCount} personnes)`
+                        : "Payer et réserver"}
                     </SquareCheckoutButton>
                   )}
                   {!isSquareOnlyActivity && normalizedCredits !== null && (
@@ -858,14 +942,22 @@ export function ActivitySessionPicker({
                       <Button
                         variant="default"
                         className="w-full sm:w-auto"
-                        disabled={isRegistering || userCredits < normalizedCredits}
+                        disabled={
+                          isRegistering ||
+                          userCredits < totalCredits ||
+                          maxParticipantsForSelection < 1
+                        }
                         onClick={() => handleRegister("credits")}
                       >
-                        {isRegistering ? "Inscription..." : `Réserver pour ${normalizedCredits} crédits`}
+                        {isRegistering
+                          ? "Inscription..."
+                          : participantCount > 1
+                            ? `Réserver pour ${totalCredits} crédits (${participantCount} personnes)`
+                            : `Réserver pour ${totalCredits} crédits`}
                       </Button>
-                      {userCredits < normalizedCredits && (
+                      {userCredits < totalCredits && (
                         <p className="text-xs text-destructive">
-                          Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {normalizedCredits}.
+                          Vous n&apos;avez pas assez de crédits. Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""} et il en faut {totalCredits}.
                         </p>
                       )}
                     </>
@@ -877,10 +969,14 @@ export function ActivitySessionPicker({
                       sessionId={selectedSessionId ?? undefined}
                       reservationStart={selectedSession?.start_ts}
                       reservationEnd={selectedSession?.end_ts}
+                      participantCount={participantCount}
                       isLoggedIn={effectiveIsLoggedIn}
+                      disabled={maxParticipantsForSelection < 1}
                       className="w-full sm:w-auto"
                     >
-                      {`Réserver pour ${normalizedPrice.toFixed(2)}€`}
+                      {participantCount > 1
+                        ? `Réserver pour ${totalPrice!.toFixed(2)}€ (${participantCount} personnes)`
+                        : `Réserver pour ${totalPrice!.toFixed(2)}€`}
                     </SquareCheckoutButton>
                   )}
                 </div>
@@ -898,6 +994,11 @@ export function ActivitySessionPicker({
           )}
           {!effectiveIsLoggedIn && hasSelectedSession && !showAuthStep ? (
             <div className="flex w-full flex-col gap-2 sm:w-auto">
+              <ParticipantCountSelector
+                value={participantCount}
+                onChange={setParticipantCount}
+                max={maxParticipantsForSelection}
+              />
               {isSquareOnlyActivity && squareCatalogProductId ? (
                 <Button
                   className="w-full sm:w-auto"
@@ -912,7 +1013,9 @@ export function ActivitySessionPicker({
                   onClick={() => handleAuthRequired()}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {`Réserver pour ${normalizedCredits} crédits`}
+                  {participantCount > 1
+                    ? `Réserver pour ${totalCredits} crédits (${participantCount} personnes)`
+                    : `Réserver pour ${totalCredits} crédits`}
                 </Button>
               ) : null}
               {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId ? (
@@ -920,7 +1023,9 @@ export function ActivitySessionPicker({
                   className="w-full sm:w-auto"
                   onClick={() => handleAuthRequired()}
                 >
-                  {`Acheter et réserver pour ${normalizedPrice.toFixed(2)}€`}
+                  {participantCount > 1
+                    ? `Acheter et réserver pour ${totalPrice!.toFixed(2)}€ (${participantCount} personnes)`
+                    : `Acheter et réserver pour ${normalizedPrice.toFixed(2)}€`}
                 </Button>
               ) : null}
               {!isSquareOnlyActivity && normalizedCredits === null && normalizedPrice === null ? (

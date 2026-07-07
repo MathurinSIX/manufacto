@@ -3,20 +3,26 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { cancelRegistration } from "@/app/account/actions";
+import { canUserCancelRegistration } from "@/lib/cancellation-policy";
 import { useRouter } from "next/navigation";
 
 interface CancelRegistrationButtonProps {
   registrationId: string;
+  startTs: string | Date;
+  participantCount?: number;
   onCancelled?: () => void;
 }
 
 export function CancelRegistrationButton({
   registrationId,
+  startTs,
+  participantCount = 1,
   onCancelled,
 }: CancelRegistrationButtonProps) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const canCancel = canUserCancelRegistration(startTs);
 
   // Clear error when component mounts
   useEffect(() => {
@@ -34,7 +40,12 @@ export function CancelRegistrationButton({
   }, [error]);
 
   const handleCancel = async () => {
-    if (!confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) {
+    const cancelLabel =
+      participantCount > 1
+        ? `Annuler la réservation pour ${participantCount} personnes ?`
+        : "Êtes-vous sûr de vouloir annuler cette réservation ?";
+
+    if (!confirm(cancelLabel)) {
       return;
     }
 
@@ -51,6 +62,10 @@ export function CancelRegistrationButton({
       router.refresh();
     }
   };
+
+  if (!canCancel) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col items-end gap-2">

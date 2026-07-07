@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { User } from "lucide-react";
 import { NAV_LINKS } from "@/lib/nav-links";
 import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
 import { HashLink } from "@/components/hash-link";
@@ -8,7 +9,6 @@ import { unstable_noStore } from "next/cache";
 
 const ASSETS = {
   logoMark: "/assets/figma-landing/logo-mark.png",
-  accountIcon: "/assets/figma-landing/account-icon.png",
 } as const;
 
 type ClaimsWithAppMetadata = {
@@ -66,10 +66,10 @@ export async function Navigation() {
           <MobileNavDrawer showadminLink={isadmin} />
           <Link
             href="/account"
-            className="flex items-center gap-3 text-base font-semibold text-[#4a56dd] underline underline-offset-2"
+            className="inline-flex items-center gap-1.5 text-base font-semibold text-[#4a56dd] transition-colors hover:text-[#3540bf]"
           >
-            <span className="hidden sm:inline">mon compte</span>
-            <Image src={ASSETS.accountIcon} alt="" width={33} height={29} aria-hidden />
+            <User className="h-[1.1em] w-[1.1em] shrink-0" strokeWidth={2.25} aria-hidden />
+            <span className="hidden underline underline-offset-2 sm:inline">mon compte</span>
           </Link>
         </div>
       </div>
