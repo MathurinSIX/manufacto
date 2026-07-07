@@ -8,6 +8,7 @@ import {
   searchSquareSubscriptionsForCustomer,
 } from "@/lib/square/subscriptions";
 import type { SquareProduct } from "@/lib/square/products";
+import { notifyRegistrationConfirmed } from "@/lib/email/registration-emails";
 import {
   clampParticipantCount,
   getParticipantCount,
@@ -1649,18 +1650,26 @@ async function registerUserForCourseSession({
     ? `square:${squarePaymentId}`
     : "square";
 
-  const { error: insertError } = await supabase.from("registration").insert({
-    session_id: sessionId,
-    user_id: userId,
-    payment_type: paymentType,
-    participant_count: participantCount,
-    reserved_start_ts: reservationStart?.toISOString() ?? null,
-    reserved_end_ts: reservationEnd?.toISOString() ?? null,
-  });
+  const { data: insertedRegistration, error: insertError } = await supabase
+    .from("registration")
+    .insert({
+      session_id: sessionId,
+      user_id: userId,
+      payment_type: paymentType,
+      participant_count: participantCount,
+      reserved_start_ts: reservationStart?.toISOString() ?? null,
+      reserved_end_ts: reservationEnd?.toISOString() ?? null,
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
-    throw new Error(insertError.message);
+  if (insertError || !insertedRegistration) {
+    throw new Error(insertError?.message ?? "Registration insert failed");
   }
+
+  void notifyRegistrationConfirmed(insertedRegistration.id).catch((err) => {
+    console.error("Failed to send registration confirmation email:", err);
+  });
 
   return { alreadyRegistered: false };
 }

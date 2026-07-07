@@ -31,6 +31,12 @@ import {
   isSameParisDay,
   parseParisDateTime,
 } from "@/lib/paris-time";
+import { getDefaultEmailTemplate } from "@/lib/email/default-templates";
+import {
+  EMAIL_TEMPLATE_KEYS,
+  type EmailTemplateKey,
+} from "@/lib/email/types";
+import { loadEmailTemplate } from "@/lib/email/load-email-template";
 const ASSET_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const ACTIVITY_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -1810,3 +1816,76 @@ export async function setSquareProductMapping({
   return { error: null };
 }
 
+
+
+export async function getEmailTemplates() {
+  await checkAdmin();
+
+  const templates = await Promise.all(
+    EMAIL_TEMPLATE_KEYS.map(async (templateKey) => loadEmailTemplate(templateKey)),
+  );
+
+  return { error: null, templates };
+}
+
+export async function saveEmailTemplate(
+  templateKey: EmailTemplateKey,
+  subject: string,
+  bodyHtml: string,
+) {
+  const adminUser = await checkAdmin();
+  const supabase = await createClient();
+
+  const normalizedSubject = subject.trim();
+  const normalizedBody = bodyHtml.trim();
+
+  if (!normalizedSubject || !normalizedBody) {
+    return { error: "Le sujet et le contenu sont requis." };
+  }
+
+  if (!EMAIL_TEMPLATE_KEYS.includes(templateKey)) {
+    return { error: "Modèle d'e-mail invalide." };
+  }
+
+  const { error } = await supabase.from("email_template").upsert(
+    {
+      template_key: templateKey,
+      subject: normalizedSubject,
+      body_html: normalizedBody,
+      updated_at: new Date().toISOString(),
+      updated_by: adminUser.id,
+    },
+    { onConflict: "template_key" },
+  );
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function resetEmailTemplate(templateKey: EmailTemplateKey) {
+  await checkAdmin();
+  const supabase = await createClient();
+
+  if (!EMAIL_TEMPLATE_KEYS.includes(templateKey)) {
+    return { error: "Modèle d'e-mail invalide." };
+  }
+
+  const { error } = await supabase
+    .from("email_template")
+    .delete()
+    .eq("template_key", templateKey);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return {
+    error: null,
+    template: getDefaultEmailTemplate(templateKey),
+  };
+}

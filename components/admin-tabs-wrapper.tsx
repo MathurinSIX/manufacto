@@ -11,6 +11,7 @@ import { AdminFreePracticeCreditsTab } from "@/components/admin-free-practice-cr
 import { AdminVisitsTab } from "@/components/admin-visits-tab";
 import { AdminNewsletterTab } from "@/components/admin-newsletter-tab";
 import { AdminSquareTab } from "@/components/admin-square-tab";
+import { AdminEmailsTab } from "@/components/admin-emails-tab";
 
 const validTabs = [
   "users",
@@ -20,6 +21,7 @@ const validTabs = [
   "visits",
   "newsletter",
   "square",
+  "emails",
 ];
 
 type CoursesSubTab = "cours" | "sessions";
@@ -280,7 +282,7 @@ export function AdminTabsWrapper() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-4 lg:grid-cols-7">
+      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-4 lg:grid-cols-8">
         <TabsTrigger
           value="users"
           className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
@@ -322,6 +324,12 @@ export function AdminTabsWrapper() {
           className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
         >
           square
+        </TabsTrigger>
+        <TabsTrigger
+          value="emails"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          e-mails
         </TabsTrigger>
       </TabsList>
       <TabsContent value="users" className="mt-6">
@@ -447,6 +455,9 @@ export function AdminTabsWrapper() {
       </TabsContent>
       <TabsContent value="square" className="mt-6">
         <AdminSquareTab />
+      </TabsContent>
+      <TabsContent value="emails" className="mt-6">
+        <AdminEmailsTab />
       </TabsContent>
     </Tabs>
   );

@@ -13,6 +13,7 @@ import {
   sumParticipantCount,
 } from "@/lib/participant-count";
 import { revalidatePath } from "next/cache";
+import { notifyRegistrationConfirmed } from "@/lib/email/registration-emails";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -342,6 +343,10 @@ export async function registerForSession(
   revalidatePath("/reserver");
   revalidatePath("/admin");
   revalidatePath(`/admin/users/${user.id}`);
+
+  void notifyRegistrationConfirmed(data.id).catch((err) => {
+    console.error("Failed to send registration confirmation email:", err);
+  });
 
   return { error: null, registrationId: data.id };
 }
