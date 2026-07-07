@@ -3,6 +3,8 @@ export async function register() {
     return;
   }
 
-  const { scheduleStartupSquareUserSync } = await import("@/lib/square/user-sync");
+  const { scheduleStartupSquareUserSync, scheduleStartupSquarePurchaseSync } =
+    await import("@/lib/square/user-sync");
   scheduleStartupSquareUserSync();
+  scheduleStartupSquarePurchaseSync();
 }

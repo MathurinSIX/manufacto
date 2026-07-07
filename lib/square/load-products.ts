@@ -51,3 +51,22 @@ export async function getSquareProduct(
   const products = await loadSquareProducts(supabase);
   return products.find((product) => product.id === productId) ?? null;
 }
+
+export async function getSquareProductByCatalogObjectId(
+  catalogObjectId: string,
+  supabase?: SupabaseClient,
+): Promise<SquareProduct | null> {
+  const normalizedCatalogId = catalogObjectId.trim();
+  if (!normalizedCatalogId) {
+    return null;
+  }
+
+  const products = await loadSquareProducts(supabase);
+  return (
+    products.find(
+      (product) =>
+        product.catalogObjectId?.trim() === normalizedCatalogId &&
+        product.kind === "credit_pack",
+    ) ?? null
+  );
+}

@@ -4,12 +4,20 @@ import {
   syncSquareCustomerToBackend,
   syncSupabaseUserToSquare,
 } from "@/lib/square/server";
+import { reconcileSquareCreditPackPurchases } from "@/lib/square/purchase-import";
 
 export type SquareUserSyncSummary = {
   supabaseUsersProcessed: number;
   supabaseUsersLinked: number;
   squareCustomersProcessed: number;
   squareCustomersLinked: number;
+  errors: number;
+};
+
+export type SquarePurchaseSyncSummary = {
+  paymentsScanned: number;
+  imported: number;
+  skipped: number;
   errors: number;
 };
 
@@ -53,6 +61,31 @@ export function isSquareUserSyncEnabled() {
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
+}
+
+export function isSquarePurchaseSyncEnabled() {
+  if (process.env.SQUARE_PURCHASE_SYNC_ON_STARTUP === "false") {
+    return false;
+  }
+
+  return Boolean(
+    process.env.SQUARE_ACCESS_TOKEN &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
+
+function getPurchaseSyncDays() {
+  const configured = Number.parseInt(
+    process.env.SQUARE_PURCHASE_SYNC_DAYS ?? "30",
+    10,
+  );
+
+  if (Number.isNaN(configured) || configured <= 0) {
+    return 30;
+  }
+
+  return configured;
 }
 
 export async function reconcileSquareAndSupabaseUsers(): Promise<SquareUserSyncSummary> {
@@ -110,8 +143,27 @@ export async function reconcileSquareAndSupabaseUsers(): Promise<SquareUserSyncS
   return summary;
 }
 
+export async function reconcileSquarePurchasesOnStartup(): Promise<SquarePurchaseSyncSummary | null> {
+  if (!isSquarePurchaseSyncEnabled()) {
+    return null;
+  }
+
+  try {
+    console.info("[square-purchase-sync] Starting credit pack reconciliation...");
+    const summary = await reconcileSquareCreditPackPurchases({
+      days: getPurchaseSyncDays(),
+    });
+    console.info("[square-purchase-sync] Reconciliation complete:", summary);
+    return summary;
+  } catch (error) {
+    console.error("[square-purchase-sync] Reconciliation failed:", error);
+    return null;
+  }
+}
+
 const globalForSync = globalThis as typeof globalThis & {
   squareUserSyncPromise?: Promise<SquareUserSyncSummary | null>;
+  squarePurchaseSyncPromise?: Promise<SquarePurchaseSyncSummary | null>;
 };
 
 export function scheduleStartupSquareUserSync() {
@@ -134,4 +186,16 @@ export function scheduleStartupSquareUserSync() {
       return null;
     }
   })();
+}
+
+export function scheduleStartupSquarePurchaseSync() {
+  if (!isSquarePurchaseSyncEnabled()) {
+    return;
+  }
+
+  if (globalForSync.squarePurchaseSyncPromise) {
+    return;
+  }
+
+  globalForSync.squarePurchaseSyncPromise = reconcileSquarePurchasesOnStartup();
 }
