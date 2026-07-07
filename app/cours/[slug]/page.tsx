@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
@@ -160,6 +161,14 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
 
   return (
     <MarketingPageContainer className="pb-[170px]">
+      <div className="mb-8">
+        <Link
+          href="/cours"
+          className="text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+        >
+          ← retour aux cours
+        </Link>
+      </div>
       <section className="grid gap-10 lg:grid-cols-[594px_1fr] lg:gap-[82px]">
         <div>
           <div className="relative h-[332px] w-full overflow-hidden rounded-[6px] bg-[#d9d9d9] md:h-[495px]">
