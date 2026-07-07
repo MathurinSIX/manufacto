@@ -81,10 +81,9 @@ export function SignUpForm({
 
       if (onSuccess) {
         await onSuccess();
-      } else if (redirectTo) {
-        router.push(redirectTo);
       } else {
-        router.push("/account");
+        router.refresh();
+        router.push(redirectTo ?? "/account");
       }
     } catch (error: unknown) {
       if (error instanceof Error) {

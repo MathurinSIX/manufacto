@@ -58,10 +58,9 @@ export function LoginForm({
       // Call onSuccess callback if provided, otherwise redirect
       if (onSuccess) {
         await onSuccess();
-      } else if (redirectTo) {
-        router.push(redirectTo);
       } else {
-        router.push("/account");
+        router.refresh();
+        router.push(redirectTo ?? "/account");
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Une erreur s'est produite");
