@@ -1,15 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
+
+import { CourseCalendarPanel } from "@/components/course-calendar-panel";
+import { CoursePageTabs } from "@/components/course-page-tabs";
 import {
   MarketingPageContainer,
   MarketingPageHeader,
-  MarketingSectionTitle,
 } from "@/components/marketing";
-import { CourseGrid } from "./course-layout";
 import {
-  buildCourseDurationMinutesByActivityId,
-  enrichCoursesWithSessionAvailability,
+  enrichCoursesForListing,
   getCoursesFromDb,
   sortCoursesForListing,
 } from "./course-data";
@@ -58,23 +58,16 @@ async function CoursContent() {
     console.error("Error fetching course session durations", durationSessionsError);
   }
 
-  const activityIdsWithUpcomingSessions = new Set(
-    futureSessions?.map((session) => session.activity_id) ?? [],
-  );
-
-  const durationByActivityId = buildCourseDurationMinutesByActivityId(
-    sessionsForDuration ?? [],
-  );
-
   const courses = sortCoursesForListing(
-    enrichCoursesWithSessionAvailability(
+    enrichCoursesForListing(
       getCoursesFromDb(
         activities?.map((activity) => ({
           ...activity,
-          durationMinutes: durationByActivityId.get(activity.id) ?? null,
+          durationMinutes: null,
         })),
       ),
-      activityIdsWithUpcomingSessions,
+      futureSessions ?? [],
+      sessionsForDuration ?? [],
     ),
   );
 
@@ -106,18 +99,12 @@ async function CoursContent() {
         </p>
       </MarketingPageHeader>
 
-      <section id="offres" className="mt-[92px] scroll-mt-28">
-        <div className="mb-9">
-          <MarketingSectionTitle>
-            découvrir nos offres
-          </MarketingSectionTitle>
-        </div>
-        <CourseGrid
-          courses={courses}
-          isLoggedIn={!!user}
-          interestedActivityIds={interestedActivityIds}
-        />
-      </section>
+      <CoursePageTabs
+        courses={courses}
+        isLoggedIn={!!user}
+        interestedActivityIds={interestedActivityIds}
+        calendarPanel={<CourseCalendarPanel />}
+      />
     </MarketingPageContainer>
   );
 }

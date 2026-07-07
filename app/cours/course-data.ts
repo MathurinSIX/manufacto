@@ -9,11 +9,13 @@ export type Course = {
   squareProductId: string | null;
   credits: number | null;
   duration: string;
+  durationMinutes: number | null;
   level: string | null;
   audience: string | null;
   description: string;
   sessions: string[];
   hasUpcomingSessions: boolean;
+  nextSessionStart: string | null;
 };
 
 import { formatCourseDiscipline } from "@/lib/course-disciplines";
@@ -181,11 +183,16 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
       credits: activity.nb_credits,
       duration:
         formatCourseDurationMinutes(activity.durationMinutes ?? 0) ?? "",
+      durationMinutes:
+        activity.durationMinutes && activity.durationMinutes > 0
+          ? activity.durationMinutes
+          : null,
       level: activity.level,
       audience: activity.audience,
       description: activity.description || DEFAULT_COURSE_DESCRIPTION,
       sessions: [],
       hasUpcomingSessions: false,
+      nextSessionStart: null,
     };
   });
 }
@@ -202,6 +209,44 @@ export function enrichCoursesWithSessionAvailability(
     ...course,
     hasUpcomingSessions: activityIdsWithUpcomingSessions.has(course.id),
   }));
+}
+
+type SessionRow = {
+  activity_id: string;
+  start_ts: string;
+  end_ts: string;
+};
+
+export function enrichCoursesForListing(
+  courses: Course[],
+  futureSessions: SessionRow[],
+  sessionsForDuration: SessionRow[],
+): Course[] {
+  const activityIdsWithUpcomingSessions = new Set(
+    futureSessions.map((session) => session.activity_id),
+  );
+  const nextSessionStartByActivityId = new Map<string, string>();
+
+  for (const session of futureSessions) {
+    if (!nextSessionStartByActivityId.has(session.activity_id)) {
+      nextSessionStartByActivityId.set(session.activity_id, session.start_ts);
+    }
+  }
+
+  const durationByActivityId =
+    buildCourseDurationMinutesByActivityId(sessionsForDuration);
+
+  return courses.map((course) => {
+    const durationMinutes = durationByActivityId.get(course.id) ?? course.durationMinutes;
+
+    return {
+      ...course,
+      hasUpcomingSessions: activityIdsWithUpcomingSessions.has(course.id),
+      nextSessionStart: nextSessionStartByActivityId.get(course.id) ?? null,
+      durationMinutes,
+      duration: formatCourseDurationMinutes(durationMinutes ?? 0) ?? course.duration,
+    };
+  });
 }
 
 export function sortCoursesForListing(courses: Course[]): Course[] {

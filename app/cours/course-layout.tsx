@@ -30,17 +30,25 @@ export function CourseCard({ course, isLoggedIn, isInterested }: CourseCardProps
         <div className="mt-3 text-xl leading-normal text-black/75">
           <p className="font-bold">{course.discipline} /</p>
           <p>{course.title}</p>
-          {metaLabel ? (
+          {metaLabel || course.duration ? (
             <p>
-              {metaLabel}
-              {course.duration ? ` · ${course.duration}` : ""}
+              {[metaLabel, course.duration].filter(Boolean).join(" · ")}
             </p>
           ) : null}
-          {(course.level || course.audience) && (
+          {course.level ? (
             <p className="mt-1 text-base leading-normal text-black/60">
-              {[course.level, course.audience].filter(Boolean).join(" · ")}
+              <span className="font-semibold text-black/70">Niveau</span>
+              {" · "}
+              {course.level}
             </p>
-          )}
+          ) : null}
+          {course.audience ? (
+            <p className="mt-1 text-base leading-normal text-black/60">
+              <span className="font-semibold text-black/70">Public</span>
+              {" · "}
+              {course.audience}
+            </p>
+          ) : null}
         </div>
       </Link>
 

@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { inferPracticeDiscipline } from "@/lib/course-disciplines";
 import type { CalendarSessionItem } from "@/components/monthly-calendar";
-import { PARIS_TIMEZONE } from "@/lib/paris-calendar";
+import {
+  getCalendarMonthFetchRange,
+  PARIS_TIMEZONE,
+  parisMonthAnchorIso,
+} from "@/lib/paris-calendar";
 
 type ActivityRow = {
   id: string;
@@ -22,52 +26,17 @@ type SessionRow = {
   activity: ActivityRow | ActivityRow[] | null;
 };
 
+export type CourseSessionsByDate = Record<string, CalendarSessionItem[]>;
+
+const SESSIONS_PAGE_SIZE = 1000;
+
 function activityFromRow(row: SessionRow) {
   const a = row.activity;
   if (Array.isArray(a)) return a[0] ?? null;
   return a;
 }
 
-export async function fetchCourseSessionsByDate(
-  rangeStart: Date,
-  rangeEnd: Date,
-): Promise<Record<string, CalendarSessionItem[]>> {
-  const supabase = await createClient();
-
-  const { data: sessions, error: sessionsError } = await supabase
-    .from("session")
-    .select(
-      `
-      id,
-      start_ts,
-      end_ts,
-      activity_id,
-      activity:activity_id (
-        id,
-        name,
-        type,
-        deleted_at,
-        discipline,
-        nb_credits,
-        price,
-        square_product_id
-      )
-    `,
-    )
-    .gte("start_ts", rangeStart.toISOString())
-    .lt("start_ts", rangeEnd.toISOString())
-    .order("start_ts", { ascending: true });
-
-  if (sessionsError) {
-    console.error("Error fetching sessions:", sessionsError);
-  }
-
-  const rows = (sessions ?? []) as SessionRow[];
-  const courseSessions = rows.filter((row) => {
-    const act = activityFromRow(row);
-    return !act?.deleted_at && act?.type === "cours";
-  });
-
+function groupSessionsByParisDay(rows: SessionRow[]): CourseSessionsByDate {
   const dayKeyFormatter = new Intl.DateTimeFormat("fr-CA", {
     year: "numeric",
     month: "2-digit",
@@ -75,13 +44,17 @@ export async function fetchCourseSessionsByDate(
     timeZone: PARIS_TIMEZONE,
   });
 
-  const sessionsByDate: Record<string, CalendarSessionItem[]> = {};
+  const sessionsByDate: CourseSessionsByDate = {};
 
-  for (const session of courseSessions) {
+  for (const session of rows) {
     const act = activityFromRow(session);
+    if (act?.deleted_at || act?.type !== "cours") {
+      continue;
+    }
+
     const dateKey = dayKeyFormatter.format(new Date(session.start_ts));
-    const activityName = act?.name ?? "Cours";
-    const discipline = inferPracticeDiscipline(activityName, act?.discipline);
+    const activityName = act.name ?? "Cours";
+    const discipline = inferPracticeDiscipline(activityName, act.discipline);
     const item: CalendarSessionItem = {
       id: session.id,
       activityId: session.activity_id,
@@ -89,10 +62,11 @@ export async function fetchCourseSessionsByDate(
       end_ts: session.end_ts,
       activityName,
       discipline,
-      nbCredits: act?.nb_credits ?? null,
-      price: act?.price ?? null,
-      squareProductId: act?.square_product_id ?? null,
+      nbCredits: act.nb_credits ?? null,
+      price: act.price ?? null,
+      squareProductId: act.square_product_id ?? null,
     };
+
     if (!sessionsByDate[dateKey]) {
       sessionsByDate[dateKey] = [];
     }
@@ -100,8 +74,80 @@ export async function fetchCourseSessionsByDate(
   }
 
   for (const key of Object.keys(sessionsByDate)) {
-    sessionsByDate[key].sort((a, b) => a.start_ts.localeCompare(b.start_ts));
+    sessionsByDate[key].sort((left, right) => left.start_ts.localeCompare(right.start_ts));
   }
 
   return sessionsByDate;
+}
+
+async function fetchAllCourseSessionRows(
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<SessionRow[]> {
+  const supabase = await createClient();
+  const allRows: SessionRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("session")
+      .select(
+        `
+        id,
+        start_ts,
+        end_ts,
+        activity_id,
+        activity:activity_id (
+          id,
+          name,
+          type,
+          deleted_at,
+          discipline,
+          nb_credits,
+          price,
+          square_product_id
+        )
+      `,
+      )
+      .gte("start_ts", rangeStart.toISOString())
+      .lt("start_ts", rangeEnd.toISOString())
+      .order("start_ts", { ascending: true })
+      .range(offset, offset + SESSIONS_PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Error fetching sessions:", error);
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    allRows.push(...(data as SessionRow[]));
+
+    if (data.length < SESSIONS_PAGE_SIZE) {
+      break;
+    }
+
+    offset += SESSIONS_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+export async function fetchCourseSessionsByDate(
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<CourseSessionsByDate> {
+  const rows = await fetchAllCourseSessionRows(rangeStart, rangeEnd);
+  return groupSessionsByParisDay(rows);
+}
+
+export async function fetchCourseSessionsForCalendarMonth(
+  year: number,
+  month: number,
+): Promise<CourseSessionsByDate> {
+  const monthAnchor = new Date(parisMonthAnchorIso(year, month));
+  const { rangeStart, rangeEnd } = getCalendarMonthFetchRange(monthAnchor);
+  return fetchCourseSessionsByDate(rangeStart, rangeEnd);
 }

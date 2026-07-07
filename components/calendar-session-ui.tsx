@@ -11,7 +11,13 @@ const DISCIPLINE_LABEL: Record<CourseDiscipline, string> = {
   ceramique: "Céramique",
 };
 
-export function DisciplineLegend({ compact = false }: { compact?: boolean }) {
+export function DisciplineLegend({
+  compact = false,
+  dense = false,
+}: {
+  compact?: boolean;
+  dense?: boolean;
+}) {
   const entries = Object.entries(COURSE_DISCIPLINE_COLORS) as Array<
     [CourseDiscipline, (typeof COURSE_DISCIPLINE_COLORS)[CourseDiscipline]]
   >;
@@ -20,7 +26,7 @@ export function DisciplineLegend({ compact = false }: { compact?: boolean }) {
     <div
       className={cn(
         "flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-black/65",
-        compact ? "mb-2 text-[10px]" : "mb-4 text-xs",
+        dense ? "mb-1.5 gap-x-3 gap-y-1 text-[9px]" : compact ? "mb-2 text-[10px]" : "mb-4 text-xs",
       )}
     >
       {entries

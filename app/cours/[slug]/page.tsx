@@ -14,12 +14,11 @@ import {
 } from "@/components/marketing";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
-  buildCourseDurationMinutesByActivityId,
-  enrichCoursesWithSessionAvailability,
   formatCredits,
   formatPrice,
   getCourseBySlug,
   getCoursesFromDb,
+  enrichCoursesForListing,
 } from "../course-data";
 
 type CourseDetailPageProps = {
@@ -95,22 +94,15 @@ async function getCourses() {
     console.error("Error fetching course durations", durationSessionsError);
   }
 
-  const activityIdsWithUpcomingSessions = new Set(
-    futureSessions?.map((session) => session.activity_id) ?? [],
-  );
-
-  const durationByActivityId = buildCourseDurationMinutesByActivityId(
-    sessionsForDuration ?? [],
-  );
-
-  return enrichCoursesWithSessionAvailability(
+  return enrichCoursesForListing(
     getCoursesFromDb(
       data?.map((activity) => ({
         ...activity,
-        durationMinutes: durationByActivityId.get(activity.id) ?? null,
+        durationMinutes: null,
       })),
     ),
-    activityIdsWithUpcomingSessions,
+    futureSessions ?? [],
+    sessionsForDuration ?? [],
   );
 }
 

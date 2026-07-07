@@ -66,3 +66,29 @@ export function parisYearMonthDay(d: Date) {
 export function parisMonthAnchorIso(year: number, month1Based: number) {
   return new Date(Date.UTC(year, month1Based - 1, 1, 12, 0, 0)).toISOString();
 }
+
+/** UTC noon dates for the 6-week grid that contains the given month. */
+export function getCalendarGridUtcBounds(monthAnchor: Date) {
+  const firstOfMonth = new Date(
+    Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth(), 1, 12, 0, 0),
+  );
+  const weekday = (firstOfMonth.getUTCDay() + 6) % 7;
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() - weekday);
+  const gridEnd = new Date(gridStart);
+  gridEnd.setUTCDate(gridStart.getUTCDate() + 42);
+  return { gridStart, gridEnd };
+}
+
+export function getCalendarMonthFetchRange(monthAnchor: Date) {
+  const { gridStart, gridEnd } = getCalendarGridUtcBounds(monthAnchor);
+  const rangeStart = new Date(gridStart);
+  rangeStart.setUTCDate(gridStart.getUTCDate() - 1);
+  const rangeEnd = new Date(gridEnd);
+  rangeEnd.setUTCDate(gridEnd.getUTCDate() + 1);
+  return { rangeStart, rangeEnd };
+}
+
+export function getCalendarMonthKey(monthAnchor: Date) {
+  return `${monthAnchor.getUTCFullYear()}-${monthAnchor.getUTCMonth() + 1}`;
+}
