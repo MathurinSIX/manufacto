@@ -1,16 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { CourseInterestButton } from "@/components/course-interest-button";
 import { Course, formatCredits, formatPrice } from "./course-data";
 
-export function CourseCard({ course }: { course: Course }) {
+type CourseCardProps = {
+  course: Course;
+  isLoggedIn: boolean;
+  isInterested: boolean;
+};
+
+export function CourseCard({ course, isLoggedIn, isInterested }: CourseCardProps) {
   const priceLabel = formatPrice(course.price);
   const creditsLabel = formatCredits(course.credits);
   const metaLabel = priceLabel ?? creditsLabel;
 
   return (
-    <Link href={`/cours/${course.slug}`} className="group block">
-      <article>
+    <article>
+      <Link href={`/cours/${course.slug}`} className="group block">
         <div className="relative h-[180px] w-full overflow-hidden bg-[#d9d9d9] md:h-[230px]">
           <Image
             src={course.image}
@@ -35,16 +42,45 @@ export function CourseCard({ course }: { course: Course }) {
             </p>
           )}
         </div>
-      </article>
-    </Link>
+      </Link>
+
+      {!course.hasUpcomingSessions ? (
+        <div className="mt-3 space-y-3">
+          <p className="text-base text-black/50">Aucune date pour le moment</p>
+          <CourseInterestButton
+            activityId={course.id}
+            isLoggedIn={isLoggedIn}
+            isInterested={isInterested}
+            redirectPath={`/cours/${course.slug}`}
+          />
+        </div>
+      ) : null}
+    </article>
   );
 }
 
-export function CourseGrid({ courses }: { courses: Course[] }) {
+type CourseGridProps = {
+  courses: Course[];
+  isLoggedIn: boolean;
+  interestedActivityIds: string[];
+};
+
+export function CourseGrid({
+  courses,
+  isLoggedIn,
+  interestedActivityIds,
+}: CourseGridProps) {
+  const interestedSet = new Set(interestedActivityIds);
+
   return (
     <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-      {courses.map((course, index) => (
-        <CourseCard key={`${course.id}-${index}`} course={course} />
+      {courses.map((course) => (
+        <CourseCard
+          key={course.id}
+          course={course}
+          isLoggedIn={isLoggedIn}
+          isInterested={interestedSet.has(course.id)}
+        />
       ))}
     </div>
   );

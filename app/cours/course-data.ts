@@ -13,6 +13,7 @@ export type Course = {
   audience: string | null;
   description: string;
   sessions: string[];
+  hasUpcomingSessions: boolean;
 };
 
 import { formatCourseDiscipline } from "@/lib/course-disciplines";
@@ -184,10 +185,31 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
       audience: activity.audience,
       description: activity.description || DEFAULT_COURSE_DESCRIPTION,
       sessions: [],
+      hasUpcomingSessions: false,
     };
   });
 }
 
 export function getCourseBySlug(slug: string, courses: Course[]) {
   return courses.find((course) => course.slug === slug) || null;
+}
+
+export function enrichCoursesWithSessionAvailability(
+  courses: Course[],
+  activityIdsWithUpcomingSessions: Set<string>,
+): Course[] {
+  return courses.map((course) => ({
+    ...course,
+    hasUpcomingSessions: activityIdsWithUpcomingSessions.has(course.id),
+  }));
+}
+
+export function sortCoursesForListing(courses: Course[]): Course[] {
+  return [...courses].sort((left, right) => {
+    if (left.hasUpcomingSessions !== right.hasUpcomingSessions) {
+      return left.hasUpcomingSessions ? -1 : 1;
+    }
+
+    return left.title.localeCompare(right.title, "fr");
+  });
 }

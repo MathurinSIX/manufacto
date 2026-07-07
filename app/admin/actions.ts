@@ -1306,6 +1306,28 @@ export async function getAllActivities() {
   return { activities: activities || [], error: null };
 }
 
+export async function getActivityInterestCounts() {
+  await checkAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("activity_interest")
+    .select("activity_id");
+
+  if (error) {
+    console.error("Error fetching activity interest counts:", error);
+    return { error: error.message, counts: {} as Record<string, number> };
+  }
+
+  const counts: Record<string, number> = {};
+
+  for (const row of data ?? []) {
+    counts[row.activity_id] = (counts[row.activity_id] ?? 0) + 1;
+  }
+
+  return { error: null, counts };
+}
+
 export async function updateActivityCredits(id: string, nb_credits: number | null) {
   await checkAdmin();
   const supabase = await createClient();

@@ -13,6 +13,7 @@ type CourseImageCarouselProps = {
   imageClassName?: string;
   sizes?: string;
   priority?: boolean;
+  compact?: boolean;
 };
 
 export function CourseImageCarousel({
@@ -22,6 +23,7 @@ export function CourseImageCarousel({
   imageClassName,
   sizes = "100vw",
   priority = false,
+  compact = false,
 }: CourseImageCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const hasMultipleImages = images.length > 1;
@@ -55,31 +57,56 @@ export function CourseImageCarousel({
         <>
           <button
             type="button"
-            onClick={goToPrevious}
+            onClick={(event) => {
+              event.stopPropagation();
+              goToPrevious();
+            }}
             aria-label="Photo précédente"
-            className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100"
+            className={cn(
+              "absolute top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              compact
+                ? "left-1 h-6 w-6 opacity-100"
+                : "left-3 h-10 w-10 opacity-0 hover:bg-black/60 focus-visible:opacity-100 group-hover:opacity-100",
+            )}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
           </button>
           <button
             type="button"
-            onClick={goToNext}
+            onClick={(event) => {
+              event.stopPropagation();
+              goToNext();
+            }}
             aria-label="Photo suivante"
-            className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100"
+            className={cn(
+              "absolute top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              compact
+                ? "right-1 h-6 w-6 opacity-100"
+                : "right-3 h-10 w-10 opacity-0 hover:bg-black/60 focus-visible:opacity-100 group-hover:opacity-100",
+            )}
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
           </button>
 
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2">
+          <div
+            className={cn(
+              "absolute left-1/2 flex -translate-x-1/2 items-center",
+              compact ? "bottom-1.5 gap-1" : "bottom-3 gap-2",
+            )}
+          >
             {images.map((image, index) => (
               <button
                 key={`${image}-${index}`}
                 type="button"
                 aria-label={`Afficher la photo ${index + 1}`}
                 aria-current={index === activeIndex}
-                onClick={() => setActiveIndex(index)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActiveIndex(index);
+                }}
                 className={cn(
-                  "h-2.5 w-2.5 rounded-full transition",
+                  "rounded-full transition",
+                  compact ? "h-1.5 w-1.5" : "h-2.5 w-2.5",
                   index === activeIndex ? "bg-white" : "bg-white/50 hover:bg-white/75",
                 )}
               />

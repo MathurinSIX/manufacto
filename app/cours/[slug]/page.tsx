@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ActivitySessionReserveTrigger } from "@/components/activity-session-reserve-trigger";
 import { CourseImageCarousel } from "@/components/course-image-carousel";
+import { CourseInterestButton } from "@/components/course-interest-button";
 import {
   MARKETING_LINK_CLASS,
   MarketingBody,
@@ -14,6 +15,7 @@ import {
 import { MarkdownContent } from "@/components/markdown-content";
 import {
   buildCourseDurationMinutesByActivityId,
+  enrichCoursesWithSessionAvailability,
   formatCredits,
   formatPrice,
   getCourseBySlug,
@@ -60,7 +62,7 @@ async function getCourses() {
   unstable_noStore();
   const supabase = await createClient();
 
-  const [{ data, error }, { data: futureSessions, error: sessionsError }] =
+  const [{ data, error }, { data: futureSessions, error: sessionsError }, { data: sessionsForDuration, error: durationSessionsError }] =
     await Promise.all([
       supabase
         .from("activity")
@@ -75,6 +77,10 @@ async function getCourses() {
         .select("activity_id, start_ts, end_ts")
         .gte("start_ts", new Date().toISOString())
         .order("start_ts", { ascending: true }),
+      supabase
+        .from("session")
+        .select("activity_id, start_ts, end_ts")
+        .order("start_ts", { ascending: false }),
     ]);
 
   if (error) {
@@ -85,15 +91,26 @@ async function getCourses() {
     console.error("Error fetching course session durations", sessionsError);
   }
 
-  const durationByActivityId = buildCourseDurationMinutesByActivityId(
-    futureSessions ?? [],
+  if (durationSessionsError) {
+    console.error("Error fetching course durations", durationSessionsError);
+  }
+
+  const activityIdsWithUpcomingSessions = new Set(
+    futureSessions?.map((session) => session.activity_id) ?? [],
   );
 
-  return getCoursesFromDb(
-    data?.map((activity) => ({
-      ...activity,
-      durationMinutes: durationByActivityId.get(activity.id) ?? null,
-    })),
+  const durationByActivityId = buildCourseDurationMinutesByActivityId(
+    sessionsForDuration ?? [],
+  );
+
+  return enrichCoursesWithSessionAvailability(
+    getCoursesFromDb(
+      data?.map((activity) => ({
+        ...activity,
+        durationMinutes: durationByActivityId.get(activity.id) ?? null,
+      })),
+    ),
+    activityIdsWithUpcomingSessions,
   );
 }
 
@@ -132,6 +149,20 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let isInterested = false;
+
+  if (user) {
+    const { data: interest } = await supabase
+      .from("activity_interest")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("activity_id", course.id)
+      .maybeSingle();
+
+    isInterested = !!interest;
+  }
+
   const priceLabel = formatPrice(course.price);
   const creditsLabel = formatCredits(course.credits);
 
@@ -218,9 +249,17 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
                   </div>
                 ))
               ) : (
-                <p className="text-xl leading-normal text-black/75">
-                  Aucune date n&apos;est disponible pour le moment.
-                </p>
+                <div className="space-y-5">
+                  <p className="text-xl leading-normal text-black/75">
+                    Aucune date n&apos;est disponible pour le moment.
+                  </p>
+                  <CourseInterestButton
+                    activityId={course.id}
+                    isLoggedIn={!!user}
+                    isInterested={isInterested}
+                    redirectPath={`/cours/${course.slug}`}
+                  />
+                </div>
               )}
             </div>
           </div>

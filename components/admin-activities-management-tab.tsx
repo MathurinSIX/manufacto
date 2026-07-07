@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import {
   getAllActivities,
+  getActivityInterestCounts,
   createActivity,
   updateActivity,
   deleteActivity,
@@ -30,6 +31,7 @@ import {
 } from "@/app/admin/actions";
 import { Plus, Loader2, Pencil, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import Image from "next/image";
+import { CourseImageCarousel } from "@/components/course-image-carousel";
 import { DEFAULT_COURSE_IMAGE, resolveActivityImages } from "@/app/cours/course-data";
 import {
   COURSE_DISCIPLINE_OPTIONS,
@@ -63,6 +65,26 @@ type Activity = {
   discipline: string | null;
 };
 
+function ActivityImageCarousel({ activity }: { activity: Activity }) {
+  const images = resolveActivityImages(activity.image_url, activity.image_urls);
+  const hasCustomImages = images.some((url) => url !== DEFAULT_COURSE_IMAGE);
+
+  if (!hasCustomImages) {
+    return <span className="text-sm text-muted-foreground">-</span>;
+  }
+
+  return (
+    <div className="relative h-20 w-28 overflow-hidden rounded-md border bg-muted">
+      <CourseImageCarousel
+        images={images}
+        alt={activity.name}
+        compact
+        sizes="112px"
+      />
+    </div>
+  );
+}
+
 interface AdminActivitiesManagementTabProps {
   activityTypes?: string[];
 }
@@ -71,6 +93,7 @@ export function AdminActivitiesManagementTab({
   activityTypes,
 }: AdminActivitiesManagementTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [interestCounts, setInterestCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -115,7 +138,11 @@ export function AdminActivitiesManagementTab({
     setLoading(true);
     setError(null);
     try {
-      const result = await getAllActivities();
+      const [result, interestResult] = await Promise.all([
+        getAllActivities(),
+        getActivityInterestCounts(),
+      ]);
+
       if (result.error) {
         setError(result.error);
       } else {
@@ -125,6 +152,12 @@ export function AdminActivitiesManagementTab({
             ? activities.filter((activity) => activityTypes.includes(activity.type))
             : activities,
         );
+      }
+
+      if (interestResult.error) {
+        setError((current) => current ?? interestResult.error);
+      } else {
+        setInterestCounts(interestResult.counts);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -619,12 +652,14 @@ export function AdminActivitiesManagementTab({
                   <thead>
                     <tr className="border-b">
                       <th className="text-left p-4 font-medium">Nom</th>
+                      <th className="text-left p-4 font-medium">Images</th>
                       <th className="text-left p-4 font-medium">Discipline</th>
                       <th className="text-left p-4 font-medium">Description</th>
                       <th className="text-left p-4 font-medium">Niveau</th>
                       <th className="text-left p-4 font-medium">Public</th>
                       <th className="text-left p-4 font-medium">Crédits</th>
                       <th className="text-left p-4 font-medium">Prix</th>
+                      <th className="text-left p-4 font-medium">Intéressés</th>
                       <th className="text-left p-4 font-medium">Square</th>
                       <th className="text-right p-4 font-medium">Actions</th>
                     </tr>
@@ -633,6 +668,9 @@ export function AdminActivitiesManagementTab({
                     {disciplineActivities.map((activity) => (
                       <tr key={activity.id} className="border-b hover:bg-muted/50">
                         <td className="p-4 font-medium">{activity.name}</td>
+                        <td className="p-4">
+                          <ActivityImageCarousel activity={activity} />
+                        </td>
                         <td className="p-4">
                           {formatCourseDiscipline(activity.discipline) ?? (
                             <span className="text-muted-foreground">-</span>
@@ -671,6 +709,13 @@ export function AdminActivitiesManagementTab({
                             <span>{activity.price.toFixed(2)} €</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {interestCounts[activity.id] ? (
+                            <span>{interestCounts[activity.id]}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
                           )}
                         </td>
                         <td className="p-4">
