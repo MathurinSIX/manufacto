@@ -1294,7 +1294,7 @@ export async function getAllActivities() {
   
   const { data: activities, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits, type, price, description, image_url, square_product_id, level, audience, discipline")
+    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline")
     .is("deleted_at", null)
     .order("type, name");
   
@@ -1338,7 +1338,7 @@ export async function createActivity(
   type: string,
   price: number | null,
   description: string | null,
-  imageUrl: string | null = null,
+  imageUrls: string[] | null = null,
   squareProductId: string | null = null,
   level: string | null = null,
   audience: string | null = null,
@@ -1351,7 +1351,11 @@ export async function createActivity(
     return { error: "Le type est requis", activity: null };
   }
 
-  if (!imageUrl && type !== "visite" && type !== "cours") {
+  const normalizedImageUrls = (imageUrls ?? [])
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  if (normalizedImageUrls.length === 0 && type !== "visite" && type !== "cours") {
     return { error: "Une image est requise", activity: null };
   }
   
@@ -1363,7 +1367,8 @@ export async function createActivity(
       type,
       price: price || null,
       description: description || null,
-      image_url: imageUrl,
+      image_url: normalizedImageUrls[0] ?? null,
+      image_urls: normalizedImageUrls,
       square_product_id: squareProductId || null,
       level: level || null,
       audience: audience || null,
@@ -1396,7 +1401,7 @@ export async function updateActivity(
   type: string,
   price: number | null,
   description: string | null,
-  imageUrl: string | null = null,
+  imageUrls: string[] | null = null,
   squareProductId: string | null = null,
   level: string | null = null,
   audience: string | null = null,
@@ -1408,6 +1413,10 @@ export async function updateActivity(
   if (!type) {
     return { error: "Le type est requis", activity: null };
   }
+
+  const normalizedImageUrls = (imageUrls ?? [])
+    .map((url) => url.trim())
+    .filter(Boolean);
   
   const { data, error } = await supabase
     .from("activity")
@@ -1417,7 +1426,8 @@ export async function updateActivity(
       type,
       price: price || null,
       description: description || null,
-      image_url: imageUrl || null,
+      image_url: normalizedImageUrls[0] ?? null,
+      image_urls: normalizedImageUrls,
       square_product_id: squareProductId || null,
       level: level || null,
       audience: audience || null,

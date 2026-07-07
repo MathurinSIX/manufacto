@@ -32,7 +32,7 @@ async function CoursContent() {
 
   const { data, error } = await supabase
     .from("activity")
-    .select("id, name, description, image_url, nb_credits, price, square_product_id, created_at, level, audience, discipline")
+    .select("id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline")
     .eq("type", "cours")
     .is("deleted_at", null)
     .in("id", activityIds.length ? activityIds : ["00000000-0000-0000-0000-000000000000"])

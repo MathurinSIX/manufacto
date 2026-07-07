@@ -4,6 +4,7 @@ export type Course = {
   discipline: string;
   title: string;
   image: string;
+  images: string[];
   price: number | null;
   squareProductId: string | null;
   credits: number | null;
@@ -21,6 +22,7 @@ export type DbCourse = {
   name: string | null;
   description: string | null;
   image_url: string | null;
+  image_urls?: string[] | null;
   nb_credits: number | null;
   price: number | null;
   square_product_id: string | null;
@@ -32,6 +34,26 @@ export type DbCourse = {
 };
 
 export const DEFAULT_COURSE_IMAGE = "/assets/homepage/Vector.jpg";
+
+export function resolveActivityImages(
+  imageUrl: string | null | undefined,
+  imageUrls: string[] | null | undefined,
+): string[] {
+  const fromArray = (imageUrls ?? [])
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  if (fromArray.length > 0) {
+    return fromArray;
+  }
+
+  if (imageUrl?.trim()) {
+    return [imageUrl.trim()];
+  }
+
+  return [DEFAULT_COURSE_IMAGE];
+}
+
 const DEFAULT_COURSE_DESCRIPTION =
   "Les informations détaillées de ce cours seront bientôt disponibles.";
 const DEFAULT_COURSE_DISCIPLINE = "Menuiserie";
@@ -144,12 +166,15 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
     const { discipline, title } = splitCourseName(name, activity.discipline);
     const displayTitle = title || name;
 
+    const images = resolveActivityImages(activity.image_url, activity.image_urls);
+
     return {
       id: activity.id,
       slug: slugify(displayTitle),
       discipline,
       title: displayTitle,
-      image: activity.image_url || DEFAULT_COURSE_IMAGE,
+      image: images[0],
+      images,
       price: activity.price,
       squareProductId: activity.square_product_id,
       credits: activity.nb_credits,

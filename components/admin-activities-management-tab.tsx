@@ -28,9 +28,9 @@ import {
   deleteActivity,
   uploadActivityImage,
 } from "@/app/admin/actions";
-import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import Image from "next/image";
-import { DEFAULT_COURSE_IMAGE } from "@/app/cours/course-data";
+import { DEFAULT_COURSE_IMAGE, resolveActivityImages } from "@/app/cours/course-data";
 import {
   COURSE_DISCIPLINE_OPTIONS,
   formatCourseDiscipline,
@@ -56,6 +56,7 @@ type Activity = {
   price: number | null;
   description: string | null;
   image_url: string | null;
+  image_urls: string[] | null;
   square_product_id: string | null;
   level: string | null;
   audience: string | null;
@@ -81,7 +82,7 @@ export function AdminActivitiesManagementTab({
   const [activityDiscipline, setActivityDiscipline] = useState<string>("menuiserie");
   const [activityCredits, setActivityCredits] = useState<string>("");
   const [activityDescription, setActivityDescription] = useState("");
-  const [activityImageUrl, setActivityImageUrl] = useState("");
+  const [activityImageUrls, setActivityImageUrls] = useState<string[]>([]);
   const [activitySquareProductId, setActivitySquareProductId] = useState("");
   const [squareVariations, setSquareVariations] = useState<SquareCatalogVariationOption[]>([]);
   const [activityLevel, setActivityLevel] = useState("");
@@ -147,7 +148,11 @@ export function AdminActivitiesManagementTab({
       );
       setActivityCredits(activity.nb_credits?.toString() || "");
       setActivityDescription(activity.description || "");
-      setActivityImageUrl(activity.image_url || "");
+      setActivityImageUrls(
+        resolveActivityImages(activity.image_url, activity.image_urls).filter(
+          (url) => url !== DEFAULT_COURSE_IMAGE,
+        ),
+      );
       setActivitySquareProductId(activity.square_product_id || "");
       setActivityLevel(activity.level || "");
       setActivityAudience(activity.audience || "");
@@ -157,7 +162,7 @@ export function AdminActivitiesManagementTab({
       setActivityDiscipline("menuiserie");
       setActivityCredits("");
       setActivityDescription("");
-      setActivityImageUrl("");
+      setActivityImageUrls([]);
       setActivitySquareProductId("");
       setActivityLevel("");
       setActivityAudience("");
@@ -173,7 +178,7 @@ export function AdminActivitiesManagementTab({
     setActivityDiscipline("menuiserie");
     setActivityCredits("");
     setActivityDescription("");
-    setActivityImageUrl("");
+    setActivityImageUrls([]);
     setActivitySquareProductId("");
     setActivityLevel("");
     setActivityAudience("");
@@ -212,10 +217,12 @@ export function AdminActivitiesManagementTab({
       }
 
       const description = activityDescription.trim() === "" ? null : activityDescription.trim();
-      const imageUrl = activityImageUrl.trim() === "" ? null : activityImageUrl.trim();
       const squareProductId = activitySquareProductId.trim() === "" ? null : activitySquareProductId.trim();
       const level = activityLevel.trim() === "" ? null : activityLevel.trim();
       const audience = activityAudience.trim() === "" ? null : activityAudience.trim();
+      const imageUrls = activityImageUrls
+        .map((url) => url.trim())
+        .filter(Boolean);
 
       let result;
       if (editingActivity) {
@@ -226,7 +233,7 @@ export function AdminActivitiesManagementTab({
           type,
           price,
           description,
-          imageUrl,
+          imageUrls,
           squareProductId,
           level,
           audience,
@@ -239,7 +246,7 @@ export function AdminActivitiesManagementTab({
           type,
           price,
           description,
-          imageUrl,
+          imageUrls,
           squareProductId,
           level,
           audience,
@@ -277,7 +284,7 @@ export function AdminActivitiesManagementTab({
         return;
       }
 
-      setActivityImageUrl(result.path);
+      setActivityImageUrls((current) => [...current, result.path!]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "L'image n'a pas pu être téléversée");
     } finally {
@@ -452,15 +459,94 @@ export function AdminActivitiesManagementTab({
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="image">Image</Label>
-                  <div className="relative h-32 overflow-hidden rounded-md border bg-muted">
-                    <Image
-                      src={activityImageUrl || DEFAULT_COURSE_IMAGE}
-                      alt="Aperçu de l'activité"
-                      fill
-                      sizes="(max-width: 768px) 100vw, 640px"
-                      className="object-cover"
-                    />
+                  <Label htmlFor="image">Images</Label>
+                  <div className="space-y-3">
+                    {activityImageUrls.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {activityImageUrls.map((imageUrl, index) => (
+                          <div
+                            key={`${imageUrl}-${index}`}
+                            className="overflow-hidden rounded-md border bg-muted"
+                          >
+                            <div className="relative h-32">
+                              <Image
+                                src={imageUrl}
+                                alt={`Aperçu ${index + 1}`}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 320px"
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between gap-2 border-t bg-background p-2">
+                              <p className="text-xs text-muted-foreground">
+                                Photo {index + 1}
+                                {index === 0 ? " · couverture" : ""}
+                              </p>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    setActivityImageUrls((current) => {
+                                      const next = [...current];
+                                      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                                      return next;
+                                    });
+                                  }}
+                                  aria-label="Monter la photo"
+                                >
+                                  <ChevronUp className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8"
+                                  disabled={index === activityImageUrls.length - 1}
+                                  onClick={() => {
+                                    setActivityImageUrls((current) => {
+                                      const next = [...current];
+                                      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                                      return next;
+                                    });
+                                  }}
+                                  aria-label="Descendre la photo"
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setActivityImageUrls((current) =>
+                                      current.filter((_, currentIndex) => currentIndex !== index),
+                                    );
+                                  }}
+                                  aria-label="Supprimer la photo"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="relative h-32 overflow-hidden rounded-md border bg-muted">
+                        <Image
+                          src={DEFAULT_COURSE_IMAGE}
+                          alt="Aperçu par défaut"
+                          fill
+                          sizes="(max-width: 768px) 100vw, 640px"
+                          className="object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
                   <Input
                     id="image"
@@ -473,7 +559,7 @@ export function AdminActivitiesManagementTab({
                     disabled={uploadingImage}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Optionnel. Sans image, l&apos;image par défaut de la page cours sera utilisée.
+                    Ajoutez une ou plusieurs photos. La première image sert de couverture dans la liste des cours.
                   </p>
                   {uploadingImage && (
                     <p className="flex items-center gap-2 text-xs text-muted-foreground">

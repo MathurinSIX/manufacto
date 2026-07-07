@@ -1,10 +1,10 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 import { ActivitySessionReserveTrigger } from "@/components/activity-session-reserve-trigger";
+import { CourseImageCarousel } from "@/components/course-image-carousel";
 import {
   MARKETING_LINK_CLASS,
   MarketingBody,
@@ -65,7 +65,7 @@ async function getCourses() {
       supabase
         .from("activity")
         .select(
-          "id, name, description, image_url, nb_credits, price, square_product_id, level, audience, discipline",
+          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline",
         )
         .eq("type", "cours")
         .is("deleted_at", null)
@@ -140,11 +140,9 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
       <section className="grid gap-10 lg:grid-cols-[594px_1fr] lg:gap-[82px]">
         <div>
           <div className="relative h-[332px] w-full overflow-hidden rounded-[6px] bg-[#d9d9d9] md:h-[495px]">
-            <Image
-              src={course.image}
+            <CourseImageCarousel
+              images={course.images}
               alt={course.title}
-              fill
-              className="object-cover"
               priority
               sizes="(max-width: 1024px) 100vw, 594px"
             />
