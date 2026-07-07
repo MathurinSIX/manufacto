@@ -628,41 +628,74 @@ export async function deleteUser(userId: string) {
   return { error: null };
 }
 
-// Add credit to a user
-export async function addCreditToUser(userId: string, amount: number, paymentType?: string) {
+// Add or remove credits for a user (positive amount adds, negative removes)
+export async function adjustUserCredits(
+  userId: string,
+  amount: number,
+  paymentType = "admin",
+) {
   await checkAdmin();
   const supabase = await createClient();
-  
-  if (amount <= 0) {
-    return { error: "Le montant doit être supérieur à 0", credit: null };
+
+  if (amount === 0 || Number.isNaN(amount)) {
+    return { error: "Le montant doit être différent de 0", credit: null };
   }
-  
+
   if (!paymentType) {
     return { error: "Le type de paiement est requis", credit: null };
   }
-  
+
+  if (amount < 0) {
+    const { data: credits, error: creditsError } = await supabase
+      .from("credit")
+      .select("amount")
+      .eq("user_id", userId);
+
+    if (creditsError) {
+      return {
+        error: "Impossible de vérifier les crédits de l'utilisateur",
+        credit: null,
+      };
+    }
+
+    const availableCredits =
+      credits?.reduce((total, credit) => total + toCreditAmount(credit.amount), 0) ?? 0;
+
+    if (availableCredits + amount < 0) {
+      return {
+        error: `Crédits insuffisants. L'utilisateur a ${Math.round(availableCredits)} crédit${availableCredits !== 1 ? "s" : ""}.`,
+        credit: null,
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from("credit")
     .insert({
       user_id: userId,
-      amount: amount,
+      amount,
       payment_type: paymentType,
     })
     .select()
     .maybeSingle();
-  
+
   if (error) {
-    console.error("Error adding credit:", error);
+    console.error("Error adjusting credits:", error);
     return { error: error.message, credit: null };
   }
-  
+
   if (!data) {
-    return { error: "Failed to add credit", credit: null };
+    return { error: "Failed to adjust credits", credit: null };
   }
-  
+
   revalidatePath("/admin");
   revalidatePath(`/admin/users/${userId}`);
   return { credit: data, error: null };
+}
+
+/** @deprecated Use adjustUserCredits instead */
+export async function addCreditToUser(userId: string, amount: number, paymentType?: string) {
+  return adjustUserCredits(userId, amount, paymentType);
 }
 
 // Make a user admin

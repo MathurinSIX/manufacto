@@ -19,12 +19,12 @@ import {
   getAllUsers,
   createUser,
   resendUserInvitation,
-  addCreditToUser,
   makeUserAdmin,
   removeUserAdmin,
   updateUser,
   deleteUser,
 } from "@/app/admin/actions";
+import { AdminAdjustCreditsDialog } from "@/components/admin-adjust-credits-dialog";
 import { Plus, Loader2, Coins, Shield, ShieldOff, Pencil, Trash2, Mail } from "lucide-react";
 
 const PARIS_TIMEZONE = "Europe/Paris";
@@ -73,8 +73,6 @@ export function AdminUsersTab() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [creditAmount, setCreditAmount] = useState<string>("");
-  const [addingCredit, setAddingCredit] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
@@ -237,39 +235,6 @@ export function AdminUsersTab() {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
     } finally {
       setDeletingUserId(null);
-    }
-  };
-
-  const handleAddCredit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUser) return;
-
-    setAddingCredit(true);
-    setError(null);
-
-    try {
-      const amount = parseFloat(creditAmount);
-      
-      if (Number.isNaN(amount) || amount <= 0) {
-        setError("Le montant doit être un nombre positif");
-        setAddingCredit(false);
-        return;
-      }
-
-      const result = await addCreditToUser(selectedUser.id, amount, "admin");
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setAddCreditDialogOpen(false);
-        setSelectedUser(null);
-        setCreditAmount("");
-        await loadUsers();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
-    } finally {
-      setAddingCredit(false);
     }
   };
 
@@ -438,12 +403,11 @@ export function AdminUsersTab() {
                             size="icon"
                             variant="outline"
                             className="h-8 w-8"
-                            title="Ajouter des crédits"
-                            aria-label="Ajouter des crédits"
+                            title="Gérer les crédits"
+                            aria-label="Gérer les crédits"
                             onClick={() => {
                               setSelectedUser(user);
                               setAddCreditDialogOpen(true);
-                              setCreditAmount("");
                               setError(null);
                             }}
                           >
@@ -643,64 +607,21 @@ export function AdminUsersTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Credit Dialog */}
-      <Dialog open={addCreditDialogOpen} onOpenChange={setAddCreditDialogOpen}>
-        <DialogContent>
-          <form onSubmit={handleAddCredit}>
-            <DialogHeader>
-              <DialogTitle>ajouter des crédits</DialogTitle>
-              <DialogDescription>
-                Ajoutez des crédits à {selectedUser?.email}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="creditAmount">Montant *</Label>
-                <Input
-                  id="creditAmount"
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={creditAmount}
-                  onChange={(e) => setCreditAmount(e.target.value)}
-                  required
-                  placeholder="Ex: 10"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Entrez le nombre de crédits à ajouter
-                </p>
-              </div>
-            </div>
-            {error && (
-              <div className="text-sm text-destructive mb-4">{error}</div>
-            )}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setAddCreditDialogOpen(false);
-                  setSelectedUser(null);
-                  setCreditAmount("");
-                  setError(null);
-                }}
-              >
-                Annuler
-              </Button>
-              <Button type="submit" disabled={addingCredit || !creditAmount}>
-                {addingCredit ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Ajout...
-                  </>
-                ) : (
-                  "ajouter"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {selectedUser && (
+        <AdminAdjustCreditsDialog
+          open={addCreditDialogOpen}
+          onOpenChange={(open) => {
+            setAddCreditDialogOpen(open);
+            if (!open) {
+              setSelectedUser(null);
+            }
+          }}
+          userId={selectedUser.id}
+          userEmail={selectedUser.email}
+          currentCredits={selectedUser.credits}
+          onSuccess={loadUsers}
+        />
+      )}
     </div>
   );
 }

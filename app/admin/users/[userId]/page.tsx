@@ -14,6 +14,7 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
+import { AdminUserCreditsHeader } from "@/components/admin-user-credits-header";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 type Activity = {
@@ -362,12 +363,11 @@ async function UserAccountContent({
                 {targetUser.email}
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-background">
-                <span className="text-sm font-medium">Crédits :</span>
-                <span className="text-sm font-bold">{Math.round(totalCredits)}</span>
-              </div>
-            </div>
+            <AdminUserCreditsHeader
+              userId={userId}
+              userEmail={targetUser.email ?? ""}
+              totalCredits={totalCredits}
+            />
           </div>
 
           {/* Reservations with Tabs */}
@@ -417,7 +417,7 @@ async function UserAccountContent({
             <CardHeader>
               <CardTitle>Historique des crédits</CardTitle>
               <CardDescription>
-                Détail des crédits ajoutés
+                Détail des crédits ajoutés et retirés
               </CardDescription>
             </CardHeader>
             <CardContent>
