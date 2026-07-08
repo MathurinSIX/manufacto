@@ -46,6 +46,7 @@ import {
 import { AdminWeekNavigator } from "@/components/admin-week-navigator";
 import { AdminWeekCalendar } from "@/components/admin-week-calendar";
 import { AdminWeekTimeGrid, type CalendarSlotSelection } from "@/components/admin-week-time-grid";
+import { cn } from "@/lib/utils";
 
 type Activity = {
   id: string;
@@ -79,6 +80,8 @@ interface AdminAddActivitiesTabProps {
   allowManualRepeat?: boolean;
   initialTargetWeekOffset?: number;
   initialActivityId?: string;
+  onSessionsCreated?: () => void;
+  mode?: "copy" | "all";
 }
 
 export function AdminAddActivitiesTab({
@@ -86,6 +89,8 @@ export function AdminAddActivitiesTab({
   allowManualRepeat = false,
   initialTargetWeekOffset = 0,
   initialActivityId,
+  onSessionsCreated,
+  mode = "all",
 }: AdminAddActivitiesTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(-1);
@@ -121,6 +126,17 @@ export function AdminAddActivitiesTab({
     activityTypes?.some((type) => PRACTICE_ACTIVITY_TYPES.has(type)) ?? false;
   const sessionWord = isPracticeMode ? "créneau" : "session";
   const sessionWordPlural = isPracticeMode ? "créneaux" : "sessions";
+
+  useEffect(() => {
+    setTargetWeekOffset(initialTargetWeekOffset);
+    setManualWeekOffset(initialTargetWeekOffset);
+  }, [initialTargetWeekOffset]);
+
+  useEffect(() => {
+    if (initialActivityId) {
+      setManualActivityId(initialActivityId);
+    }
+  }, [initialActivityId]);
 
   useEffect(() => {
     const loadActivities = async () => {
@@ -350,6 +366,7 @@ export function AdminAddActivitiesTab({
         }
         setShowCopyNextWeek(true);
         await loadWeekSessions();
+        onSessionsCreated?.();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -595,6 +612,7 @@ export function AdminAddActivitiesTab({
         await loadManualWeekSessions();
         setManualModalOpen(false);
         setSlotSelection(null);
+        onSessionsCreated?.();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -612,15 +630,23 @@ export function AdminAddActivitiesTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", mode === "all" && "border-t pt-8")}>
       <div>
         <h3 className="text-lg font-semibold mb-2">
-          {isPracticeMode ? "ajouter des créneaux" : "ajouter des sessions"}
+          {mode === "copy"
+            ? "Recopier des semaines complètes"
+            : isPracticeMode
+              ? "ajouter des créneaux"
+              : "ajouter des sessions"}
         </h3>
         <p className="text-sm text-muted-foreground">
-          {isPracticeMode
-            ? "Naviguez semaine par semaine, visualisez le calendrier horaire et créez ou copiez des créneaux d'ouverture."
-            : "Naviguez semaine par semaine, visualisez le calendrier et créez ou copiez des sessions."}
+          {mode === "copy"
+            ? isPracticeMode
+              ? "Sélectionnez une semaine source, choisissez les activités et copiez les créneaux vers une semaine cible."
+              : "Sélectionnez une semaine source et copiez les sessions vers une semaine cible."
+            : isPracticeMode
+              ? "Naviguez semaine par semaine, visualisez le calendrier horaire et créez ou copiez des créneaux d'ouverture."
+              : "Naviguez semaine par semaine, visualisez le calendrier et créez ou copiez des sessions."}
         </p>
       </div>
 
@@ -649,11 +675,13 @@ export function AdminAddActivitiesTab({
       )}
 
       <Tabs defaultValue="batch" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="batch">Par copie</TabsTrigger>
-          <TabsTrigger value="manual">Manuelle</TabsTrigger>
-        </TabsList>
-        
+        {mode === "all" ? (
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="batch">Par copie</TabsTrigger>
+            <TabsTrigger value="manual">Manuelle</TabsTrigger>
+          </TabsList>
+        ) : null}
+
         <TabsContent value="batch" className="space-y-4">
           <div className="space-y-6">
             <AdminWeekNavigator
@@ -762,7 +790,8 @@ export function AdminAddActivitiesTab({
             </div>
           </div>
         </TabsContent>
-        
+
+        {mode === "all" ? (
         <TabsContent value="manual" className="space-y-4">
           <div className="space-y-4">
             <AdminWeekNavigator
@@ -986,6 +1015,7 @@ export function AdminAddActivitiesTab({
             </DialogContent>
           </Dialog>
         </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

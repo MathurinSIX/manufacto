@@ -41,7 +41,6 @@ import {
   formatParisTime,
   getParisHour,
   getParisWeekMonday,
-  getParisWeekOffset,
   isSameParisDay,
   PARIS_TIMEZONE,
   parseParisDateTime,
@@ -50,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { AdminWeekNavigator } from "@/components/admin-week-navigator";
 import { AdminWeekTimeGrid } from "@/components/admin-week-time-grid";
 import type { AdminWeekCalendarSession } from "@/components/admin-week-calendar";
+import { useAdminManualSessionCreate } from "@/components/admin-manual-session-create-dialog";
 import {
   countRegistrationsOverlappingHour,
   getPracticeCapacitySummary,
@@ -366,9 +366,12 @@ function WeekViewSessions({
 }
 
 interface AdminActivitiesTabProps {
-  onAddSessions?: (context: { weekOffset: number; activityId?: string }) => void;
   activityTypes?: string[];
   title?: string;
+  allowManualRepeat?: boolean;
+  defaultActivityId?: string;
+  onCopyWeeks?: (context: { weekOffset: number; activityId?: string }) => void;
+  onSessionsCreated?: () => void;
 }
 
 const PRACTICE_ACTIVITY_TYPES = new Set([
@@ -379,9 +382,12 @@ const PRACTICE_ACTIVITY_TYPES = new Set([
 ]);
 
 export function AdminActivitiesTab({
-  onAddSessions,
   activityTypes,
   title = "Sessions",
+  allowManualRepeat = false,
+  defaultActivityId,
+  onCopyWeeks,
+  onSessionsCreated,
 }: AdminActivitiesTabProps) {
   const searchParams = useSearchParams();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -415,9 +421,7 @@ export function AdminActivitiesTab({
   const setStartTimeFromParts = (hour: string, minute: string) => {
     setEditStartTime(`${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
   };
-  const [viewMode, setViewMode] = useState<"day" | "week">(() =>
-    activityTypes?.some((type) => PRACTICE_ACTIVITY_TYPES.has(type)) ? "week" : "day",
-  );
+  const [viewMode, setViewMode] = useState<"day" | "week">("week");
   const [weekOffset, setWeekOffset] = useState(() =>
     parseWeekOffsetParam(searchParams.get("weekOffset")),
   );
@@ -619,7 +623,7 @@ export function AdminActivitiesTab({
     return sessions;
   }, [sessionsForWeek]);
 
-  const practiceSessionById = useMemo(() => {
+  const weekSessionById = useMemo(() => {
     const map = new Map<string, SessionWithUsers>();
     sessionsForWeek.forEach((daySessions) => {
       for (const session of daySessions) {
@@ -629,10 +633,40 @@ export function AdminActivitiesTab({
     return map;
   }, [sessionsForWeek]);
 
-  const practiceActivityColorIds = useMemo(
+  const weekActivityColorIds = useMemo(
     () => activities.map((activity) => activity.id),
     [activities],
   );
+
+  const manualActivities = useMemo(
+    () => activities.map((activity) => ({ id: activity.id, name: activity.name })),
+    [activities],
+  );
+
+  const effectiveDefaultActivityId =
+    isPracticeView && selectedPracticeActivityId !== PRACTICE_ACTIVITY_FILTER_ALL
+      ? selectedPracticeActivityId
+      : defaultActivityId;
+
+  const manualCreate = useAdminManualSessionCreate({
+    activities: manualActivities,
+    weekOffset,
+    allowManualRepeat,
+    isPracticeMode: isPracticeView,
+    defaultActivityId: effectiveDefaultActivityId,
+    onCreated: () => {
+      loadData();
+      onSessionsCreated?.();
+    },
+  });
+
+  const handleCopyWeeksClick = () => {
+    if (!onCopyWeeks) return;
+    onCopyWeeks({
+      weekOffset,
+      activityId: effectiveDefaultActivityId,
+    });
+  };
 
   // Update selectedSession when activities data changes (after add/remove user)
   useEffect(() => {
@@ -858,19 +892,6 @@ export function AdminActivitiesTab({
     setWeekOffset(0);
   };
 
-  const handleAddSessionsClick = () => {
-    if (!onAddSessions) return;
-
-    const effectiveWeekOffset =
-      viewMode === "week" ? weekOffset : getParisWeekOffset(selectedDate);
-    const activityId =
-      isPracticeView && selectedPracticeActivityId !== PRACTICE_ACTIVITY_FILTER_ALL
-        ? selectedPracticeActivityId
-        : undefined;
-
-    onAddSessions({ weekOffset: effectiveWeekOffset, activityId });
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -884,12 +905,15 @@ export function AdminActivitiesTab({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h3 className="text-lg font-semibold">{title}</h3>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
-          {onAddSessions && (
-            <Button onClick={handleAddSessionsClick}>
-              <Plus className="mr-2 h-4 w-4" />
-              {isPracticeView ? "ajouter des créneaux" : "ajouter des sessions"}
-            </Button>
-          )}
+          {onCopyWeeks ? (
+            <button
+              type="button"
+              onClick={handleCopyWeeksClick}
+              className="text-sm font-semibold text-[#4a56dd] hover:underline text-left"
+            >
+              Recopier des semaines complètes
+            </button>
+          ) : null}
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "day" | "week")}>
             <TabsList>
               <TabsTrigger value="day">
@@ -940,7 +964,7 @@ export function AdminActivitiesTab({
                   const isSelected = selectedPracticeActivityId === activity.id;
                   const colorClass = getActivityColorClass(
                     activity.id,
-                    practiceActivityColorIds,
+                    weekActivityColorIds,
                   );
                   return (
                     <button
@@ -1058,7 +1082,7 @@ export function AdminActivitiesTab({
                             isPracticeView && session.activity_id
                               ? getActivityColorClass(
                                   session.activity_id,
-                                  practiceActivityColorIds,
+                                  weekActivityColorIds,
                                 )
                               : "bg-background";
 
@@ -1141,32 +1165,26 @@ export function AdminActivitiesTab({
 
       {/* Week View - Calendar Grid */}
       {viewMode === "week" && (
-        isPracticeView ? (
+        <>
           <AdminWeekTimeGrid
             weekOffset={weekOffset}
             existingSessions={practiceWeekCalendarSessions}
-            activityColorIds={practiceActivityColorIds}
+            previewSessions={manualCreate.previewSessions}
+            activityColorIds={weekActivityColorIds}
+            selectedDays={manualCreate.selectedDays}
+            onToggleDay={manualCreate.onToggleDay}
+            selectable
+            onSelectSlot={manualCreate.onSelectSlot}
             onExistingSessionClick={(session) => {
-              const fullSession = session.id ? practiceSessionById.get(session.id) : undefined;
+              const fullSession = session.id ? weekSessionById.get(session.id) : undefined;
               if (fullSession) {
                 setSelectedSession(fullSession);
                 setUsersDialogOpen(true);
               }
             }}
           />
-        ) : (
-          <WeekViewSessions
-            sessionsByDate={sessionsForWeek}
-            weekOffset={weekOffset}
-            isPracticeView={isPracticeView}
-            onSessionClick={(session) => {
-              setSelectedSession(session);
-              setUsersDialogOpen(true);
-            }}
-            onEditSession={handleEditSession}
-            onDeleteSession={handleDeleteSession}
-          />
-        )
+          {manualCreate.dialog}
+        </>
       )}
 
       {/* Edit Session Dialog */}

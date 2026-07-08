@@ -39,7 +39,7 @@ const FREE_PRACTICE_ACTIVITY_TYPES = [
 ];
 const FREE_PRACTICE_SESSION_ACTIVITY_TYPES = FREE_PRACTICE_ACTIVITY_TYPES;
 const DISCOVERY_PACK_ACTIVITY_TYPES = ["pack_decouverte"];
-type SessionArea = "courses" | "free-practice" | "discovery-packs";
+type SessionArea = "courses" | "free-practice" | "discovery-packs" | "visits";
 
 type AddSessionsContext = {
   weekOffset: number;
@@ -63,44 +63,113 @@ function parseFreePracticeSubTab(subTab: string | null): FreePracticeSubTab {
   return "pratique-libre";
 }
 
+function AdminSessionsPage({
+  area,
+  activityTypes,
+  title,
+  allowManualRepeat = false,
+}: {
+  area: SessionArea;
+  activityTypes: string[];
+  title: string;
+  allowManualRepeat?: boolean;
+}) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const weekOffset = parseWeekOffsetParam(searchParams.get("weekOffset"));
+  const activityId = searchParams.get("activityId") ?? undefined;
+
+  const openCopyView = (context?: AddSessionsContext) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("addSessionsFor", area);
+    params.set("weekOffset", String(context?.weekOffset ?? weekOffset));
+    if (context?.activityId) {
+      params.set("activityId", context.activityId);
+    } else {
+      params.delete("activityId");
+    }
+    router.replace(`/admin?${params.toString()}`, { scroll: false });
+  };
+
+  return (
+    <AdminActivitiesTab
+      key={calendarRefreshKey}
+      activityTypes={activityTypes}
+      title={title}
+      allowManualRepeat={allowManualRepeat}
+      defaultActivityId={activityId}
+      onCopyWeeks={openCopyView}
+      onSessionsCreated={() => setCalendarRefreshKey((key) => key + 1)}
+    />
+  );
+}
+
+function AdminCopyWeeksPage({
+  area,
+  activityTypes,
+  allowManualRepeat = false,
+  onBack,
+}: {
+  area: SessionArea;
+  activityTypes: string[];
+  allowManualRepeat?: boolean;
+  onBack: () => void;
+}) {
+  const searchParams = useSearchParams();
+  const weekOffset = parseWeekOffsetParam(searchParams.get("weekOffset"));
+  const activityId = searchParams.get("activityId") ?? undefined;
+
+  return (
+    <div className="space-y-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-sm font-semibold text-[#4a56dd] hover:underline"
+      >
+        retour au calendrier
+      </button>
+      <AdminAddActivitiesTab
+        activityTypes={activityTypes}
+        allowManualRepeat={allowManualRepeat}
+        initialTargetWeekOffset={weekOffset}
+        initialActivityId={activityId}
+        mode="copy"
+      />
+    </div>
+  );
+}
+
 export function AdminTabsWrapper() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const getAddSessionsArea = useCallback((): SessionArea | null => {
-    const addSessionsForParam = searchParams.get("addSessionsFor");
-    if (
-      addSessionsForParam === "courses" ||
-      addSessionsForParam === "free-practice" ||
-      addSessionsForParam === "discovery-packs"
-    ) {
-      return addSessionsForParam;
-    }
-    if (searchParams.get("tab") === "add-sessions") {
-      return "free-practice";
-    }
-    return null;
-  }, [searchParams]);
-
   const resolveFromUrl = useCallback(() => {
-    const addSessionsArea = getAddSessionsArea();
-    if (addSessionsArea === "courses") {
+    const addSessionsForParam = searchParams.get("addSessionsFor");
+    if (addSessionsForParam === "courses") {
       return {
         tab: "courses",
         coursesSubTab: "sessions" as CoursesSubTab,
         freePracticeSubTab: "pratique-libre" as FreePracticeSubTab,
       };
     }
-    if (addSessionsArea === "free-practice") {
+    if (addSessionsForParam === "free-practice") {
       return {
         tab: "free-practice",
         coursesSubTab: "cours" as CoursesSubTab,
         freePracticeSubTab: "sessions" as FreePracticeSubTab,
       };
     }
-    if (addSessionsArea === "discovery-packs") {
+    if (addSessionsForParam === "discovery-packs") {
       return {
         tab: "discovery-packs",
+        coursesSubTab: "cours" as CoursesSubTab,
+        freePracticeSubTab: "pratique-libre" as FreePracticeSubTab,
+      };
+    }
+    if (addSessionsForParam === "visits") {
+      return {
+        tab: "visits",
         coursesSubTab: "cours" as CoursesSubTab,
         freePracticeSubTab: "pratique-libre" as FreePracticeSubTab,
       };
@@ -149,7 +218,7 @@ export function AdminTabsWrapper() {
       coursesSubTab: "cours" as CoursesSubTab,
       freePracticeSubTab: "pratique-libre" as FreePracticeSubTab,
     };
-  }, [getAddSessionsArea, searchParams]);
+  }, [searchParams]);
 
   const initial = resolveFromUrl();
   const [activeTab, setActiveTab] = useState<string>(initial.tab);
@@ -157,35 +226,30 @@ export function AdminTabsWrapper() {
   const [freePracticeSubTab, setFreePracticeSubTab] = useState<FreePracticeSubTab>(
     initial.freePracticeSubTab,
   );
-  const [addSessionsFor, setAddSessionsFor] = useState<SessionArea | null>(getAddSessionsArea);
-  const addSessionsWeekOffset = parseWeekOffsetParam(searchParams.get("weekOffset"));
-  const addSessionsActivityId = searchParams.get("activityId") ?? undefined;
+  const addSessionsFor = searchParams.get("addSessionsFor") as SessionArea | null;
+
+  const handleBackToCalendar = (area: SessionArea) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("addSessionsFor");
+    if (area === "courses") {
+      params.set("tab", "courses");
+      params.set("subTab", "sessions");
+    } else if (area === "free-practice") {
+      params.set("tab", "free-practice");
+      params.set("subTab", "sessions");
+    } else if (area === "discovery-packs") {
+      params.set("tab", "discovery-packs");
+      params.delete("subTab");
+    } else if (area === "visits") {
+      params.set("tab", "visits");
+      params.delete("subTab");
+    }
+    router.replace(`/admin?${params.toString()}`, { scroll: false });
+  };
 
   useEffect(() => {
-    const addSessionsArea = getAddSessionsArea();
-    if (addSessionsArea) {
-      setAddSessionsFor(addSessionsArea);
-      if (addSessionsArea === "courses") {
-        setActiveTab((current) => current === "courses" ? current : "courses");
-        setCoursesSubTab((current) => current === "sessions" ? current : "sessions");
-      } else if (addSessionsArea === "free-practice") {
-        setActiveTab((current) =>
-          current === "free-practice" ? current : "free-practice",
-        );
-        setFreePracticeSubTab((current) =>
-          current === "sessions" ? current : "sessions",
-        );
-      } else {
-        setActiveTab((current) =>
-          current === "discovery-packs" ? current : "discovery-packs",
-        );
-      }
-      return;
-    }
-
     const resolved = resolveFromUrl();
-    setAddSessionsFor(null);
-    setActiveTab((current) => current === resolved.tab ? current : resolved.tab);
+    setActiveTab((current) => (current === resolved.tab ? current : resolved.tab));
     if (resolved.tab === "courses") {
       setCoursesSubTab((current) =>
         current === resolved.coursesSubTab ? current : resolved.coursesSubTab,
@@ -196,7 +260,7 @@ export function AdminTabsWrapper() {
         current === resolved.freePracticeSubTab ? current : resolved.freePracticeSubTab,
       );
     }
-  }, [getAddSessionsArea, resolveFromUrl]);
+  }, [resolveFromUrl]);
 
   const syncUrl = (params: URLSearchParams) => {
     setTimeout(() => {
@@ -206,7 +270,6 @@ export function AdminTabsWrapper() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    setAddSessionsFor(null);
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", value);
@@ -230,7 +293,6 @@ export function AdminTabsWrapper() {
   const handleCoursesSubTabChange = (value: string) => {
     const subTab = parseCoursesSubTab(value);
     setCoursesSubTab(subTab);
-    setAddSessionsFor(null);
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", "courses");
@@ -243,70 +305,11 @@ export function AdminTabsWrapper() {
   const handleFreePracticeSubTabChange = (value: string) => {
     const subTab = parseFreePracticeSubTab(value);
     setFreePracticeSubTab(subTab);
-    setAddSessionsFor(null);
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", "free-practice");
     params.set("subTab", subTab);
     params.delete("addSessionsFor");
-
-    syncUrl(params);
-  };
-
-  const handleAddSessions = (area: SessionArea, context?: AddSessionsContext) => {
-    setAddSessionsFor(area);
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("addSessionsFor", area);
-    params.set("weekOffset", String(context?.weekOffset ?? 0));
-    if (context?.activityId) {
-      params.set("activityId", context.activityId);
-    } else {
-      params.delete("activityId");
-    }
-
-    if (area === "courses") {
-      setActiveTab("courses");
-      setCoursesSubTab("sessions");
-      params.set("tab", "courses");
-      params.set("subTab", "sessions");
-    } else if (area === "free-practice") {
-      setActiveTab("free-practice");
-      setFreePracticeSubTab("sessions");
-      params.set("tab", "free-practice");
-      params.set("subTab", "sessions");
-    } else {
-      setActiveTab("discovery-packs");
-      params.set("tab", "discovery-packs");
-      params.delete("subTab");
-    }
-
-    syncUrl(params);
-  };
-
-  const handleBackToSessions = () => {
-    const area = addSessionsFor ?? "free-practice";
-    setAddSessionsFor(null);
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("addSessionsFor");
-    params.delete("activityId");
-    if (addSessionsWeekOffset !== 0) {
-      params.set("weekOffset", String(addSessionsWeekOffset));
-    } else {
-      params.delete("weekOffset");
-    }
-
-    if (area === "courses") {
-      params.set("tab", "courses");
-      params.set("subTab", "sessions");
-    } else if (area === "free-practice") {
-      params.set("tab", "free-practice");
-      params.set("subTab", "sessions");
-    } else {
-      params.set("tab", "discovery-packs");
-      params.delete("subTab");
-    }
 
     syncUrl(params);
   };
@@ -396,25 +399,16 @@ export function AdminTabsWrapper() {
           </TabsContent>
           <TabsContent value="sessions" className="mt-0">
             {addSessionsFor === "courses" ? (
-              <div className="space-y-6">
-                <button
-                  type="button"
-                  onClick={handleBackToSessions}
-                  className="text-sm font-semibold text-[#4a56dd] hover:underline"
-                >
-                  retour aux sessions
-                </button>
-                <AdminAddActivitiesTab
-                  activityTypes={COURSE_ACTIVITY_TYPES}
-                  initialTargetWeekOffset={addSessionsWeekOffset}
-                  initialActivityId={addSessionsActivityId}
-                />
-              </div>
+              <AdminCopyWeeksPage
+                area="courses"
+                activityTypes={COURSE_ACTIVITY_TYPES}
+                onBack={() => handleBackToCalendar("courses")}
+              />
             ) : (
-              <AdminActivitiesTab
+              <AdminSessionsPage
+                area="courses"
                 activityTypes={COURSE_ACTIVITY_TYPES}
                 title="sessions des cours"
-                onAddSessions={() => handleAddSessions("courses")}
               />
             )}
           </TabsContent>
@@ -445,26 +439,18 @@ export function AdminTabsWrapper() {
           </TabsContent>
           <TabsContent value="sessions" className="mt-0">
             {addSessionsFor === "free-practice" ? (
-              <div className="space-y-6">
-                <button
-                  type="button"
-                  onClick={handleBackToSessions}
-                  className="text-sm font-semibold text-[#4a56dd] hover:underline"
-                >
-                  retour aux créneaux
-                </button>
-                <AdminAddActivitiesTab
-                  activityTypes={FREE_PRACTICE_SESSION_ACTIVITY_TYPES}
-                  allowManualRepeat
-                  initialTargetWeekOffset={addSessionsWeekOffset}
-                  initialActivityId={addSessionsActivityId}
-                />
-              </div>
+              <AdminCopyWeeksPage
+                area="free-practice"
+                activityTypes={FREE_PRACTICE_SESSION_ACTIVITY_TYPES}
+                allowManualRepeat
+                onBack={() => handleBackToCalendar("free-practice")}
+              />
             ) : (
-              <AdminActivitiesTab
+              <AdminSessionsPage
+                area="free-practice"
                 activityTypes={FREE_PRACTICE_SESSION_ACTIVITY_TYPES}
                 title="créneaux d'ouverture de pratique libre"
-                onAddSessions={() => handleAddSessions("free-practice")}
+                allowManualRepeat
               />
             )}
           </TabsContent>
@@ -472,31 +458,23 @@ export function AdminTabsWrapper() {
       </TabsContent>
       <TabsContent value="discovery-packs" className="mt-6">
         {addSessionsFor === "discovery-packs" ? (
-          <div className="space-y-6">
-            <button
-              type="button"
-              onClick={handleBackToSessions}
-              className="text-sm font-semibold text-[#4a56dd] hover:underline"
-            >
-              retour aux sessions
-            </button>
-            <AdminAddActivitiesTab
-              activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
-              allowManualRepeat
-              initialTargetWeekOffset={addSessionsWeekOffset}
-              initialActivityId={addSessionsActivityId}
-            />
-          </div>
+          <AdminCopyWeeksPage
+            area="discovery-packs"
+            activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
+            allowManualRepeat
+            onBack={() => handleBackToCalendar("discovery-packs")}
+          />
         ) : (
-          <AdminActivitiesTab
+          <AdminSessionsPage
+            area="discovery-packs"
             activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
             title="sessions des packs découverte"
-            onAddSessions={() => handleAddSessions("discovery-packs")}
+            allowManualRepeat
           />
         )}
       </TabsContent>
       <TabsContent value="visits" className="mt-6">
-        <AdminVisitsTab />
+        <AdminVisitsTab copyMode={addSessionsFor === "visits"} />
       </TabsContent>
       <TabsContent value="newsletter" className="mt-6">
         <AdminNewsletterTab />

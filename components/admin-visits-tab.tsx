@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import {
@@ -32,12 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import type { AdminWeekCalendarSession } from "@/components/admin-week-calendar";
 import { AdminWeekNavigator } from "@/components/admin-week-navigator";
 import {
@@ -129,12 +124,13 @@ function toCalendarSession(
   };
 }
 
-export function AdminVisitsTab() {
+export function AdminVisitsTab({ copyMode = false }: { copyMode?: boolean }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activities, setActivities] = useState<VisitActivity[]>([]);
   const [sessions, setSessions] = useState<VisitSession[]>([]);
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [mainWeekOffset, setMainWeekOffset] = useState(0);
-  const [manualWeekOffset, setManualWeekOffset] = useState(0);
   const [manualStartTime, setManualStartTime] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("30");
   const [maxRegistrations, setMaxRegistrations] = useState("20");
@@ -143,8 +139,6 @@ export function AdminVisitsTab() {
   const [creatingDefaultActivity, setCreatingDefaultActivity] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showAddVisits, setShowAddVisits] = useState(false);
-  const [visitAddTab, setVisitAddTab] = useState<"batch" | "manual">("batch");
   const [batchSelectedWeekOffset, setBatchSelectedWeekOffset] = useState(-1);
   const [batchTargetWeekOffset, setBatchTargetWeekOffset] = useState(0);
   const [batchPreviewSessions, setBatchPreviewSessions] = useState<
@@ -154,8 +148,6 @@ export function AdminVisitsTab() {
   const [batchCreating, setBatchCreating] = useState(false);
   const [batchWarning, setBatchWarning] = useState<string | null>(null);
   const [showCopyNextWeek, setShowCopyNextWeek] = useState(false);
-  const [manualWeekSessions, setManualWeekSessions] = useState<WeekSourceSession[]>([]);
-  const [loadingManualWeek, setLoadingManualWeek] = useState(false);
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [slotSelection, setSlotSelection] = useState<CalendarSlotSelection | null>(null);
   const [detailSession, setDetailSession] = useState<VisitSession | null>(null);
@@ -232,13 +224,7 @@ export function AdminVisitsTab() {
     [batchPreviewSessions, batchSelectedWeekOffset, batchTargetWeekOffset, activityNameById],
   );
 
-  const manualExistingCalendarSessions = useMemo(
-    () =>
-      manualWeekSessions.map((session) =>
-        toCalendarSession(session, activityNameById.get(session.activity_id)),
-      ),
-    [manualWeekSessions, activityNameById],
-  );
+  const manualExistingCalendarSessions = mainWeekCalendarSessions;
 
   const manualPreviewCalendarSessions = useMemo((): AdminWeekCalendarSession[] => {
     if (!slotSelection || !manualStartTime || !selectedActivityId) return [];
@@ -323,7 +309,7 @@ export function AdminVisitsTab() {
   }, [loadData]);
 
   useEffect(() => {
-    if (!showAddVisits || visitAddTab !== "batch" || !selectedActivityId) {
+    if (!copyMode || !selectedActivityId) {
       setBatchPreviewSessions([]);
       return;
     }
@@ -364,38 +350,25 @@ export function AdminVisitsTab() {
       cancelled = true;
     };
   }, [
-    showAddVisits,
-    visitAddTab,
+    copyMode,
     selectedActivityId,
     batchSelectedWeekOffset,
   ]);
 
-  const loadManualWeekSessions = useCallback(async () => {
-    if (!selectedActivityId) {
-      setManualWeekSessions([]);
-      return;
-    }
+  const openCopyView = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "visits");
+    params.set("addSessionsFor", "visits");
+    params.set("weekOffset", String(mainWeekOffset));
+    router.replace(`/admin?${params.toString()}`, { scroll: false });
+  };
 
-    setLoadingManualWeek(true);
-    try {
-      const result = await getWeekSessions(selectedActivityId, manualWeekOffset);
-      if (result.error) {
-        setManualWeekSessions([]);
-      } else {
-        setManualWeekSessions((result.sessions ?? []) as WeekSourceSession[]);
-      }
-    } catch {
-      setManualWeekSessions([]);
-    } finally {
-      setLoadingManualWeek(false);
-    }
-  }, [selectedActivityId, manualWeekOffset]);
-
-  useEffect(() => {
-    if (showAddVisits && visitAddTab === "manual" && selectedActivityId) {
-      loadManualWeekSessions();
-    }
-  }, [showAddVisits, visitAddTab, selectedActivityId, loadManualWeekSessions]);
+  const backToCalendar = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("addSessionsFor");
+    params.set("tab", "visits");
+    router.replace(`/admin?${params.toString()}`, { scroll: false });
+  };
 
   const handleSelectCalendarSlot = useCallback((selection: CalendarSlotSelection) => {
     setSlotSelection(selection);
@@ -521,8 +494,6 @@ export function AdminVisitsTab() {
         setSlotSelection(null);
         setManualStartTime("");
         await loadData();
-        await loadManualWeekSessions();
-        setShowAddVisits(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -680,6 +651,148 @@ export function AdminVisitsTab() {
     );
   }
 
+  if (copyMode) {
+    return (
+      <div className="space-y-6">
+        <button
+          type="button"
+          onClick={backToCalendar}
+          className="text-sm font-semibold text-[#4a56dd] hover:underline"
+        >
+          retour au calendrier
+        </button>
+
+        <div>
+          <h2 className="text-2xl font-semibold text-black">
+            Recopier des semaines complètes
+          </h2>
+          <p className="mt-2 text-sm text-black/65">
+            Dupliquez les créneaux de visite d&apos;une semaine vers une autre.
+          </p>
+        </div>
+
+        {error ? (
+          <p className="rounded-[14px] bg-red-50 p-4 text-sm font-medium text-red-700">
+            {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="rounded-[14px] bg-green-50 p-4 text-sm font-medium text-green-700">
+            {success}
+          </p>
+        ) : null}
+
+        {activities.length ? (
+          <div className="space-y-6 rounded-[16px] border border-black/10 p-5">
+            <div className="grid gap-2 max-w-md">
+              <Label htmlFor="visit-batch-activity">activité visite</Label>
+              <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
+                <SelectTrigger id="visit-batch-activity">
+                  <SelectValue placeholder="Choisir une visite" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activities.map((activity) => (
+                    <SelectItem key={activity.id} value={activity.id}>
+                      {activity.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <AdminWeekNavigator
+              label="Semaine source"
+              hint="créneaux existants sur cette semaine"
+              weekOffset={batchSelectedWeekOffset}
+              onWeekOffsetChange={setBatchSelectedWeekOffset}
+              id="visit-source-week"
+            />
+
+            {batchLoadingPreview ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border py-16 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Chargement du calendrier…
+              </div>
+            ) : (
+              <AdminWeekTimeGrid
+                weekOffset={batchSelectedWeekOffset}
+                existingSessions={batchSourceCalendarSessions}
+                activityColorIds={
+                  selectedActivityId ? [selectedActivityId] : activityColorIds
+                }
+              />
+            )}
+
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+              <AdminWeekNavigator
+                label="Semaine cible"
+                hint="aperçu de ce qui sera créé"
+                weekOffset={batchTargetWeekOffset}
+                onWeekOffsetChange={setBatchTargetWeekOffset}
+                id="visit-target-week"
+              />
+
+              {batchSourceEqualsTarget ? (
+                <p className="text-sm text-destructive">
+                  La semaine source et la semaine cible doivent être différentes.
+                </p>
+              ) : null}
+
+              {batchWarning ? (
+                <p className="text-sm text-amber-700">{batchWarning}</p>
+              ) : null}
+
+              {!batchLoadingPreview && batchPreviewSessions.length > 0 ? (
+                <AdminWeekTimeGrid
+                  weekOffset={batchTargetWeekOffset}
+                  previewSessions={batchTargetCalendarSessions}
+                  title="Aperçu semaine cible"
+                  activityColorIds={
+                    selectedActivityId ? [selectedActivityId] : activityColorIds
+                  }
+                />
+              ) : !batchLoadingPreview ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Aucun créneau dans la semaine source pour cette activité.
+                </p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                {batchPreviewSessions.length > 0 && !batchSourceEqualsTarget ? (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={handleCreateBatch}
+                      disabled={batchCreating || !selectedActivityId}
+                    >
+                      {batchCreating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Création...
+                        </>
+                      ) : (
+                        `Créer ${batchPreviewSessions.length} créneau${batchPreviewSessions.length > 1 ? "x" : ""}`
+                      )}
+                    </Button>
+                    {showCopyNextWeek && selectedActivityId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCopyToNextWeek}
+                      >
+                        Copier vers la semaine suivante
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -694,20 +807,13 @@ export function AdminVisitsTab() {
           </p>
         </div>
         {activities.length ? (
-          <Button
+          <button
             type="button"
-            onClick={() => {
-              setError(null);
-              setVisitAddTab("batch");
-              setBatchSelectedWeekOffset(-1);
-              setBatchTargetWeekOffset(0);
-              setManualWeekOffset(mainWeekOffset);
-              setShowAddVisits(true);
-            }}
+            onClick={openCopyView}
+            className="text-sm font-semibold text-[#4a56dd] hover:underline text-left"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            ajouter des visites
-          </Button>
+            Recopier des semaines complètes
+          </button>
         ) : (
           <Button
             type="button"
@@ -735,338 +841,7 @@ export function AdminVisitsTab() {
         </p>
       ) : null}
 
-      {showAddVisits && activities.length ? (
-        <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => {
-              setShowAddVisits(false);
-              setError(null);
-            }}
-            className="text-sm font-semibold text-[#4a56dd] hover:underline"
-          >
-            retour aux visites
-          </button>
-          <p className="text-sm text-black/65">
-            Naviguez semaine par semaine, visualisez le calendrier horaire et créez
-            ou copiez des créneaux de visite.
-          </p>
-          <Tabs
-            value={visitAddTab}
-            onValueChange={(value) => {
-              setVisitAddTab(value as "batch" | "manual");
-              setError(null);
-            }}
-            className="w-full"
-          >
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="batch">par copie</TabsTrigger>
-              <TabsTrigger value="manual">manuelle</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="batch" className="mt-4 space-y-4">
-              <div className="space-y-6 rounded-[16px] border border-black/10 p-5">
-                <div className="grid gap-2 max-w-md">
-                  <Label htmlFor="visit-batch-activity">activité visite</Label>
-                  <Select
-                    value={selectedActivityId}
-                    onValueChange={setSelectedActivityId}
-                  >
-                    <SelectTrigger id="visit-batch-activity">
-                      <SelectValue placeholder="Choisir une visite" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activities.map((activity) => (
-                        <SelectItem key={activity.id} value={activity.id}>
-                          {activity.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <AdminWeekNavigator
-                  label="Semaine source"
-                  hint="créneaux existants sur cette semaine"
-                  weekOffset={batchSelectedWeekOffset}
-                  onWeekOffsetChange={setBatchSelectedWeekOffset}
-                  id="visit-source-week"
-                />
-
-                {batchLoadingPreview ? (
-                  <div className="flex items-center justify-center gap-2 rounded-lg border py-16 text-sm text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Chargement du calendrier…
-                  </div>
-                ) : (
-                  <AdminWeekTimeGrid
-                    weekOffset={batchSelectedWeekOffset}
-                    existingSessions={batchSourceCalendarSessions}
-                    activityColorIds={
-                      selectedActivityId ? [selectedActivityId] : activityColorIds
-                    }
-                  />
-                )}
-
-                <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
-                  <AdminWeekNavigator
-                    label="Semaine cible"
-                    hint="aperçu de ce qui sera créé"
-                    weekOffset={batchTargetWeekOffset}
-                    onWeekOffsetChange={setBatchTargetWeekOffset}
-                    id="visit-target-week"
-                  />
-
-                  {batchSourceEqualsTarget ? (
-                    <p className="text-sm text-destructive">
-                      La semaine source et la semaine cible doivent être différentes.
-                    </p>
-                  ) : null}
-
-                  {batchWarning ? (
-                    <p className="text-sm text-amber-700">{batchWarning}</p>
-                  ) : null}
-
-                  {!batchLoadingPreview && batchPreviewSessions.length > 0 ? (
-                    <AdminWeekTimeGrid
-                      weekOffset={batchTargetWeekOffset}
-                      previewSessions={batchTargetCalendarSessions}
-                      title="Aperçu semaine cible"
-                      activityColorIds={
-                        selectedActivityId ? [selectedActivityId] : activityColorIds
-                      }
-                    />
-                  ) : !batchLoadingPreview ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      Aucun créneau dans la semaine source pour cette activité.
-                    </p>
-                  ) : null}
-
-                  <div className="flex flex-wrap gap-2 pt-2 border-t">
-                    {batchPreviewSessions.length > 0 && !batchSourceEqualsTarget ? (
-                      <>
-                        <Button
-                          type="button"
-                          onClick={handleCreateBatch}
-                          disabled={batchCreating || !selectedActivityId}
-                        >
-                          {batchCreating ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Création...
-                            </>
-                          ) : (
-                            `Créer ${batchPreviewSessions.length} créneau${batchPreviewSessions.length > 1 ? "x" : ""}`
-                          )}
-                        </Button>
-                        {showCopyNextWeek && selectedActivityId ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleCopyToNextWeek}
-                          >
-                            Copier vers la semaine suivante
-                          </Button>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="manual" className="mt-4 space-y-4">
-              <div className="space-y-4 rounded-[16px] border border-black/10 p-5">
-                <div className="grid gap-2 max-w-md">
-                  <Label htmlFor="visit-activity">activité visite</Label>
-                  <Select
-                    value={selectedActivityId}
-                    onValueChange={setSelectedActivityId}
-                  >
-                    <SelectTrigger id="visit-activity">
-                      <SelectValue placeholder="Choisir une visite" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activities.map((activity) => (
-                        <SelectItem key={activity.id} value={activity.id}>
-                          {activity.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <AdminWeekNavigator
-                  label="Semaine"
-                  weekOffset={manualWeekOffset}
-                  onWeekOffsetChange={setManualWeekOffset}
-                  id="visit-manual-week"
-                />
-
-                {loadingManualWeek ? (
-                  <div className="flex items-center justify-center gap-2 rounded-lg border py-20 text-sm text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Chargement du calendrier…
-                  </div>
-                ) : (
-                  <AdminWeekTimeGrid
-                    weekOffset={manualWeekOffset}
-                    existingSessions={manualExistingCalendarSessions}
-                    previewSessions={manualPreviewCalendarSessions}
-                    activityColorIds={
-                      selectedActivityId ? [selectedActivityId] : activityColorIds
-                    }
-                    selectable
-                    onSelectSlot={handleSelectCalendarSlot}
-                  />
-                )}
-              </div>
-
-              <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Nouveau créneau de visite</DialogTitle>
-                    <DialogDescription>
-                      {slotDateLabel && manualStartTime
-                        ? `${slotDateLabel} · ${manualStartTime} (${durationMinutes} min)`
-                        : "Configurez le créneau à créer"}
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="grid gap-4 py-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="manual-visit-activity">Activité *</Label>
-                      <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
-                        <SelectTrigger id="manual-visit-activity">
-                          <SelectValue placeholder="Choisir une visite" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {activities.map((activity) => (
-                            <SelectItem key={activity.id} value={activity.id}>
-                              {activity.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="manual-visit-start">Heure de début *</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Select
-                            value={manualStartTime ? (manualStartTime.split(":")[0] || "00") : ""}
-                            onValueChange={(hour) => {
-                              const currentMinute =
-                                manualStartTime && manualStartTime.includes(":")
-                                  ? manualStartTime.split(":")[1]
-                                  : "00";
-                              setManualStartTime(`${hour.padStart(2, "0")}:${currentMinute.padStart(2, "0")}`);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Heure" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
-                                <SelectItem key={hour} value={hour.toString().padStart(2, "0")}>
-                                  {hour.toString().padStart(2, "0")}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Select
-                            value={
-                              manualStartTime && manualStartTime.includes(":")
-                                ? manualStartTime.split(":")[1] || "00"
-                                : ""
-                            }
-                            onValueChange={(minute) => {
-                              const currentHour =
-                                manualStartTime && manualStartTime.includes(":")
-                                  ? manualStartTime.split(":")[0]
-                                  : "00";
-                              setManualStartTime(`${currentHour.padStart(2, "0")}:${minute.padStart(2, "0")}`);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Min" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {["00", "15", "30", "45"].map((minute) => (
-                                <SelectItem key={minute} value={minute}>
-                                  {minute}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="visit-duration">Durée (min) *</Label>
-                        <Input
-                          id="visit-duration"
-                          type="number"
-                          min="5"
-                          step="5"
-                          value={durationMinutes}
-                          onChange={(event) => setDurationMinutes(event.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="visit-capacity">Places max</Label>
-                      <Input
-                        id="visit-capacity"
-                        type="number"
-                        min="0"
-                        value={maxRegistrations}
-                        onChange={(event) => setMaxRegistrations(event.target.value)}
-                        placeholder="Illimité"
-                      />
-                    </div>
-                  </div>
-
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <Button type="button" variant="outline" onClick={() => setManualModalOpen(false)}>
-                      Annuler
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleCreateSession}
-                      disabled={
-                        saving ||
-                        !selectedActivityId ||
-                        !slotSelection ||
-                        !manualStartTime
-                      }
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Création...
-                        </>
-                      ) : (
-                        "Créer le créneau"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </TabsContent>
-          </Tabs>
-        </div>
-      ) : !activities.length ? (
-        <p className="rounded-[16px] border border-dashed border-black/10 p-5 text-sm text-black/60">
-          aucune activité de type visite n&apos;existe encore. créez-la pour
-          pouvoir ajouter des créneaux de découverte.
-        </p>
-      ) : null}
-
-      {!showAddVisits && activities.length ? (
+      {activities.length ? (
         <section className="space-y-4">
           <AdminWeekNavigator
             weekOffset={mainWeekOffset}
@@ -1075,7 +850,10 @@ export function AdminVisitsTab() {
           <AdminWeekTimeGrid
             weekOffset={mainWeekOffset}
             existingSessions={mainWeekCalendarSessions}
+            previewSessions={manualPreviewCalendarSessions}
             activityColorIds={activityColorIds}
+            selectable
+            onSelectSlot={handleSelectCalendarSlot}
             onExistingSessionClick={(session) => {
               const fullSession = session.id ? sessionById.get(session.id) : undefined;
               if (fullSession) {
@@ -1085,7 +863,12 @@ export function AdminVisitsTab() {
             }}
           />
         </section>
-      ) : null}
+      ) : (
+        <p className="rounded-[16px] border border-dashed border-black/10 p-5 text-sm text-black/60">
+          aucune activité de type visite n&apos;existe encore. créez-la pour
+          pouvoir ajouter des créneaux de découverte.
+        </p>
+      )}
 
       <section className="space-y-4">
         <h3 className="text-xl font-semibold text-black">créneaux à venir</h3>
@@ -1097,6 +880,141 @@ export function AdminVisitsTab() {
           </p>
         )}
       </section>
+
+      <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nouveau créneau de visite</DialogTitle>
+            <DialogDescription>
+              {slotDateLabel && manualStartTime
+                ? `${slotDateLabel} · ${manualStartTime} (${durationMinutes} min)`
+                : "Configurez le créneau à créer"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="manual-visit-activity">Activité *</Label>
+              <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
+                <SelectTrigger id="manual-visit-activity">
+                  <SelectValue placeholder="Choisir une visite" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activities.map((activity) => (
+                    <SelectItem key={activity.id} value={activity.id}>
+                      {activity.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="manual-visit-start">Heure de début *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={manualStartTime ? (manualStartTime.split(":")[0] || "00") : ""}
+                    onValueChange={(hour) => {
+                      const currentMinute =
+                        manualStartTime && manualStartTime.includes(":")
+                          ? manualStartTime.split(":")[1]
+                          : "00";
+                      setManualStartTime(`${hour.padStart(2, "0")}:${currentMinute.padStart(2, "0")}`);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Heure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                        <SelectItem key={hour} value={hour.toString().padStart(2, "0")}>
+                          {hour.toString().padStart(2, "0")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={
+                      manualStartTime && manualStartTime.includes(":")
+                        ? manualStartTime.split(":")[1] || "00"
+                        : ""
+                    }
+                    onValueChange={(minute) => {
+                      const currentHour =
+                        manualStartTime && manualStartTime.includes(":")
+                          ? manualStartTime.split(":")[0]
+                          : "00";
+                      setManualStartTime(`${currentHour.padStart(2, "0")}:${minute.padStart(2, "0")}`);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Min" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["00", "15", "30", "45"].map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="visit-duration">Durée (min) *</Label>
+                <Input
+                  id="visit-duration"
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={durationMinutes}
+                  onChange={(event) => setDurationMinutes(event.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="visit-capacity">Places max</Label>
+              <Input
+                id="visit-capacity"
+                type="number"
+                min="0"
+                value={maxRegistrations}
+                onChange={(event) => setMaxRegistrations(event.target.value)}
+                placeholder="Illimité"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setManualModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateSession}
+              disabled={
+                saving ||
+                !selectedActivityId ||
+                !slotSelection ||
+                !manualStartTime
+              }
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Création...
+                </>
+              ) : (
+                "Créer le créneau"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
