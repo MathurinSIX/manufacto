@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -10,11 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createActivitiesBatch, getPreviousWeekSessions, createSession } from "@/app/admin/actions";
+import {
+  createActivitiesBatchMulti,
+  getWeekSessionsForActivities,
+  createSession,
+} from "@/app/admin/actions";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -25,14 +37,15 @@ import {
   addParisCalendarDays,
   formatParisDate,
   formatParisTime,
-  getParisMondayDate,
+  getParisWeekMonday,
   getParisWeekdayIndex,
-  getPastWeekOffsets,
-  getScheduleWeekOffsets,
   PARIS_TIMEZONE,
   parseParisDateTime,
+  shiftParisTimestampByWeeks,
 } from "@/lib/paris-time";
-import { cn } from "@/lib/utils";
+import { AdminWeekNavigator } from "@/components/admin-week-navigator";
+import { AdminWeekCalendar } from "@/components/admin-week-calendar";
+import { AdminWeekTimeGrid, type CalendarSlotSelection } from "@/components/admin-week-time-grid";
 
 type Activity = {
   id: string;
@@ -45,128 +58,50 @@ type Activity = {
 
 const DISCOVERY_PACK_ACTIVITY_TYPE = "pack_decouverte";
 const DISCOVERY_PACK_DISCIPLINE_ORDER = ["couture", "menuiserie"] as const;
+const MANUAL_WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"] as const;
+const PRACTICE_ACTIVITY_TYPES = new Set([
+  "autonomie",
+  "autonomie_encadree",
+  "accompagnement",
+  "cuisson",
+]);
 
-type PreviewSession = {
-  date: string;
-  start: string;
-  end: string;
-  max_registrations?: number | null;
+type WeekSessionRow = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  activity_id: string;
+  max_registrations: number | null;
 };
-
-interface WeekCalendarPreviewProps {
-  sessions: PreviewSession[];
-  weekOffset: number;
-}
-
-function WeekCalendarPreview({ sessions, weekOffset }: WeekCalendarPreviewProps) {
-  const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-  
-  const weekDays = useMemo(() => {
-    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
-    return Array.from({ length: 7 }, (_, index) =>
-      addParisCalendarDays(weekMonday, index),
-    );
-  }, [weekOffset]);
-
-  // Group sessions by date
-  const sessionsByDate = useMemo(() => {
-    const map = new Map<string, PreviewSession[]>();
-    sessions.forEach(session => {
-      const dateKey = session.date;
-      if (!map.has(dateKey)) {
-        map.set(dateKey, []);
-      }
-      map.get(dateKey)!.push(session);
-    });
-    return map;
-  }, [sessions]);
-
-  const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "short",
-    timeZone: PARIS_TIMEZONE,
-  });
-
-  const formatDayLabel = (dateKey: string) => {
-    return dateFormatter.format(parseParisDateTime(dateKey, "12:00"));
-  };
-
-  return (
-    <div className="border rounded-lg p-4 bg-background">
-      <div className="grid grid-cols-7 gap-2 items-start">
-        {WEEKDAY_LABELS.map((label, index) => {
-          const dateKey = weekDays[index];
-          const daySessions = sessionsByDate.get(dateKey) || [];
-          const isToday = formatParisDate(new Date()) === dateKey;
-
-          return (
-            <div
-              key={index}
-              className={cn(
-                "flex flex-col w-full rounded-md border p-2 text-sm transition-colors",
-                isToday && "ring-2 ring-primary bg-primary/5",
-                daySessions.length > 0 && "bg-primary/5 border-primary/20",
-                daySessions.length === 0 && "bg-muted/30"
-              )}
-            >
-              <div className="mb-2 border-b pb-1 flex-shrink-0">
-                <p className="text-xs font-semibold text-muted-foreground uppercase">
-                  {label}
-                </p>
-                <p className="text-sm font-medium">
-                  {formatDayLabel(dateKey)}
-                </p>
-              </div>
-              <div className="space-y-1 w-full">
-                {daySessions.length > 0 ? (
-                  daySessions.map((session, sessionIndex) => (
-                    <div
-                      key={sessionIndex}
-                      className="text-xs bg-primary/20 text-primary-foreground rounded px-2 py-1.5 border border-primary/30 w-full"
-                    >
-                      <p className="font-medium">
-                        {session.start} - {session.end}
-                      </p>
-                      {session.max_registrations && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Max: {session.max_registrations}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-muted-foreground/50 italic">Aucune session</p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 interface AdminAddActivitiesTabProps {
   activityTypes?: string[];
   allowManualRepeat?: boolean;
+  initialTargetWeekOffset?: number;
+  initialActivityId?: string;
 }
 
 export function AdminAddActivitiesTab({
   activityTypes,
   allowManualRepeat = false,
+  initialTargetWeekOffset = 0,
+  initialActivityId,
 }: AdminAddActivitiesTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [selectedActivityId, setSelectedActivityId] = useState<string>("");
   const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(-1);
-  const [targetWeekOffset, setTargetWeekOffset] = useState<number>(0);
+  const [targetWeekOffset, setTargetWeekOffset] = useState<number>(initialTargetWeekOffset);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [previewSessions, setPreviewSessions] = useState<any[]>([]);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [showCopyNextWeek, setShowCopyNextWeek] = useState(false);
+  const [weekSessions, setWeekSessions] = useState<WeekSessionRow[]>([]);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [manualActivityId, setManualActivityId] = useState<string>("");
-  const [manualWeekOffset, setManualWeekOffset] = useState<number>(0);
+  const initialSelectionAppliedRef = useRef(false);
+  const [manualActivityId, setManualActivityId] = useState<string>(initialActivityId ?? "");
+  const [manualWeekOffset, setManualWeekOffset] = useState<number>(initialTargetWeekOffset);
   const [manualStartTime, setManualStartTime] = useState<string>("");
   const [manualDuration, setManualDuration] = useState<string>("60"); // Duration in minutes
   const [manualMaxRegistrations, setManualMaxRegistrations] = useState<string>("");
@@ -175,9 +110,17 @@ export function AdminAddActivitiesTab({
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [manualPreview, setManualPreview] = useState<Array<{date: string, start: string, end: string}>>([]);
   const [creatingManual, setCreatingManual] = useState(false);
+  const [manualWeekSessions, setManualWeekSessions] = useState<WeekSessionRow[]>([]);
+  const [loadingManualWeek, setLoadingManualWeek] = useState(false);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [slotSelection, setSlotSelection] = useState<CalendarSlotSelection | null>(null);
   const isDiscoveryPackMode =
     activityTypes?.length === 1 &&
     activityTypes[0] === DISCOVERY_PACK_ACTIVITY_TYPE;
+  const isPracticeMode =
+    activityTypes?.some((type) => PRACTICE_ACTIVITY_TYPES.has(type)) ?? false;
+  const sessionWord = isPracticeMode ? "créneau" : "session";
+  const sessionWordPlural = isPracticeMode ? "créneaux" : "sessions";
 
   useEffect(() => {
     const loadActivities = async () => {
@@ -246,79 +189,167 @@ export function AdminAddActivitiesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualWeekOffset, manualStartTime, manualDuration, repeatInterval, repeatTimes, selectedDays]);
 
-  // Auto-preview for batch tab when activity and week are selected
-  useEffect(() => {
-    if (selectedActivityId && selectedWeekOffset !== undefined) {
-      handlePreview();
-    } else {
-      setPreviewSessions([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedActivityId, selectedWeekOffset]);
+  const activityNameById = useMemo(
+    () => new Map(activities.map((activity) => [activity.id, activity.name])),
+    [activities],
+  );
 
-  const shortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "short",
-    timeZone: PARIS_TIMEZONE,
-  });
-
-  const getWeekLabel = (offset: number): string => {
-    const selectedWeekMonday = addParisCalendarDays(getParisMondayDate(), offset * 7);
-    const selectedWeekSunday = addParisCalendarDays(selectedWeekMonday, 6);
-
-    const formatDate = (dateKey: string) =>
-      shortDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
-    
-    if (offset === 0) {
-      return `Cette semaine (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
-    } else if (offset === -1) {
-      return `semaine précédente (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
-    } else if (offset > 0) {
-      return `Dans ${offset} semaine${offset > 1 ? "s" : ""} (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
-    } else {
-      return `${Math.abs(offset)} semaines précédentes (${formatDate(selectedWeekMonday)} - ${formatDate(selectedWeekSunday)})`;
-    }
-  };
-
-  const handlePreview = async () => {
-    if (!selectedActivityId) return;
+  const loadWeekSessions = useCallback(async () => {
+    if (activities.length === 0) return;
 
     setLoadingPreview(true);
     setError(null);
-    setPreviewSessions([]);
 
     try {
-      const result = await getPreviousWeekSessions(selectedActivityId, selectedWeekOffset);
+      const result = await getWeekSessionsForActivities(
+        activities.map((activity) => activity.id),
+        selectedWeekOffset,
+      );
+
       if (result.error) {
         setError(result.error);
+        setWeekSessions([]);
+        setSelectedActivityIds(new Set());
+        return;
+      }
+
+      const sessions = result.sessions as WeekSessionRow[];
+      setWeekSessions(sessions);
+
+      const idsWithSessions = new Set(sessions.map((session) => session.activity_id));
+
+      if (
+        !initialSelectionAppliedRef.current &&
+        initialActivityId &&
+        idsWithSessions.has(initialActivityId)
+      ) {
+        setSelectedActivityIds(new Set([initialActivityId]));
+        initialSelectionAppliedRef.current = true;
       } else {
-        setPreviewSessions(result.sessions);
-        if (result.sessions.length === 0) {
-          setError(`Aucune session trouvée dans la semaine sélectionnée pour cette activité`);
-        }
+        setSelectedActivityIds(idsWithSessions);
+      }
+
+      if (sessions.length === 0) {
+        setError(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+      setWeekSessions([]);
+      setSelectedActivityIds(new Set());
     } finally {
       setLoadingPreview(false);
     }
+  }, [activities, initialActivityId, selectedWeekOffset]);
+
+  // Load all sessions when source week changes
+  useEffect(() => {
+    if (activities.length > 0) {
+      loadWeekSessions();
+    }
+  }, [activities, loadWeekSessions]);
+
+  const loadManualWeekSessions = useCallback(async () => {
+    if (activities.length === 0) return;
+
+    setLoadingManualWeek(true);
+    try {
+      const result = await getWeekSessionsForActivities(
+        activities.map((activity) => activity.id),
+        manualWeekOffset,
+      );
+      if (result.error) {
+        setManualWeekSessions([]);
+      } else {
+        setManualWeekSessions(result.sessions as WeekSessionRow[]);
+      }
+    } catch {
+      setManualWeekSessions([]);
+    } finally {
+      setLoadingManualWeek(false);
+    }
+  }, [activities, manualWeekOffset]);
+
+  useEffect(() => {
+    if (activities.length > 0) {
+      loadManualWeekSessions();
+    }
+  }, [activities, loadManualWeekSessions]);
+
+  const sourceEqualsTarget = selectedWeekOffset === targetWeekOffset;
+
+  const activitiesInWeek = useMemo(() => {
+    const activityMap = new Map(activities.map((activity) => [activity.id, activity]));
+    const groups = new Map<string, WeekSessionRow[]>();
+
+    for (const session of weekSessions) {
+      const existing = groups.get(session.activity_id) ?? [];
+      existing.push(session);
+      groups.set(session.activity_id, existing);
+    }
+
+    return Array.from(groups.entries())
+      .map(([activityId, sessions]) => ({
+        activity: activityMap.get(activityId)!,
+        sessions: sessions.sort(
+          (left, right) =>
+            new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime(),
+        ),
+      }))
+      .filter((group) => group.activity)
+      .sort((left, right) => left.activity.name.localeCompare(right.activity.name, "fr"));
+  }, [weekSessions, activities]);
+
+  const selectedSessions = useMemo(
+    () => weekSessions.filter((session) => selectedActivityIds.has(session.activity_id)),
+    [weekSessions, selectedActivityIds],
+  );
+
+  const toggleActivitySelection = (activityId: string) => {
+    setSelectedActivityIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(activityId)) {
+        next.delete(activityId);
+      } else {
+        next.add(activityId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllActivities = () => {
+    setSelectedActivityIds(new Set(activitiesInWeek.map((group) => group.activity.id)));
+  };
+
+  const deselectAllActivities = () => {
+    setSelectedActivityIds(new Set());
   };
 
   const handleCreateBatch = async () => {
-    if (!selectedActivityId) return;
+    if (selectedSessions.length === 0 || sourceEqualsTarget) return;
 
     setCreating(true);
     setError(null);
     setSuccess(null);
+    setWarning(null);
+    setShowCopyNextWeek(false);
 
     try {
-      const result = await createActivitiesBatch(selectedActivityId, selectedWeekOffset, targetWeekOffset);
+      const result = await createActivitiesBatchMulti(
+        Array.from(selectedActivityIds),
+        selectedWeekOffset,
+        targetWeekOffset,
+      );
       if (result.error) {
         setError(result.error);
       } else {
-        setSuccess(`${result.created} session${result.created > 1 ? "s" : ""} créée${result.created > 1 ? "s" : ""} avec succès`);
-        setPreviewSessions([]);
-        setSelectedActivityId("");
+        setSuccess(
+          `${result.created} session${result.created > 1 ? "s" : ""} créée${result.created > 1 ? "s" : ""} avec succès`,
+        );
+        if (result.warning) {
+          setWarning(result.warning);
+        }
+        setShowCopyNextWeek(true);
+        await loadWeekSessions();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -327,13 +358,103 @@ export function AdminAddActivitiesTab({
     }
   };
 
-  const getTargetWeekDate = (dateString: string) => {
-    const date = new Date(dateString);
-    // Calculate how many weeks ahead to create the new sessions
-    const weeksAhead = targetWeekOffset - selectedWeekOffset;
-    const weekInMs = weeksAhead * 7 * 24 * 60 * 60 * 1000;
-    return new Date(date.getTime() + weekInMs);
+  const handleCopyToNextWeek = () => {
+    setTargetWeekOffset((prev) => prev + 1);
+    setSuccess(null);
+    setWarning(null);
+    setShowCopyNextWeek(false);
   };
+
+  const toSourcePreviewSession = (session: WeekSessionRow) => ({
+    id: session.id,
+    date: formatParisDate(new Date(session.start_ts)),
+    start: formatParisTime(new Date(session.start_ts)),
+    end: formatParisTime(new Date(session.end_ts)),
+    max_registrations: session.max_registrations,
+    activity_id: session.activity_id,
+    activity_name: activityNameById.get(session.activity_id),
+  });
+
+  const toTargetPreviewSession = (session: WeekSessionRow) => {
+    const weeksAhead = targetWeekOffset - selectedWeekOffset;
+    const targetStart = shiftParisTimestampByWeeks(session.start_ts, weeksAhead);
+    const targetEnd = shiftParisTimestampByWeeks(session.end_ts, weeksAhead);
+    return {
+      id: session.id,
+      date: formatParisDate(new Date(targetStart)),
+      start: formatParisTime(new Date(targetStart)),
+      end: formatParisTime(new Date(targetEnd)),
+      max_registrations: session.max_registrations,
+      activity_id: session.activity_id,
+      activity_name: activityNameById.get(session.activity_id),
+    };
+  };
+
+  const sourceCalendarSessions = useMemo(
+    () => weekSessions.map(toSourcePreviewSession),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekSessions, activityNameById],
+  );
+
+  const targetCalendarSessions = useMemo(
+    () => selectedSessions.map(toTargetPreviewSession),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedSessions, targetWeekOffset, selectedWeekOffset, activityNameById],
+  );
+
+  const activityLegend = useMemo(
+    () =>
+      activitiesInWeek.map(({ activity, sessions }) => ({
+        id: activity.id,
+        name: activity.name,
+        sessionCount: sessions.length,
+      })),
+    [activitiesInWeek],
+  );
+
+  const activityColorIds = useMemo(
+    () => activityLegend.map((item) => item.id),
+    [activityLegend],
+  );
+
+  const selectedActivityLegend = useMemo(
+    () => activityLegend.filter((item) => selectedActivityIds.has(item.id)),
+    [activityLegend, selectedActivityIds],
+  );
+
+  const manualCalendarSessions = useMemo(
+    () =>
+      manualPreview.map((session, index) => ({
+        id: `preview-${index}`,
+        date: session.date,
+        start: session.start,
+        end: session.end,
+        activity_id: manualActivityId || undefined,
+        activity_name: manualActivityId
+          ? activityNameById.get(manualActivityId)
+          : undefined,
+      })),
+    [manualPreview, manualActivityId, activityNameById],
+  );
+
+  const manualExistingCalendarSessions = useMemo(
+    () =>
+      manualWeekSessions.map((session) => ({
+        id: session.id,
+        date: formatParisDate(new Date(session.start_ts)),
+        start: formatParisTime(new Date(session.start_ts)),
+        end: formatParisTime(new Date(session.end_ts)),
+        activity_id: session.activity_id,
+        activity_name: activityNameById.get(session.activity_id),
+        max_registrations: session.max_registrations,
+      })),
+    [manualWeekSessions, activityNameById],
+  );
+
+  const manualActivityColorIds = useMemo(
+    () => activities.map((activity) => activity.id),
+    [activities],
+  );
 
   const generatePreview = () => {
     if (!manualStartTime || !manualDuration || selectedDays.length === 0) {
@@ -350,7 +471,7 @@ export function AdminAddActivitiesTab({
         : parseInt(repeatInterval) || durationMinutes;
     const times = allowManualRepeat ? parseInt(repeatTimes) || 1 : 1;
 
-    const weekMonday = addParisCalendarDays(getParisMondayDate(), manualWeekOffset * 7);
+    const weekMonday = getParisWeekMonday(manualWeekOffset);
 
     for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
       const dateStr = addParisCalendarDays(weekMonday, dayOffset);
@@ -388,6 +509,45 @@ export function AdminAddActivitiesTab({
         : [...prev, day].sort()
     );
   };
+
+  const handleSelectCalendarSlot = useCallback((selection: CalendarSlotSelection) => {
+    setSlotSelection(selection);
+    setManualStartTime(selection.startTime);
+
+    const [startHour, startMinute] = selection.startTime.split(":").map(Number);
+    const [endHour, endMinute] = selection.endTime.split(":").map(Number);
+    const durationMinutes =
+      endHour * 60 + endMinute - (startHour * 60 + startMinute);
+    if (durationMinutes >= 15) {
+      setManualDuration(String(durationMinutes));
+    }
+
+    setSelectedDays((previous) =>
+      previous.includes(selection.dayIndex)
+        ? previous
+        : [...previous, selection.dayIndex].sort(),
+    );
+
+    if (!manualActivityId && initialActivityId) {
+      setManualActivityId(initialActivityId);
+    }
+
+    if (allowManualRepeat && !repeatInterval) {
+      setRepeatInterval("60");
+    }
+
+    setManualModalOpen(true);
+  }, [allowManualRepeat, initialActivityId, manualActivityId, repeatInterval]);
+
+  const slotDateLabel = useMemo(() => {
+    if (!slotSelection) return null;
+    return new Intl.DateTimeFormat("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: PARIS_TIMEZONE,
+    }).format(parseParisDateTime(slotSelection.date, "12:00"));
+  }, [slotSelection]);
 
   const handleCreateManualSession = async () => {
     if (!manualActivityId || manualPreview.length === 0) return;
@@ -432,6 +592,9 @@ export function AdminAddActivitiesTab({
         setRepeatTimes("1");
         setSelectedDays([]);
         setManualPreview([]);
+        await loadManualWeekSessions();
+        setManualModalOpen(false);
+        setSlotSelection(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -451,9 +614,13 @@ export function AdminAddActivitiesTab({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">ajouter des sessions</h3>
+        <h3 className="text-lg font-semibold mb-2">
+          {isPracticeMode ? "ajouter des créneaux" : "ajouter des sessions"}
+        </h3>
         <p className="text-sm text-muted-foreground">
-          créez des sessions manuellement ou par lot en copiant celles d'une semaine spécifique.
+          {isPracticeMode
+            ? "Naviguez semaine par semaine, visualisez le calendrier horaire et créez ou copiez des créneaux d'ouverture."
+            : "Naviguez semaine par semaine, visualisez le calendrier et créez ou copiez des sessions."}
         </p>
       </div>
 
@@ -464,8 +631,20 @@ export function AdminAddActivitiesTab({
       )}
 
       {success && (
-        <div className="text-sm text-green-600 p-4 bg-green-50 rounded-md">
-          {success}
+        <div className="space-y-2">
+          <div className="text-sm text-green-600 p-4 bg-green-50 rounded-md">
+            {success}
+          </div>
+          {warning ? (
+            <div className="text-sm text-amber-700 p-4 bg-amber-50 rounded-md">
+              {warning}
+            </div>
+          ) : null}
+          {showCopyNextWeek && selectedActivityIds.size > 0 ? (
+            <Button type="button" variant="outline" onClick={handleCopyToNextWeek}>
+              Copier vers la semaine suivante
+            </Button>
+          ) : null}
         </div>
       )}
 
@@ -476,324 +655,336 @@ export function AdminAddActivitiesTab({
         </TabsList>
         
         <TabsContent value="batch" className="space-y-4">
-          <div className="border rounded-lg p-6 space-y-4">
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="activity">Activité</Label>
-            <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une activité" />
-              </SelectTrigger>
-              <SelectContent>
-                {activities.map((activity) => (
-                  <SelectItem key={activity.id} value={activity.id}>
-                    {activity.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="space-y-6">
+            <AdminWeekNavigator
+              label="Semaine source"
+              hint={
+                isPracticeMode
+                  ? "naviguez pour voir tous les créneaux de la semaine"
+                  : "naviguez pour voir toutes les sessions de la semaine"
+              }
+              weekOffset={selectedWeekOffset}
+              onWeekOffsetChange={setSelectedWeekOffset}
+              id="source-week"
+            />
 
-          <div className="grid gap-2">
-            <Label htmlFor="week">semaine à copier</Label>
-            <Select 
-              value={selectedWeekOffset.toString()} 
-              onValueChange={(value) => setSelectedWeekOffset(parseInt(value))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une semaine" />
-              </SelectTrigger>
-              <SelectContent>
-                {getPastWeekOffsets().map((offset) => (
-                  <SelectItem key={offset} value={offset.toString()}>
-                    {getWeekLabel(offset)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              sélectionnez la semaine dont vous souhaitez copier les sessions
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="target-week">semaine cible</Label>
-            <Select 
-              value={targetWeekOffset.toString()} 
-              onValueChange={(value) => setTargetWeekOffset(parseInt(value))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une semaine" />
-              </SelectTrigger>
-              <SelectContent>
-                {getScheduleWeekOffsets().map((offset) => (
-                  <SelectItem key={offset} value={offset.toString()}>
-                    {getWeekLabel(offset)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              sélectionnez la semaine où créer les nouvelles sessions
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            {loadingPreview && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Chargement de l'aperçu...
-              </div>
-            )}
-            {previewSessions.length > 0 && (
-              <Button
-                onClick={handleCreateBatch}
-                disabled={creating || !selectedActivityId}
-              >
-                {creating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Création...
-                  </>
-                ) : (
-                  `créer ${previewSessions.length} session${previewSessions.length > 1 ? "s" : ""}`
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {(loadingPreview || previewSessions.length > 0) && (
-          <div className="mt-6 space-y-4">
             {loadingPreview ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Chargement de l'aperçu...
+              <div className="flex items-center justify-center gap-2 rounded-lg border py-16 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Chargement du calendrier…
               </div>
-            ) : previewSessions.length > 0 ? (
-              <>
-                <h4 className="font-medium">aperçu des sessions à créer :</h4>
-                <WeekCalendarPreview sessions={previewSessions.map((session) => {
-                  const targetWeekStart = getTargetWeekDate(session.start_ts);
-                  const targetWeekEnd = getTargetWeekDate(session.end_ts);
-                  return {
-                    date: formatParisDate(targetWeekStart),
-                    start: formatParisTime(targetWeekStart),
-                    end: formatParisTime(targetWeekEnd),
-                    max_registrations: session.max_registrations,
-                  };
-                })} weekOffset={targetWeekOffset} />
-              </>
-            ) : null}
-          </div>
-        )}
-
-            <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
-              <p className="font-medium mb-2">comment ça fonctionne ?</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>sélectionnez une activité</li>
-                <li>sélectionnez la semaine dont vous souhaitez copier les sessions</li>
-                <li>l'aperçu des sessions s'affiche automatiquement ci-dessous</li>
-                <li>les nouvelles sessions seront créées pour la semaine cible sélectionnée</li>
-                <li>cliquez sur "créer" pour créer toutes les sessions en une fois</li>
-              </ul>
-            </div>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="manual" className="space-y-4">
-          <div className="border rounded-lg p-6 space-y-4">
-            <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="manual-activity">Activité *</Label>
-              <Select value={manualActivityId} onValueChange={setManualActivityId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une activité" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activities.map((activity) => (
-                    <SelectItem key={activity.id} value={activity.id}>
-                      {activity.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="manual-week">semaine *</Label>
-              <Select 
-                value={manualWeekOffset.toString()} 
-                onValueChange={(value) => setManualWeekOffset(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une semaine" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getScheduleWeekOffsets().map((offset) => (
-                    <SelectItem key={offset} value={offset.toString()}>
-                      {getWeekLabel(offset)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                sélectionnez la semaine où créer les sessions
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="manual-start-time">Heure de début *</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Select
-                    value={manualStartTime ? (manualStartTime.split(':')[0] || "00") : ""}
-                    onValueChange={(hour) => {
-                      const currentMinute = manualStartTime && manualStartTime.includes(':') ? manualStartTime.split(':')[1] : "00";
-                      setManualStartTime(`${hour.padStart(2, '0')}:${currentMinute.padStart(2, '0')}`);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Heure" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
-                        <SelectItem key={hour} value={hour.toString().padStart(2, '0')}>
-                          {hour.toString().padStart(2, '0')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={manualStartTime && manualStartTime.includes(':') ? (manualStartTime.split(':')[1] || "00") : ""}
-                    onValueChange={(minute) => {
-                      const currentHour = manualStartTime && manualStartTime.includes(':') ? manualStartTime.split(':')[0] : "00";
-                      setManualStartTime(`${currentHour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Minute" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 12 }, (_, i) => i * 5).map((minute) => (
-                        <SelectItem key={minute} value={minute.toString().padStart(2, '0')}>
-                          {minute.toString().padStart(2, '0')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="manual-duration">Durée (minutes) *</Label>
-                <Input
-                  id="manual-duration"
-                  type="number"
-                  min="15"
-                  step="15"
-                  value={manualDuration}
-                  onChange={(e) => setManualDuration(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            {allowManualRepeat ? (
-              <div className="grid grid-cols-2 gap-4 items-start">
-                <div className="grid gap-2">
-                  <Label htmlFor="repeat-interval">Répéter toutes les (minutes) *</Label>
-                  <Input
-                    id="repeat-interval"
-                    type="number"
-                    min="0"
-                    step="15"
-                    value={repeatInterval}
-                    onChange={(e) => setRepeatInterval(e.target.value)}
-                    placeholder={manualDuration || "60"}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Laissez vide pour utiliser la durée de la session ({manualDuration || "60"} min)
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="repeat-times">Pour (fois) *</Label>
-                  <Input
-                    id="repeat-times"
-                    type="number"
-                    min="1"
-                    value={repeatTimes}
-                    onChange={(e) => setRepeatTimes(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            ) : null}
-            <div className="grid gap-2">
-              <Label>jours de la semaine *</Label>
-              <div className="grid grid-cols-7 gap-2">
-                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`day-${index}`}
-                      checked={selectedDays.includes(index)}
-                      onCheckedChange={() => handleToggleDay(index)}
-                    />
-                    <Label htmlFor={`day-${index}`} className="text-sm font-normal cursor-pointer">
-                      {day}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sélectionnez les jours où cette séquence de sessions sera répétée
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="manual-max-registrations">Nombre maximum d'inscriptions</Label>
-              <Input
-                id="manual-max-registrations"
-                type="number"
-                min="0"
-                value={manualMaxRegistrations}
-                onChange={(e) => setManualMaxRegistrations(e.target.value)}
-                placeholder="Illimité si vide"
+            ) : isPracticeMode ? (
+              <AdminWeekTimeGrid
+                weekOffset={selectedWeekOffset}
+                existingSessions={sourceCalendarSessions}
+                activityColorIds={activityColorIds}
+                activityLegend={activityLegend}
+                selectedActivityIds={selectedActivityIds}
+                onToggleActivity={toggleActivitySelection}
+                onSelectAllActivities={selectAllActivities}
+                onDeselectAllActivities={deselectAllActivities}
               />
-              <p className="text-xs text-muted-foreground">
-                Laissez vide pour un nombre illimité d'inscriptions
-              </p>
-            </div>
+            ) : (
+              <AdminWeekCalendar
+                weekOffset={selectedWeekOffset}
+                sessions={sourceCalendarSessions}
+                emptyDayLabel="Aucune session"
+                selectedActivityIds={selectedActivityIds}
+                activityLegend={activityLegend}
+                activityColorIds={activityColorIds}
+                onToggleActivity={toggleActivitySelection}
+                onSelectAllActivities={selectAllActivities}
+                onDeselectAllActivities={deselectAllActivities}
+              />
+            )}
 
-              <div className="flex gap-2">
-                {manualPreview.length > 0 && (
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+              <AdminWeekNavigator
+                label="Semaine cible"
+                hint="aperçu de ce qui sera créé"
+                weekOffset={targetWeekOffset}
+                onWeekOffsetChange={setTargetWeekOffset}
+                id="target-week"
+              />
+
+              {sourceEqualsTarget ? (
+                <p className="text-sm text-destructive">
+                  La semaine source et la semaine cible doivent être différentes.
+                </p>
+              ) : null}
+
+              {!loadingPreview && selectedSessions.length > 0 ? (
+                isPracticeMode ? (
+                  <AdminWeekTimeGrid
+                    weekOffset={targetWeekOffset}
+                    previewSessions={targetCalendarSessions}
+                    title="Aperçu semaine cible"
+                    activityColorIds={activityColorIds}
+                    activityLegend={selectedActivityLegend}
+                    legendReadOnly
+                  />
+                ) : (
+                  <AdminWeekCalendar
+                    weekOffset={targetWeekOffset}
+                    sessions={targetCalendarSessions}
+                    title="Aperçu semaine cible"
+                    emptyDayLabel="—"
+                    sessionVariant="target"
+                    minDayHeight="min-h-[160px]"
+                    activityColorIds={activityColorIds}
+                    activityLegend={selectedActivityLegend}
+                    legendReadOnly
+                  />
+                )
+              ) : !loadingPreview ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Sélectionnez des activités dans le calendrier source pour voir l&apos;aperçu.
+                </p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                {selectedSessions.length > 0 && !sourceEqualsTarget && (
                   <Button
-                    onClick={handleCreateManualSession}
-                    disabled={creatingManual || !manualActivityId || manualPreview.length === 0}
+                    onClick={handleCreateBatch}
+                    disabled={creating || selectedActivityIds.size === 0}
                   >
-                    {creatingManual ? (
+                    {creating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Création...
                       </>
                     ) : (
-                      `créer ${manualPreview.length} session${manualPreview.length > 1 ? "s" : ""}`
+                      `Créer ${selectedSessions.length} ${selectedSessions.length > 1 ? sessionWordPlural : sessionWord} (${selectedActivityIds.size} activité${selectedActivityIds.size > 1 ? "s" : ""})`
                     )}
                   </Button>
                 )}
               </div>
             </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="manual" className="space-y-4">
+          <div className="space-y-4">
+            <AdminWeekNavigator
+              label="Semaine"
+              weekOffset={manualWeekOffset}
+              onWeekOffsetChange={setManualWeekOffset}
+              id="manual-week"
+            />
 
-            {(manualActivityId && manualStartTime && manualDuration && selectedDays.length > 0) && (
-              <div className="mt-6 space-y-4">
-                {manualPreview.length > 0 ? (
-                  <>
-                    <h4 className="font-medium">aperçu des sessions à créer ({manualPreview.length} session{manualPreview.length > 1 ? "s" : ""}) :</h4>
-                    <WeekCalendarPreview sessions={manualPreview.map(s => ({ ...s, max_registrations: null }))} weekOffset={manualWeekOffset} />
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
-                    Aucune session à prévisualiser. Vérifiez que tous les champs requis sont remplis.
-                  </div>
-                )}
+            {loadingManualWeek ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border py-20 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Chargement du calendrier…
               </div>
+            ) : (
+              <AdminWeekTimeGrid
+                weekOffset={manualWeekOffset}
+                existingSessions={manualExistingCalendarSessions}
+                previewSessions={manualCalendarSessions}
+                activityColorIds={manualActivityColorIds}
+                selectedDays={selectedDays}
+                onToggleDay={handleToggleDay}
+                selectable
+                onSelectSlot={handleSelectCalendarSlot}
+              />
             )}
           </div>
+
+          <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {isPracticeMode ? "Nouveau créneau" : "Nouvelle session"}
+                </DialogTitle>
+                <DialogDescription>
+                  {slotDateLabel && manualStartTime
+                    ? `${slotDateLabel} · ${manualStartTime} (${manualDuration} min)`
+                    : isPracticeMode
+                      ? "Configurez le créneau à créer"
+                      : "Configurez la session à créer"}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="manual-activity">Activité *</Label>
+                  <Select value={manualActivityId} onValueChange={setManualActivityId}>
+                    <SelectTrigger id="manual-activity">
+                      <SelectValue placeholder="Sélectionner une activité" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activities.map((activity) => (
+                        <SelectItem key={activity.id} value={activity.id}>
+                          {activity.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-start-time">Heure de début *</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        value={manualStartTime ? (manualStartTime.split(":")[0] || "00") : ""}
+                        onValueChange={(hour) => {
+                          const currentMinute =
+                            manualStartTime && manualStartTime.includes(":")
+                              ? manualStartTime.split(":")[1]
+                              : "00";
+                          setManualStartTime(`${hour.padStart(2, "0")}:${currentMinute.padStart(2, "0")}`);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Heure" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                            <SelectItem key={hour} value={hour.toString().padStart(2, "0")}>
+                              {hour.toString().padStart(2, "0")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={
+                          manualStartTime && manualStartTime.includes(":")
+                            ? manualStartTime.split(":")[1] || "00"
+                            : ""
+                        }
+                        onValueChange={(minute) => {
+                          const currentHour =
+                            manualStartTime && manualStartTime.includes(":")
+                              ? manualStartTime.split(":")[0]
+                              : "00";
+                          setManualStartTime(`${currentHour.padStart(2, "0")}:${minute.padStart(2, "0")}`);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Min" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i * 5).map((minute) => (
+                            <SelectItem key={minute} value={minute.toString().padStart(2, "0")}>
+                              {minute.toString().padStart(2, "0")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-duration">Durée (minutes) *</Label>
+                    <Input
+                      id="manual-duration"
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={manualDuration}
+                      onChange={(e) => setManualDuration(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {allowManualRepeat ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="repeat-interval">Répéter toutes les (min)</Label>
+                      <Input
+                        id="repeat-interval"
+                        type="number"
+                        min="0"
+                        step="15"
+                        value={repeatInterval}
+                        onChange={(e) => setRepeatInterval(e.target.value)}
+                        placeholder={manualDuration || "60"}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="repeat-times">Nombre de créneaux</Label>
+                      <Input
+                        id="repeat-times"
+                        type="number"
+                        min="1"
+                        value={repeatTimes}
+                        onChange={(e) => setRepeatTimes(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2">
+                  <Label>Jours de la semaine *</Label>
+                  <div className="grid grid-cols-7 gap-2">
+                    {MANUAL_WEEKDAY_LABELS.map((day, index) => (
+                      <div key={day} className="flex flex-col items-center gap-1">
+                        <Checkbox
+                          id={`modal-day-${index}`}
+                          checked={selectedDays.includes(index)}
+                          onCheckedChange={() => handleToggleDay(index)}
+                        />
+                        <Label
+                          htmlFor={`modal-day-${index}`}
+                          className="text-xs font-normal cursor-pointer"
+                        >
+                          {day}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="manual-max-registrations">Places max</Label>
+                  <Input
+                    id="manual-max-registrations"
+                    type="number"
+                    min="0"
+                    value={manualMaxRegistrations}
+                    onChange={(e) => setManualMaxRegistrations(e.target.value)}
+                    placeholder="Illimité"
+                  />
+                </div>
+
+                {manualPreview.length > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {manualPreview.length} {manualPreview.length > 1 ? sessionWordPlural : sessionWord}{" "}
+                    seront créé{manualPreview.length > 1 ? "s" : ""} sur {selectedDays.length} jour
+                    {selectedDays.length > 1 ? "s" : ""}.
+                  </p>
+                ) : null}
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => setManualModalOpen(false)}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleCreateManualSession}
+                  disabled={
+                    creatingManual ||
+                    !manualActivityId ||
+                    manualPreview.length === 0 ||
+                    selectedDays.length === 0
+                  }
+                >
+                  {creatingManual ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Création...
+                    </>
+                  ) : (
+                    `Créer ${manualPreview.length} ${manualPreview.length > 1 ? sessionWordPlural : sessionWord}`
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

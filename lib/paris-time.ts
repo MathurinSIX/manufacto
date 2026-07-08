@@ -1,21 +1,12 @@
 export const PARIS_TIMEZONE = "Europe/Paris";
 
-/** Weeks ahead admins can schedule (0 = current week). ~3 months. */
-export const MAX_FUTURE_WEEK_OFFSET = 12;
-
-/** Weeks in the past available as copy sources in admin scheduling. */
-export const MAX_PAST_WEEK_OFFSET = 8;
-
 const HOUR_MS = 60 * 60 * 1000;
 
-export function getPastWeekOffsets(): number[] {
-  return Array.from({ length: MAX_PAST_WEEK_OFFSET }, (_, i) => -(i + 1));
-}
-
-/** Week offsets from previous week through MAX_FUTURE_WEEK_OFFSET. */
-export function getScheduleWeekOffsets(): number[] {
-  return Array.from({ length: MAX_FUTURE_WEEK_OFFSET + 2 }, (_, i) => i - 1);
-}
+const parisShortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  timeZone: PARIS_TIMEZONE,
+});
 
 const parisPartsFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: PARIS_TIMEZONE,
@@ -156,6 +147,51 @@ export function getParisMondayDate(anchor: Date = new Date()): string {
   const today = formatParisDate(anchor);
   const weekday = getParisWeekdayIndex(parseParisDateTime(today, "12:00"));
   return addParisCalendarDays(today, -weekday);
+}
+
+/** Monday of the week at the given offset (0 = current week). */
+export function getParisWeekMonday(weekOffset: number, anchor: Date = new Date()): string {
+  return addParisCalendarDays(getParisMondayDate(anchor), weekOffset * 7);
+}
+
+/** Week offset relative to current week for a Paris calendar date. */
+export function getParisWeekOffset(dateKey: string, anchor: Date = new Date()): number {
+  const anchorMonday = getParisMondayDate(anchor);
+  const weekday = getParisWeekdayIndex(parseParisDateTime(dateKey, "12:00"));
+  const dateMonday = addParisCalendarDays(dateKey, -weekday);
+  const anchorMs = parseParisDateTime(anchorMonday, "12:00").getTime();
+  const dateMs = parseParisDateTime(dateMonday, "12:00").getTime();
+  return Math.round((dateMs - anchorMs) / (7 * 24 * HOUR_MS));
+}
+
+export function formatParisWeekLabel(weekOffset: number, anchor: Date = new Date()): string {
+  const selectedWeekMonday = getParisWeekMonday(weekOffset, anchor);
+  const selectedWeekSunday = addParisCalendarDays(selectedWeekMonday, 6);
+
+  const formatWeekDate = (dateKey: string) =>
+    parisShortDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
+
+  const range = `${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)}`;
+
+  if (weekOffset === 0) {
+    return `Cette semaine (${range})`;
+  }
+  if (weekOffset === -1) {
+    return `semaine précédente (${range})`;
+  }
+  if (weekOffset > 0) {
+    return `Dans ${weekOffset} semaine${weekOffset > 1 ? "s" : ""} (${range})`;
+  }
+  return `${Math.abs(weekOffset)} semaines précédentes (${range})`;
+}
+
+/** Shifts an ISO timestamp by whole weeks, preserving Paris wall-clock date/time. */
+export function shiftParisTimestampByWeeks(iso: string, weeks: number): string {
+  const date = new Date(iso);
+  const dateKey = formatParisDate(date);
+  const time = formatParisTime(date);
+  const newDateKey = addParisCalendarDays(dateKey, weeks * 7);
+  return parseParisDateTime(newDateKey, time).toISOString();
 }
 
 export function buildParisHourSlots(startTs: string, endTs: string): Date[] {

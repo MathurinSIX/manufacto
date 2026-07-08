@@ -27,9 +27,12 @@ import { syncSupabaseUserToSquare } from "@/lib/square/server";
 import {
   addParisCalendarDays,
   formatParisDate,
+  formatParisTime,
   getParisMondayDate,
+  getParisWeekMonday,
   isSameParisDay,
   parseParisDateTime,
+  shiftParisTimestampByWeeks,
 } from "@/lib/paris-time";
 import { getDefaultEmailTemplate } from "@/lib/email/default-templates";
 import {
@@ -1028,6 +1031,162 @@ export async function getAllActivitiesWithSessions() {
   return { activities: activitiesWithSessions, error: null };
 }
 
+export type TodayCourseSession = {
+  id: string;
+  date: string;
+  start: string;
+  end: string;
+  activity_id: string;
+  activity_name: string;
+  max_registrations: number | null;
+  registrationCount: number;
+  registeredUsers: Array<{ name: string; email: string }>;
+  publicRegisteredUsers: Array<{ name: string; phone: string }>;
+};
+
+export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
+  await checkAdmin();
+  const supabase = await createClient();
+
+  const today = formatParisDate(new Date());
+  const date =
+    dateKey && /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : today;
+  const dayStart = parseParisDateTime(date, "00:00").toISOString();
+  const dayEnd = parseParisDateTime(addParisCalendarDays(date, 1), "00:00").toISOString();
+
+  const { data: courseActivities, error: activitiesError } = await supabase
+    .from("activity")
+    .select("id, name")
+    .eq("type", "cours")
+    .is("deleted_at", null);
+
+  if (activitiesError) {
+    return { error: activitiesError.message, sessions: [] as TodayCourseSession[], date };
+  }
+
+  const activitiesById = new Map(
+    (courseActivities ?? []).map((activity) => [activity.id, activity.name]),
+  );
+  const courseActivityIds = [...activitiesById.keys()];
+
+  if (courseActivityIds.length === 0) {
+    return { error: null, sessions: [] as TodayCourseSession[], date };
+  }
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("session")
+    .select("id, start_ts, end_ts, activity_id, max_registrations")
+    .in("activity_id", courseActivityIds)
+    .gte("start_ts", dayStart)
+    .lt("start_ts", dayEnd)
+    .order("start_ts");
+
+  if (sessionsError) {
+    return { error: sessionsError.message, sessions: [] as TodayCourseSession[], date };
+  }
+
+  if (!sessions?.length) {
+    return { error: null, sessions: [] as TodayCourseSession[], date };
+  }
+
+  const sessionIds = sessions.map((session) => session.id);
+
+  const { data: registrations, error: registrationsError } = await supabase
+    .from("registration")
+    .select("id, user_id, session_id")
+    .in("session_id", sessionIds);
+
+  if (registrationsError) {
+    return { error: registrationsError.message, sessions: [] as TodayCourseSession[], date };
+  }
+
+  const registrationIds = (registrations ?? []).map((registration) => registration.id);
+  const statuses: Array<{
+    registration_id: string;
+    status: string;
+    created_at: string;
+  }> = [];
+
+  for (const registrationIdChunk of chunkValues(registrationIds, SUPABASE_IN_CHUNK_SIZE)) {
+    const { data: statusChunk, error: statusesError } = await supabase
+      .from("registration_status")
+      .select("registration_id, status, created_at")
+      .in("registration_id", registrationIdChunk)
+      .order("created_at", { ascending: false });
+
+    if (statusesError) {
+      return { error: statusesError.message, sessions: [] as TodayCourseSession[], date };
+    }
+
+    statuses.push(...(statusChunk ?? []));
+  }
+
+  const activeRegistrationIds = getActiveRegistrationIds(registrationIds, statuses);
+
+  const { data: publicSubscriptions, error: publicSubscriptionsError } = await supabase
+    .from("public_session_subscription")
+    .select("id, session_id, name, phone")
+    .in("session_id", sessionIds);
+
+  if (publicSubscriptionsError) {
+    return {
+      error: publicSubscriptionsError.message,
+      sessions: [] as TodayCourseSession[],
+      date,
+    };
+  }
+
+  const adminClient = getAdminClient();
+  const { users: allUsers } = await listAllAuthUsers(adminClient);
+  const usersMap = new Map(allUsers.map((user) => [user.id, user] as const));
+
+  const todaySessions: TodayCourseSession[] = [];
+
+  for (const session of sessions) {
+    const activityName = activitiesById.get(session.activity_id);
+    if (!activityName) continue;
+
+    const sessionRegistrations = (registrations ?? []).filter(
+      (registration) =>
+        registration.session_id === session.id &&
+        activeRegistrationIds.has(registration.id),
+    );
+    const sessionPublicSubscriptions = (publicSubscriptions ?? []).filter(
+      (subscription) => subscription.session_id === session.id,
+    );
+
+    const registrationCount = sessionRegistrations.length + sessionPublicSubscriptions.length;
+    if (registrationCount < 1) continue;
+
+    const startDate = new Date(session.start_ts);
+    const endDate = new Date(session.end_ts);
+
+    todaySessions.push({
+      id: session.id,
+      date,
+      start: formatParisTime(startDate),
+      end: formatParisTime(endDate),
+      activity_id: session.activity_id,
+      activity_name: activityName,
+      max_registrations: session.max_registrations,
+      registrationCount,
+      registeredUsers: sessionRegistrations.map((registration) => {
+        const user = usersMap.get(registration.user_id);
+        return {
+          name: formatRegisteredUserName(user),
+          email: user?.email ?? "",
+        };
+      }),
+      publicRegisteredUsers: sessionPublicSubscriptions.map((subscription) => ({
+        name: subscription.name,
+        phone: subscription.phone,
+      })),
+    });
+  }
+
+  return { error: null, sessions: todaySessions, date };
+}
+
 function toCreditAmount(value: unknown): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0;
@@ -1195,12 +1354,12 @@ export async function removeUserFromSession(registrationId: string) {
   return { error: null };
 }
 
-// Get sessions from previous week for batch creation
-export async function getPreviousWeekSessions(activityId: string, weekOffset: number = -1) {
+// Get sessions from a given week for batch creation
+export async function getWeekSessions(activityId: string, weekOffset: number = -1) {
   await checkAdmin();
   const supabase = await createClient();
-  
-  const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset);
+
+  const weekMonday = getParisWeekMonday(weekOffset);
   const weekStart = parseParisDateTime(weekMonday, "00:00");
   const weekEnd = parseParisDateTime(addParisCalendarDays(weekMonday, 7), "00:00");
 
@@ -1211,12 +1370,17 @@ export async function getPreviousWeekSessions(activityId: string, weekOffset: nu
     .gte("start_ts", weekStart.toISOString())
     .lt("start_ts", weekEnd.toISOString())
     .order("start_ts");
-  
+
   if (error) {
     return { error: error.message, sessions: [] };
   }
-  
+
   return { sessions: sessions || [], error: null };
+}
+
+/** @deprecated Use getWeekSessions */
+export async function getPreviousWeekSessions(activityId: string, weekOffset: number = -1) {
+  return getWeekSessions(activityId, weekOffset);
 }
 
 // Create a single session
@@ -1249,48 +1413,138 @@ export async function createSession(
   return { session: data, error: null };
 }
 
-// Create activities by batch based on previous week
+// Create activities by batch based on a source week
 export async function createActivitiesBatch(activityId: string, weekOffset: number = -1, targetWeekOffset: number = 0) {
   await checkAdmin();
   const supabase = await createClient();
-  
-  // Get sessions from selected week
-  const { sessions, error: fetchError } = await getPreviousWeekSessions(activityId, weekOffset);
-  
+
+  const { sessions, error: fetchError } = await getWeekSessions(activityId, weekOffset);
+
   if (fetchError || !sessions || sessions.length === 0) {
-    return { error: "No sessions found in selected week to duplicate", created: 0 };
-  }
-  
-  // Calculate how many weeks ahead to create the new sessions
-  // targetWeekOffset - weekOffset gives us the difference
-  const weeksAhead = targetWeekOffset - weekOffset;
-  
-  // Create new sessions the specified number of weeks later
-  const newSessions = sessions.map(session => {
-    const oldStart = new Date(session.start_ts);
-    const oldEnd = new Date(session.end_ts);
-    const weekInMs = weeksAhead * 7 * 24 * 60 * 60 * 1000;
-    
     return {
-      activity_id: activityId,
-      start_ts: new Date(oldStart.getTime() + weekInMs).toISOString(),
-      end_ts: new Date(oldEnd.getTime() + weekInMs).toISOString(),
-      max_registrations: session.max_registrations,
+      error: "Aucune session trouvée dans la semaine sélectionnée pour cette activité",
+      created: 0,
+      warning: null,
     };
-  });
-  
+  }
+
+  const weeksAhead = targetWeekOffset - weekOffset;
+
+  const newSessions = sessions.map((session) => ({
+    activity_id: activityId,
+    start_ts: shiftParisTimestampByWeeks(session.start_ts, weeksAhead),
+    end_ts: shiftParisTimestampByWeeks(session.end_ts, weeksAhead),
+    max_registrations: session.max_registrations,
+  }));
+
+  const targetWeekMonday = getParisWeekMonday(targetWeekOffset);
+  const targetWeekStart = parseParisDateTime(targetWeekMonday, "00:00");
+  const targetWeekEnd = parseParisDateTime(addParisCalendarDays(targetWeekMonday, 7), "00:00");
+
+  const { count: existingCount } = await supabase
+    .from("session")
+    .select("id", { count: "exact", head: true })
+    .eq("activity_id", activityId)
+    .gte("start_ts", targetWeekStart.toISOString())
+    .lt("start_ts", targetWeekEnd.toISOString());
+
   const { data, error } = await supabase
     .from("session")
     .insert(newSessions)
     .select();
-  
+
   if (error) {
     console.error("Error creating batch sessions:", error);
-    return { error: error.message, created: 0 };
+    return { error: error.message, created: 0, warning: null };
   }
-  
+
   revalidatePath("/admin");
-  return { created: data?.length || 0, error: null };
+
+  const warning =
+    existingCount && existingCount > 0
+      ? `Attention : ${existingCount} créneau${existingCount > 1 ? "x" : ""} existaient déjà dans la semaine cible.`
+      : null;
+
+  return { created: data?.length || 0, error: null, warning };
+}
+
+export async function getWeekSessionsForActivities(
+  activityIds: string[],
+  weekOffset: number = -1,
+) {
+  await checkAdmin();
+
+  if (activityIds.length === 0) {
+    return { sessions: [], error: null };
+  }
+
+  const supabase = await createClient();
+  const weekMonday = getParisWeekMonday(weekOffset);
+  const weekStart = parseParisDateTime(weekMonday, "00:00");
+  const weekEnd = parseParisDateTime(addParisCalendarDays(weekMonday, 7), "00:00");
+
+  const { data: sessions, error } = await supabase
+    .from("session")
+    .select("id, start_ts, end_ts, activity_id, max_registrations")
+    .in("activity_id", activityIds)
+    .gte("start_ts", weekStart.toISOString())
+    .lt("start_ts", weekEnd.toISOString())
+    .order("start_ts");
+
+  if (error) {
+    return { error: error.message, sessions: [] };
+  }
+
+  return { sessions: sessions || [], error: null };
+}
+
+export async function createActivitiesBatchMulti(
+  activityIds: string[],
+  weekOffset: number = -1,
+  targetWeekOffset: number = 0,
+) {
+  await checkAdmin();
+
+  if (activityIds.length === 0) {
+    return {
+      error: "Sélectionnez au moins une activité à copier",
+      created: 0,
+      warning: null,
+    };
+  }
+
+  const results = await Promise.all(
+    activityIds.map((activityId) =>
+      createActivitiesBatch(activityId, weekOffset, targetWeekOffset),
+    ),
+  );
+
+  const errors = results.filter((result) => result.error);
+  if (errors.length === activityIds.length) {
+    return {
+      error: errors[0]?.error ?? "Aucune session créée",
+      created: 0,
+      warning: null,
+    };
+  }
+
+  const created = results.reduce((sum, result) => sum + (result.created ?? 0), 0);
+  const warnings = results
+    .map((result) => result.warning)
+    .filter((warning): warning is string => Boolean(warning));
+
+  revalidatePath("/admin");
+
+  return {
+    created,
+    error: null,
+    warning:
+      warnings.length > 0
+        ? warnings.join(" ")
+        : errors.length > 0
+          ? `${errors.length} activité${errors.length > 1 ? "s" : ""} ignorée${errors.length > 1 ? "s" : ""} (aucune session source).`
+          : null,
+  };
 }
 
 // Get all activities

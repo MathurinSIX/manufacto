@@ -12,8 +12,10 @@ import { AdminVisitsTab } from "@/components/admin-visits-tab";
 import { AdminNewsletterTab } from "@/components/admin-newsletter-tab";
 import { AdminSquareTab } from "@/components/admin-square-tab";
 import { AdminEmailsTab } from "@/components/admin-emails-tab";
+import { AdminTodayTab } from "@/components/admin-today-tab";
 
 const validTabs = [
+  "today",
   "users",
   "courses",
   "free-practice",
@@ -38,6 +40,17 @@ const FREE_PRACTICE_ACTIVITY_TYPES = [
 const FREE_PRACTICE_SESSION_ACTIVITY_TYPES = FREE_PRACTICE_ACTIVITY_TYPES;
 const DISCOVERY_PACK_ACTIVITY_TYPES = ["pack_decouverte"];
 type SessionArea = "courses" | "free-practice" | "discovery-packs";
+
+type AddSessionsContext = {
+  weekOffset: number;
+  activityId?: string;
+};
+
+function parseWeekOffsetParam(value: string | null): number {
+  if (value === null || value.trim() === "") return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function parseCoursesSubTab(subTab: string | null): CoursesSubTab {
   if (subTab === "sessions") return "sessions";
@@ -145,6 +158,8 @@ export function AdminTabsWrapper() {
     initial.freePracticeSubTab,
   );
   const [addSessionsFor, setAddSessionsFor] = useState<SessionArea | null>(getAddSessionsArea);
+  const addSessionsWeekOffset = parseWeekOffsetParam(searchParams.get("weekOffset"));
+  const addSessionsActivityId = searchParams.get("activityId") ?? undefined;
 
   useEffect(() => {
     const addSessionsArea = getAddSessionsArea();
@@ -205,6 +220,10 @@ export function AdminTabsWrapper() {
       params.delete("subTab");
     }
 
+    if (value !== "today") {
+      params.delete("date");
+    }
+
     syncUrl(params);
   };
 
@@ -234,11 +253,17 @@ export function AdminTabsWrapper() {
     syncUrl(params);
   };
 
-  const handleAddSessions = (area: SessionArea) => {
+  const handleAddSessions = (area: SessionArea, context?: AddSessionsContext) => {
     setAddSessionsFor(area);
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("addSessionsFor", area);
+    params.set("weekOffset", String(context?.weekOffset ?? 0));
+    if (context?.activityId) {
+      params.set("activityId", context.activityId);
+    } else {
+      params.delete("activityId");
+    }
 
     if (area === "courses") {
       setActiveTab("courses");
@@ -265,6 +290,12 @@ export function AdminTabsWrapper() {
 
     const params = new URLSearchParams(searchParams.toString());
     params.delete("addSessionsFor");
+    params.delete("activityId");
+    if (addSessionsWeekOffset !== 0) {
+      params.set("weekOffset", String(addSessionsWeekOffset));
+    } else {
+      params.delete("weekOffset");
+    }
 
     if (area === "courses") {
       params.set("tab", "courses");
@@ -282,7 +313,13 @@ export function AdminTabsWrapper() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-4 lg:grid-cols-8">
+      <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid-cols-3 lg:grid-cols-9">
+        <TabsTrigger
+          value="today"
+          className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+        >
+          aujourd&apos;hui
+        </TabsTrigger>
         <TabsTrigger
           value="users"
           className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
@@ -332,6 +369,9 @@ export function AdminTabsWrapper() {
           e-mails
         </TabsTrigger>
       </TabsList>
+      <TabsContent value="today" className="mt-6">
+        <AdminTodayTab />
+      </TabsContent>
       <TabsContent value="users" className="mt-6">
         <AdminUsersTab />
       </TabsContent>
@@ -364,7 +404,11 @@ export function AdminTabsWrapper() {
                 >
                   retour aux sessions
                 </button>
-                <AdminAddActivitiesTab activityTypes={COURSE_ACTIVITY_TYPES} />
+                <AdminAddActivitiesTab
+                  activityTypes={COURSE_ACTIVITY_TYPES}
+                  initialTargetWeekOffset={addSessionsWeekOffset}
+                  initialActivityId={addSessionsActivityId}
+                />
               </div>
             ) : (
               <AdminActivitiesTab
@@ -412,6 +456,8 @@ export function AdminTabsWrapper() {
                 <AdminAddActivitiesTab
                   activityTypes={FREE_PRACTICE_SESSION_ACTIVITY_TYPES}
                   allowManualRepeat
+                  initialTargetWeekOffset={addSessionsWeekOffset}
+                  initialActivityId={addSessionsActivityId}
                 />
               </div>
             ) : (
@@ -437,6 +483,8 @@ export function AdminTabsWrapper() {
             <AdminAddActivitiesTab
               activityTypes={DISCOVERY_PACK_ACTIVITY_TYPES}
               allowManualRepeat
+              initialTargetWeekOffset={addSessionsWeekOffset}
+              initialActivityId={addSessionsActivityId}
             />
           </div>
         ) : (

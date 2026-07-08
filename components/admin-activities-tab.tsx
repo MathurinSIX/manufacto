@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,12 +26,11 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getActivityColorClass } from "@/components/admin-week-calendar";
 import {
   COURSE_DISCIPLINE_OPTIONS,
   inferPracticeDiscipline,
@@ -40,12 +40,16 @@ import {
   formatParisDate,
   formatParisTime,
   getParisHour,
-  getParisMondayDate,
+  getParisWeekMonday,
+  getParisWeekOffset,
   isSameParisDay,
   PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
 import { cn } from "@/lib/utils";
+import { AdminWeekNavigator } from "@/components/admin-week-navigator";
+import { AdminWeekTimeGrid } from "@/components/admin-week-time-grid";
+import type { AdminWeekCalendarSession } from "@/components/admin-week-calendar";
 import {
   countRegistrationsOverlappingHour,
   getPracticeCapacitySummary,
@@ -53,6 +57,12 @@ import {
 } from "@/lib/practice-capacity";
 
 const PRACTICE_ACTIVITY_FILTER_ALL = "__all__";
+
+function parseWeekOffsetParam(value: string | null): number {
+  if (value === null || value.trim() === "") return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 type User = {
   id: string;
@@ -219,7 +229,7 @@ function WeekViewSessions({
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   
   const weekDays = useMemo(() => {
-    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
+    const weekMonday = getParisWeekMonday(weekOffset);
     return Array.from({ length: 7 }, (_, index) =>
       addParisCalendarDays(weekMonday, index),
     );
@@ -356,7 +366,7 @@ function WeekViewSessions({
 }
 
 interface AdminActivitiesTabProps {
-  onAddSessions?: () => void;
+  onAddSessions?: (context: { weekOffset: number; activityId?: string }) => void;
   activityTypes?: string[];
   title?: string;
 }
@@ -373,6 +383,7 @@ export function AdminActivitiesTab({
   activityTypes,
   title = "Sessions",
 }: AdminActivitiesTabProps) {
+  const searchParams = useSearchParams();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -404,14 +415,22 @@ export function AdminActivitiesTab({
   const setStartTimeFromParts = (hour: string, minute: string) => {
     setEditStartTime(`${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
   };
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [viewMode, setViewMode] = useState<"day" | "week">(() =>
+    activityTypes?.some((type) => PRACTICE_ACTIVITY_TYPES.has(type)) ? "week" : "day",
+  );
+  const [weekOffset, setWeekOffset] = useState(() =>
+    parseWeekOffsetParam(searchParams.get("weekOffset")),
+  );
   const [selectedPracticeActivityId, setSelectedPracticeActivityId] = useState(
     PRACTICE_ACTIVITY_FILTER_ALL,
   );
   const isPracticeView = activityTypes?.some((type) =>
     PRACTICE_ACTIVITY_TYPES.has(type),
   ) ?? false;
+
+  useEffect(() => {
+    setWeekOffset(parseWeekOffsetParam(searchParams.get("weekOffset")));
+  }, [searchParams]);
 
   const visibleActivities = useMemo(() => {
     if (!isPracticeView || selectedPracticeActivityId === PRACTICE_ACTIVITY_FILTER_ALL) {
@@ -552,7 +571,7 @@ export function AdminActivitiesTab({
 
   // Get all sessions for the selected week
   const sessionsForWeek = useMemo(() => {
-    const weekMonday = addParisCalendarDays(getParisMondayDate(), weekOffset * 7);
+    const weekMonday = getParisWeekMonday(weekOffset);
     const weekDays = Array.from({ length: 7 }, (_, index) =>
       addParisCalendarDays(weekMonday, index),
     );
@@ -581,6 +600,39 @@ export function AdminActivitiesTab({
     
     return weekSessions;
   }, [visibleActivities, weekOffset]);
+
+  const practiceWeekCalendarSessions = useMemo((): AdminWeekCalendarSession[] => {
+    const sessions: AdminWeekCalendarSession[] = [];
+    sessionsForWeek.forEach((daySessions, dateKey) => {
+      for (const session of daySessions) {
+        sessions.push({
+          id: session.id,
+          date: dateKey,
+          start: formatParisTime(new Date(session.start_ts)),
+          end: formatParisTime(new Date(session.end_ts)),
+          activity_id: session.activity_id,
+          activity_name: session.activity_name,
+          max_registrations: session.max_registrations,
+        });
+      }
+    });
+    return sessions;
+  }, [sessionsForWeek]);
+
+  const practiceSessionById = useMemo(() => {
+    const map = new Map<string, SessionWithUsers>();
+    sessionsForWeek.forEach((daySessions) => {
+      for (const session of daySessions) {
+        map.set(session.id, session);
+      }
+    });
+    return map;
+  }, [sessionsForWeek]);
+
+  const practiceActivityColorIds = useMemo(
+    () => activities.map((activity) => activity.id),
+    [activities],
+  );
 
   // Update selectedSession when activities data changes (after add/remove user)
   useEffect(() => {
@@ -781,12 +833,6 @@ export function AdminActivitiesTab({
     timeZone: PARIS_TIMEZONE,
   });
 
-  const shortDateFormatter = new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "short",
-    timeZone: PARIS_TIMEZONE,
-  });
-
   const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -807,31 +853,22 @@ export function AdminActivitiesTab({
     );
   };
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    setWeekOffset(prev => prev + (direction === 'next' ? 1 : -1));
-  };
-
   const goToToday = () => {
     setSelectedDate(formatParisDate(new Date()));
     setWeekOffset(0);
   };
 
-  const getWeekLabel = (offset: number): string => {
-    const selectedWeekMonday = addParisCalendarDays(getParisMondayDate(), offset * 7);
-    const selectedWeekSunday = addParisCalendarDays(selectedWeekMonday, 6);
+  const handleAddSessionsClick = () => {
+    if (!onAddSessions) return;
 
-    const formatWeekDate = (dateKey: string) =>
-      shortDateFormatter.format(parseParisDateTime(dateKey, "12:00"));
-    
-    if (offset === 0) {
-      return `Cette semaine (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
-    } else if (offset === -1) {
-      return `semaine précédente (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
-    } else if (offset > 0) {
-      return `Dans ${offset} semaine${offset > 1 ? "s" : ""} (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
-    } else {
-      return `${Math.abs(offset)} semaines précédentes (${formatWeekDate(selectedWeekMonday)} - ${formatWeekDate(selectedWeekSunday)})`;
-    }
+    const effectiveWeekOffset =
+      viewMode === "week" ? weekOffset : getParisWeekOffset(selectedDate);
+    const activityId =
+      isPracticeView && selectedPracticeActivityId !== PRACTICE_ACTIVITY_FILTER_ALL
+        ? selectedPracticeActivityId
+        : undefined;
+
+    onAddSessions({ weekOffset: effectiveWeekOffset, activityId });
   };
 
   if (loading) {
@@ -847,33 +884,8 @@ export function AdminActivitiesTab({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h3 className="text-lg font-semibold">{title}</h3>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
-          {isPracticeView ? (
-            <Select
-              value={selectedPracticeActivityId}
-              onValueChange={setSelectedPracticeActivityId}
-            >
-              <SelectTrigger className="w-full min-w-[220px] sm:w-[280px]">
-                <SelectValue placeholder="Filtrer par offre" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={PRACTICE_ACTIVITY_FILTER_ALL}>
-                  Toutes les offres
-                </SelectItem>
-                {practiceActivityFilterGroups.map((group) => (
-                  <SelectGroup key={group.value}>
-                    <SelectLabel>{group.label}</SelectLabel>
-                    {group.activities.map((activity) => (
-                      <SelectItem key={activity.id} value={activity.id}>
-                        {activity.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
           {onAddSessions && (
-            <Button onClick={onAddSessions}>
+            <Button onClick={handleAddSessionsClick}>
               <Plus className="mr-2 h-4 w-4" />
               {isPracticeView ? "ajouter des créneaux" : "ajouter des sessions"}
             </Button>
@@ -898,6 +910,64 @@ export function AdminActivitiesTab({
           {error}
         </div>
       )}
+
+      {isPracticeView ? (
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mr-1">
+              Offres
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedPracticeActivityId(PRACTICE_ACTIVITY_FILTER_ALL)}
+              className={cn(
+                "inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium transition-colors",
+                selectedPracticeActivityId === PRACTICE_ACTIVITY_FILTER_ALL
+                  ? "ring-2 ring-primary ring-offset-1"
+                  : "opacity-70 hover:opacity-100",
+              )}
+            >
+              Toutes
+            </button>
+          </div>
+          {practiceActivityFilterGroups.map((group) => (
+            <div key={group.value}>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {group.activities.map((activity) => {
+                  const isSelected = selectedPracticeActivityId === activity.id;
+                  const colorClass = getActivityColorClass(
+                    activity.id,
+                    practiceActivityColorIds,
+                  );
+                  return (
+                    <button
+                      key={activity.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedPracticeActivityId(
+                          isSelected ? PRACTICE_ACTIVITY_FILTER_ALL : activity.id,
+                        )
+                      }
+                      className={cn(
+                        "inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs transition-opacity",
+                        colorClass,
+                        isSelected
+                          ? "ring-2 ring-primary ring-offset-1 opacity-100"
+                          : "opacity-60 hover:opacity-100",
+                      )}
+                    >
+                      <span className="truncate">{activity.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Day Navigation */}
       {viewMode === "day" && (
@@ -934,35 +1004,10 @@ export function AdminActivitiesTab({
 
       {/* Week Navigation */}
       {viewMode === "week" && (
-        <div className="flex items-center justify-between border rounded-lg p-4 bg-muted/50">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateWeek('prev')}
-          >
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            semaine précédente
-          </Button>
-          <div className="text-center">
-            <p className="font-semibold">{getWeekLabel(weekOffset)}</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={goToToday}
-              className="text-xs text-muted-foreground"
-            >
-              Cette semaine
-            </Button>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateWeek('next')}
-          >
-            semaine suivante
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
+        <AdminWeekNavigator
+          weekOffset={weekOffset}
+          onWeekOffsetChange={setWeekOffset}
+        />
       )}
 
       {/* Day View - Hourly Calendar */}
@@ -1009,11 +1054,21 @@ export function AdminActivitiesTab({
                             : maxReg !== null && registeredCount >= maxReg;
                           const available =
                             maxReg !== null ? maxReg - (isPracticeView ? hourCount : registeredCount) : null;
+                          const sessionColorClass =
+                            isPracticeView && session.activity_id
+                              ? getActivityColorClass(
+                                  session.activity_id,
+                                  practiceActivityColorIds,
+                                )
+                              : "bg-background";
 
                           return (
                             <div
                               key={session.id}
-                              className="flex items-center justify-between p-3 border rounded-md bg-background hover:shadow-sm transition-shadow"
+                              className={cn(
+                                "flex items-center justify-between p-3 border rounded-md hover:shadow-sm transition-shadow",
+                                sessionColorClass,
+                              )}
                             >
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
@@ -1086,17 +1141,32 @@ export function AdminActivitiesTab({
 
       {/* Week View - Calendar Grid */}
       {viewMode === "week" && (
-        <WeekViewSessions 
-          sessionsByDate={sessionsForWeek} 
-          weekOffset={weekOffset}
-          isPracticeView={isPracticeView}
-          onSessionClick={(session) => {
-            setSelectedSession(session);
-            setUsersDialogOpen(true);
-          }}
-          onEditSession={handleEditSession}
-          onDeleteSession={handleDeleteSession}
-        />
+        isPracticeView ? (
+          <AdminWeekTimeGrid
+            weekOffset={weekOffset}
+            existingSessions={practiceWeekCalendarSessions}
+            activityColorIds={practiceActivityColorIds}
+            onExistingSessionClick={(session) => {
+              const fullSession = session.id ? practiceSessionById.get(session.id) : undefined;
+              if (fullSession) {
+                setSelectedSession(fullSession);
+                setUsersDialogOpen(true);
+              }
+            }}
+          />
+        ) : (
+          <WeekViewSessions
+            sessionsByDate={sessionsForWeek}
+            weekOffset={weekOffset}
+            isPracticeView={isPracticeView}
+            onSessionClick={(session) => {
+              setSelectedSession(session);
+              setUsersDialogOpen(true);
+            }}
+            onEditSession={handleEditSession}
+            onDeleteSession={handleDeleteSession}
+          />
+        )
       )}
 
       {/* Edit Session Dialog */}
@@ -1357,6 +1427,35 @@ export function AdminActivitiesTab({
               </div>
             )}
           </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (selectedSession) {
+                  setUsersDialogOpen(false);
+                  handleEditSession(selectedSession);
+                }
+              }}
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Modifier
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                if (selectedSession) {
+                  setUsersDialogOpen(false);
+                  handleDeleteSession(selectedSession);
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Supprimer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
