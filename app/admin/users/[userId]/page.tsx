@@ -15,7 +15,10 @@ import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
 import { AdminUserCreditsHeader } from "@/components/admin-user-credits-header";
+import { AdminUserLegalSection } from "@/components/admin-user-legal-section";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { getUserLegalCompliance } from "@/lib/legal/status";
+import { getAdminClient as getSquareAdminClient } from "@/lib/square/server";
 
 type Activity = {
   id: string;
@@ -353,6 +356,14 @@ async function UserAccountContent({
     ? `${targetUser.user_metadata.first_name} ${targetUser.user_metadata.last_name}`
     : targetUser.user_metadata?.first_name || targetUser.user_metadata?.last_name || targetUser.email;
 
+  const legalStatus = await getUserLegalCompliance(supabase, userId);
+  const squareAdmin = getSquareAdminClient();
+  const { data: habilitations } = await squareAdmin
+    .from("user_habilitation")
+    .select("id, user_id, machine_key, label, notes, granted_at, granted_by")
+    .eq("user_id", userId)
+    .order("label");
+
   return (
     <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
         <div className="w-full max-w-6xl space-y-8">
@@ -369,6 +380,26 @@ async function UserAccountContent({
               totalCredits={totalCredits}
             />
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Fiche client</CardTitle>
+              <CardDescription>
+                Documents, droit à l’image, habilitations et notes internes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AdminUserLegalSection
+                userId={userId}
+                documents={legalStatus.documents}
+                acceptances={legalStatus.acceptances}
+                profile={legalStatus.profile}
+                habilitations={habilitations ?? []}
+                complete={legalStatus.complete}
+                imageRights={legalStatus.imageRights}
+              />
+            </CardContent>
+          </Card>
 
           {/* Reservations with Tabs */}
           <Card>

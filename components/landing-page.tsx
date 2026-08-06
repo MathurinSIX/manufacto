@@ -11,7 +11,6 @@ const ASSETS = {
   heroElec: "/assets/pictures/120e19b8f3497733331fe206ad3cebf6cc80d967.png",
   wordMenuiserie: "/assets/words/orange/menuiserie.png",
   wordCouture: "/assets/words/bleue/couture.png",
-  wordElectronique: "/assets/words/verte/electronique.png",
   wordCeramique: "/assets/words/rose/ceramique.png",
   starBlue: "/assets/figma-landing/star-blue.png",
   starOrange: "/assets/figma-landing/star-orange.png",
@@ -40,13 +39,6 @@ const wordImages = [
     width: 279,
     height: 63,
     className: "h-6 w-auto max-w-[40vw] sm:h-7 md:h-9 lg:h-11",
-  },
-  {
-    src: ASSETS.wordElectronique,
-    alt: "électronique",
-    width: 466,
-    height: 124,
-    className: "h-9 w-auto max-w-[40vw] sm:h-10 md:h-12 lg:h-16",
   },
   {
     src: ASSETS.wordCeramique,
@@ -135,7 +127,7 @@ export function LandingPage() {
                 <div className="relative h-48 w-48 shrink-0 overflow-hidden rounded-xl shadow-md ring-1 ring-black/5 md:h-56 md:w-56">
                   <Image
                     src={ASSETS.heroElec}
-                    alt="Mains travaillant sur une carte électronique"
+                    alt="Mains au travail dans l'atelier"
                     fill
                     className="object-cover"
                     sizes="224px"
@@ -192,8 +184,8 @@ export function LandingPage() {
               <p>
                 En autonomie ou accompagné.e, Manufacto est ouvert à toute
                 personne ayant un projet de réparation et/ou de fabrication
-                autour du travail du bois, du textile, de l&apos;électronique ou
-                de la céramique, quel que soit son niveau.
+                autour du travail du bois, du textile ou de la céramique, quel
+                que soit son niveau.
               </p>
             </div>
             <Link href="/pratique-libre" className="mt-8 block">
@@ -277,11 +269,7 @@ export function LandingPage() {
             <p>
               Pour rester au courant de nos actualités, laissez-nous votre mail.
               On ne vous inondera pas c&apos;est promis, vous recevrez de nos
-              nouvelles <strong>une fois par trimestre.</strong>
-            </p>
-            <p className="mt-6">
-              Vous pouvez aussi choisir de recevoir, chaque début de mois, le
-              calendrier des cours proposés (cochez simplement la case).
+              nouvelles une fois par mois.
             </p>
           </div>
           <Link

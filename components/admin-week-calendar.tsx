@@ -20,6 +20,7 @@ export type AdminWeekCalendarSession = {
   activity_id?: string;
   activity_name?: string;
   max_registrations?: number | null;
+  registrationCount?: number;
 };
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -285,7 +286,13 @@ export function AdminWeekCalendar({
                               {session.activity_name}
                             </p>
                           ) : null}
-                          {session.max_registrations ? (
+                          {session.registrationCount != null ? (
+                            <p className="mt-0.5 text-[10px] font-semibold opacity-80">
+                              {session.max_registrations != null
+                                ? `${session.registrationCount}/${session.max_registrations}`
+                                : `${session.registrationCount} inscrit${session.registrationCount > 1 ? "s" : ""}`}
+                            </p>
+                          ) : session.max_registrations ? (
                             <p className="mt-0.5 text-[10px] opacity-70">
                               max {session.max_registrations}
                             </p>

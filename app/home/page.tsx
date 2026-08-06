@@ -10,11 +10,7 @@ async function HandleSearchParams({ searchParams }: HomeProps) {
   const params = await searchParams;
   if (params?.code) {
     const confirmParams = new URLSearchParams({ code: params.code });
-
-    if (params.next) {
-      confirmParams.set("next", params.next);
-    }
-
+    confirmParams.set("next", params.next ?? "/auth/update-password");
     redirect(`/auth/confirm?${confirmParams.toString()}`);
   }
 

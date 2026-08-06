@@ -26,8 +26,10 @@ import type { AdminWeekCalendarSession } from "@/components/admin-week-calendar"
 import type { CalendarSlotSelection } from "@/components/admin-week-time-grid";
 import {
   addParisCalendarDays,
+  formatParisDate,
   formatParisTime,
   getParisWeekMonday,
+  getParisWeekOffset,
   getParisWeekdayIndex,
   PARIS_TIMEZONE,
   parseParisDateTime,
@@ -86,6 +88,14 @@ export function useAdminManualSessionCreate({
     [activities],
   );
 
+  // Prefer the week containing the selected slot date when generating preview.
+  const effectiveWeekOffset = useMemo(() => {
+    if (slotSelection?.date) {
+      return getParisWeekOffset(slotSelection.date);
+    }
+    return weekOffset;
+  }, [slotSelection?.date, weekOffset]);
+
   const previewSessions = useMemo((): AdminWeekCalendarSession[] => {
     return manualPreview.map((session, index) => ({
       id: `preview-${index}`,
@@ -113,7 +123,7 @@ export function useAdminManualSessionCreate({
         ? durationMinutes
         : parseInt(repeatInterval, 10) || durationMinutes;
     const times = allowManualRepeat ? parseInt(repeatTimes, 10) || 1 : 1;
-    const weekMonday = getParisWeekMonday(weekOffset);
+    const weekMonday = getParisWeekMonday(effectiveWeekOffset);
 
     for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
       const dateStr = addParisCalendarDays(weekMonday, dayOffset);
@@ -144,12 +154,12 @@ export function useAdminManualSessionCreate({
     setManualPreview(preview);
   }, [
     allowManualRepeat,
+    effectiveWeekOffset,
     manualDuration,
     manualStartTime,
     repeatInterval,
     repeatTimes,
     selectedDays,
-    weekOffset,
   ]);
 
   useEffect(() => {
@@ -183,6 +193,39 @@ export function useAdminManualSessionCreate({
           ? previous
           : [...previous, selection.dayIndex].sort(),
       );
+
+      if (!manualActivityId && defaultActivityId) {
+        setManualActivityId(defaultActivityId);
+      }
+
+      if (allowManualRepeat && !repeatInterval) {
+        setRepeatInterval("60");
+      }
+
+      setManualModalOpen(true);
+    },
+    [allowManualRepeat, defaultActivityId, manualActivityId, repeatInterval],
+  );
+
+  const openManualCreate = useCallback(
+    (initialDate?: string) => {
+      const dateKey = initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)
+        ? initialDate
+        : formatParisDate(new Date());
+      const dayIndex = getParisWeekdayIndex(parseParisDateTime(dateKey, "12:00"));
+      const startTime = "10:00";
+      const endTime = "11:00";
+
+      setError(null);
+      setManualStartTime(startTime);
+      setManualDuration("60");
+      setSelectedDays([dayIndex]);
+      setSlotSelection({
+        dayIndex,
+        date: dateKey,
+        startTime,
+        endTime,
+      });
 
       if (!manualActivityId && defaultActivityId) {
         setManualActivityId(defaultActivityId);
@@ -260,6 +303,7 @@ export function useAdminManualSessionCreate({
     selectedDays,
     onToggleDay: handleToggleDay,
     onSelectSlot: handleSelectCalendarSlot,
+    openManualCreate,
     dialog: (
       <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">

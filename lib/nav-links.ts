@@ -14,7 +14,8 @@ export const NAV_LINKS: NavLink[] = [
     subLinks: [
       { href: "/atelier#concept", label: "concept" },
       { href: "/atelier#fonctionnement", label: "fonctionnement" },
-      { href: "/atelier#horaires-et-tarifs", label: "horaires & tarifs" },
+      { href: "/atelier#horaires-et-tarifs", label: "horaires" },
+      { href: "/atelier#tarifs", label: "tarifs" },
     ],
   },
   { href: "/cours", label: "cours" },
@@ -24,7 +25,6 @@ export const NAV_LINKS: NavLink[] = [
     subLinks: [
       { href: "/pratique-libre#menuiserie", label: "menuiserie" },
       { href: "/pratique-libre#couture", label: "couture" },
-      { href: "/pratique-libre#electronique", label: "électronique" },
       { href: "/pratique-libre#ceramique", label: "céramique" },
     ],
   },

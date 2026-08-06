@@ -113,6 +113,8 @@ function toCalendarSession(
   session: WeekSourceSession | VisitSession,
   activityName?: string,
 ): AdminWeekCalendarSession {
+  const registrationCount =
+    "subscriptions" in session ? sumParticipantCount(session.subscriptions) : undefined;
   return {
     id: session.id,
     date: formatParisDate(new Date(session.start_ts)),
@@ -121,16 +123,24 @@ function toCalendarSession(
     activity_id: session.activity_id,
     activity_name: activityName ?? ("activity_name" in session ? session.activity_name : undefined),
     max_registrations: session.max_registrations,
+    registrationCount,
   };
+}
+
+function parseWeekOffsetParam(value: string | null): number {
+  if (value === null || value.trim() === "") return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export function AdminVisitsTab({ copyMode = false }: { copyMode?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialWeekOffset = parseWeekOffsetParam(searchParams.get("weekOffset"));
   const [activities, setActivities] = useState<VisitActivity[]>([]);
   const [sessions, setSessions] = useState<VisitSession[]>([]);
   const [selectedActivityId, setSelectedActivityId] = useState("");
-  const [mainWeekOffset, setMainWeekOffset] = useState(0);
+  const [mainWeekOffset, setMainWeekOffset] = useState(initialWeekOffset);
   const [manualStartTime, setManualStartTime] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("30");
   const [maxRegistrations, setMaxRegistrations] = useState("20");
@@ -139,8 +149,12 @@ export function AdminVisitsTab({ copyMode = false }: { copyMode?: boolean }) {
   const [creatingDefaultActivity, setCreatingDefaultActivity] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [batchSelectedWeekOffset, setBatchSelectedWeekOffset] = useState(-1);
-  const [batchTargetWeekOffset, setBatchTargetWeekOffset] = useState(0);
+  const [batchSelectedWeekOffset, setBatchSelectedWeekOffset] = useState(
+    initialWeekOffset,
+  );
+  const [batchTargetWeekOffset, setBatchTargetWeekOffset] = useState(
+    initialWeekOffset + 1,
+  );
   const [batchPreviewSessions, setBatchPreviewSessions] = useState<
     WeekSourceSession[]
   >([]);
@@ -307,6 +321,30 @@ export function AdminVisitsTab({ copyMode = false }: { copyMode?: boolean }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!copyMode) return;
+    const offset = parseWeekOffsetParam(searchParams.get("weekOffset"));
+    setBatchSelectedWeekOffset(offset);
+    setBatchTargetWeekOffset(offset + 1);
+    setMainWeekOffset(offset);
+  }, [copyMode, searchParams]);
+
+  useEffect(() => {
+    if (copyMode) return;
+    const current = parseWeekOffsetParam(searchParams.get("weekOffset"));
+    if (current === mainWeekOffset) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (mainWeekOffset === 0) {
+      params.delete("weekOffset");
+    } else {
+      params.set("weekOffset", String(mainWeekOffset));
+    }
+    params.set("tab", "visits");
+    setTimeout(() => {
+      router.replace(`/admin?${params.toString()}`, { scroll: false });
+    }, 0);
+  }, [copyMode, mainWeekOffset, router, searchParams]);
 
   useEffect(() => {
     if (!copyMode || !selectedActivityId) {

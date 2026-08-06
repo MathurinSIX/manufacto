@@ -12,9 +12,9 @@ async function HandleSearchParams({ searchParams }: RootPageProps) {
   if (params?.code) {
     const confirmParams = new URLSearchParams({ code: params.code });
 
-    if (params.next) {
-      confirmParams.set("next", params.next);
-    }
+    // Password recovery/invite emails often land on Site URL with only ?code=.
+    // Prefer the password setup page unless an explicit next was provided.
+    confirmParams.set("next", params.next ?? "/auth/update-password");
 
     redirect(`/auth/confirm?${confirmParams.toString()}`);
   }

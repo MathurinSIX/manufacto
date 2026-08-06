@@ -12,7 +12,10 @@ import { CancelRegistrationButton } from "@/components/cancel-registration-butto
 import { canUserCancelRegistration } from "@/lib/cancellation-policy";
 import { ReservationAuthStep } from "@/components/reservation-auth-step";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
-import { ParticipantCountSelector } from "@/components/participant-count-selector";
+import {
+  ParticipantCountSelector,
+  companionNamesAreValid,
+} from "@/components/participant-count-selector";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -36,6 +39,10 @@ import {
   getParticipantCount,
   maxSelectableCount,
 } from "@/lib/participant-count";
+import {
+  legalDocsUserMessage,
+  redirectToLegalDocsIfRequired,
+} from "@/lib/legal/client";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -266,6 +273,7 @@ export function PracticeReservationPicker({
   const [userCredits, setUserCredits] = useState(0);
   const [showAuthStep, setShowAuthStep] = useState(false);
   const [participantCount, setParticipantCount] = useState(1);
+  const [companionFirstNames, setCompanionFirstNames] = useState<string[]>([]);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -534,7 +542,7 @@ export function PracticeReservationPicker({
           sessionId: session.id,
           label: `${timeFormatter.format(hour)} - ${timeFormatter.format(hourEnd)}`,
           disabled:
-            hour.getTime() <= now ||
+            hour.getTime() <= now - 15 * 60 * 1000 ||
             bookedByMe ||
             (available !== null && available < participantCount),
           available,
@@ -756,6 +764,14 @@ export function PracticeReservationPicker({
       return;
     }
 
+    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+      setIsRegistering(false);
+      setErrorMessage(
+        "Indiquez le prénom de chaque personne supplémentaire.",
+      );
+      return;
+    }
+
     if (isAccompagnement) {
       for (const option of orderedSelectedSlots) {
         const hourStart = new Date(option.iso);
@@ -774,11 +790,15 @@ export function PracticeReservationPicker({
             end: hourEnd.toISOString(),
           },
           participantCount,
+          companionFirstNames,
         );
 
         if (result.error) {
           setIsRegistering(false);
-          setErrorMessage(result.error);
+          if (redirectToLegalDocsIfRequired(result.error, window.location.pathname)) {
+            return;
+          }
+          setErrorMessage(legalDocsUserMessage(result.error));
           return;
         }
       }
@@ -807,11 +827,15 @@ export function PracticeReservationPicker({
         })),
         "credits",
         participantCount,
+        companionFirstNames,
       );
 
       if (result.error) {
         setIsRegistering(false);
-        setErrorMessage(result.error);
+        if (redirectToLegalDocsIfRequired(result.error, window.location.pathname)) {
+          return;
+        }
+        setErrorMessage(legalDocsUserMessage(result.error));
         return;
       }
     }
@@ -821,6 +845,8 @@ export function PracticeReservationPicker({
       : orderedSelectedSlots.length;
     setIsRegistering(false);
     setSelectedHourKeys([]);
+    setParticipantCount(1);
+    setCompanionFirstNames([]);
     setSuccessMessage(
       bookedCount > 1
         ? `${bookedCount} créneaux réservés ! Nous vous attendons à l'atelier.`
@@ -994,6 +1020,8 @@ export function PracticeReservationPicker({
             onValueChange={(value) => {
               setSelectedDay(value);
               setSelectedHourKeys([]);
+              setParticipantCount(1);
+              setCompanionFirstNames([]);
             }}
           >
             <SelectTrigger>
@@ -1146,6 +1174,8 @@ export function PracticeReservationPicker({
         <ParticipantCountSelector
           value={participantCount}
           onChange={setParticipantCount}
+          companionFirstNames={companionFirstNames}
+          onCompanionFirstNamesChange={setCompanionFirstNames}
           max={maxParticipantsForSelection}
         />
       ) : null}
@@ -1182,7 +1212,8 @@ export function PracticeReservationPicker({
               selectedHourCount === 0 ||
               hasFullHour ||
               !hasRequiredHourCount ||
-              maxParticipantsForSelection < 1
+              maxParticipantsForSelection < 1 ||
+              !companionNamesAreValid(participantCount, companionFirstNames)
             }
           >
             {reservationRuleMessage

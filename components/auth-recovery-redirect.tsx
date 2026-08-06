@@ -3,9 +3,8 @@
 import { useEffect } from "react";
 
 /**
- * Supabase recovery emails redirect with tokens in the URL hash.
- * If the allowed redirect URL is missing from the Supabase project config,
- * users land on the site root instead of /auth/update-password.
+ * Supabase recovery/invite emails may land on the site root with tokens in the
+ * URL hash when the configured redirect URL is missing from the project allowlist.
  */
 export function AuthRecoveryRedirect() {
   useEffect(() => {
@@ -13,7 +12,8 @@ export function AuthRecoveryRedirect() {
     if (!hash.startsWith("#")) return;
 
     const params = new URLSearchParams(hash.slice(1));
-    if (params.get("type") !== "recovery") return;
+    const type = params.get("type");
+    if (type !== "recovery" && type !== "invite") return;
 
     if (window.location.pathname !== "/auth/update-password") {
       window.location.replace(`/auth/update-password${hash}`);

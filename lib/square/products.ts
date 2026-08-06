@@ -44,6 +44,14 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     credits: 60,
   },
   {
+    id: "credits-1",
+    kind: "credit_pack",
+    name: "1 crédit",
+    description: "1 crédit à 8€.",
+    amountCents: 800,
+    credits: 1,
+  },
+  {
     id: "credits-2",
     kind: "credit_pack",
     name: "Pack de crédit 01",

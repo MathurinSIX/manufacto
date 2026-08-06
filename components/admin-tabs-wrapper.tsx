@@ -132,7 +132,8 @@ function AdminCopyWeeksPage({
       <AdminAddActivitiesTab
         activityTypes={activityTypes}
         allowManualRepeat={allowManualRepeat}
-        initialTargetWeekOffset={weekOffset}
+        initialSourceWeekOffset={weekOffset}
+        initialTargetWeekOffset={weekOffset + 1}
         initialActivityId={activityId}
         mode="copy"
       />

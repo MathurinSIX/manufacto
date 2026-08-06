@@ -23,6 +23,7 @@ import {
   isAlreadyExistsError,
   sendAccountAccessEmail,
 } from "@/lib/auth/invite-user";
+import { getPasswordSetupRedirectUrl } from "@/lib/auth-redirect";
 import { syncSupabaseUserToSquare } from "@/lib/square/server";
 import {
   addParisCalendarDays,
@@ -53,6 +54,9 @@ const PRACTICE_ACTIVITY_TYPES = new Set([
   "accompagnement",
   "cuisson",
 ]);
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function getSiteUrl() {
   if (process.env.NEXT_PUBLIC_SITE_URL) {
@@ -757,7 +761,7 @@ export async function removeUserAdmin(userId: string) {
 export async function createUser(email: string, metadata?: { first_name?: string; last_name?: string }) {
   await checkAdmin();
   const adminClient = getAdminClient();
-  const redirectTo = `${getSiteUrl()}/auth/update-password`;
+  const redirectTo = getPasswordSetupRedirectUrl(getSiteUrl());
 
   // inviteUserByEmail creates the account and sends the invitation email.
   // Do not call createUser first — the user would already exist and the invite
@@ -804,7 +808,7 @@ export async function resendUserInvitation(userId: string) {
 
   const result = await sendAccountAccessEmail(
     data.user.email,
-    `${getSiteUrl()}/auth/update-password`,
+    getPasswordSetupRedirectUrl(getSiteUrl()),
   );
 
   if (result.error) {
@@ -859,6 +863,8 @@ export async function getAllActivitiesWithSessions() {
     session_id: string | null;
     reserved_start_ts: string | null;
     reserved_end_ts: string | null;
+    participant_count?: number | null;
+    companion_first_names?: string[] | null;
   };
 
   const {
@@ -867,7 +873,7 @@ export async function getAllActivitiesWithSessions() {
   } = await fetchAllSupabaseRows<RegistrationRow>(async ({ from, to }) => {
     const { data, error } = await supabase
       .from("registration")
-      .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts")
+      .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count, companion_first_names")
       .range(from, to);
 
     return { data, error };
@@ -915,10 +921,12 @@ export async function getAllActivitiesWithSessions() {
     name: string;
     phone: string;
     created_at: string;
+    participant_count?: number | null;
+    companion_first_names?: string[] | null;
   }>(async ({ from, to }) => {
     const { data, error } = await supabase
       .from("public_session_subscription")
-      .select("id, session_id, name, phone, created_at")
+      .select("id, session_id, name, phone, created_at, participant_count, companion_first_names")
       .order("created_at", { ascending: true })
       .range(from, to);
 
@@ -985,6 +993,10 @@ export async function getAllActivitiesWithSessions() {
         );
         const registeredUsers = sessionRegistrations.map(reg => {
           const user = usersMap.get(reg.user_id);
+          const participantCount = Math.max(1, Number(reg.participant_count) || 1);
+          const companionFirstNames = Array.isArray(reg.companion_first_names)
+            ? (reg.companion_first_names as string[]).filter(Boolean)
+            : [];
           return {
             registrationId: reg.id,
             userId: reg.user_id,
@@ -992,6 +1004,8 @@ export async function getAllActivitiesWithSessions() {
             name: formatRegisteredUserName(user),
             reservedStartTs: reg.reserved_start_ts,
             reservedEndTs: reg.reserved_end_ts,
+            participantCount,
+            companionFirstNames,
           };
         });
         const publicRegisteredUsers = publicSubscriptions
@@ -1001,6 +1015,10 @@ export async function getAllActivitiesWithSessions() {
             name: subscription.name,
             phone: subscription.phone,
             createdAt: subscription.created_at,
+            participantCount: Math.max(1, Number(subscription.participant_count) || 1),
+            companionFirstNames: Array.isArray(subscription.companion_first_names)
+              ? (subscription.companion_first_names as string[]).filter(Boolean)
+              : [],
           }));
         
         return {
@@ -1038,11 +1056,44 @@ export type TodayCourseSession = {
   end: string;
   activity_id: string;
   activity_name: string;
+  activity_type: string | null;
   max_registrations: number | null;
   registrationCount: number;
-  registeredUsers: Array<{ name: string; email: string }>;
-  publicRegisteredUsers: Array<{ name: string; phone: string }>;
+  registeredUsers: Array<{
+    name: string;
+    email: string;
+    isSameDayBooking: boolean;
+    arrival: string;
+    departure: string;
+  }>;
+  publicRegisteredUsers: Array<{
+    name: string;
+    phone: string;
+    isSameDayBooking: boolean;
+  }>;
 };
+
+export type TodayVisitor = {
+  name: string;
+  email?: string;
+  phone?: string;
+  activity_name: string;
+  activity_type: string | null;
+  arrival: string;
+  departure: string;
+  isSameDayBooking: boolean;
+  source: "registration" | "public";
+};
+
+const TODAY_INCLUDED_ACTIVITY_TYPES = new Set([
+  "cours",
+  "autonomie",
+  "autonomie_encadree",
+  "accompagnement",
+  "cuisson",
+  "visite",
+  "pack_decouverte",
+]);
 
 export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
   await checkAdmin();
@@ -1054,50 +1105,78 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
   const dayStart = parseParisDateTime(date, "00:00").toISOString();
   const dayEnd = parseParisDateTime(addParisCalendarDays(date, 1), "00:00").toISOString();
 
-  const { data: courseActivities, error: activitiesError } = await supabase
+  const { data: activities, error: activitiesError } = await supabase
     .from("activity")
-    .select("id, name")
-    .eq("type", "cours")
+    .select("id, name, type")
+    .in("type", [...TODAY_INCLUDED_ACTIVITY_TYPES])
     .is("deleted_at", null);
 
   if (activitiesError) {
-    return { error: activitiesError.message, sessions: [] as TodayCourseSession[], date };
+    return {
+      error: activitiesError.message,
+      sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
+      date,
+    };
   }
 
   const activitiesById = new Map(
-    (courseActivities ?? []).map((activity) => [activity.id, activity.name]),
+    (activities ?? []).map((activity) => [
+      activity.id,
+      { name: activity.name, type: activity.type as string | null },
+    ]),
   );
-  const courseActivityIds = [...activitiesById.keys()];
+  const activityIds = [...activitiesById.keys()];
 
-  if (courseActivityIds.length === 0) {
-    return { error: null, sessions: [] as TodayCourseSession[], date };
+  if (activityIds.length === 0) {
+    return {
+      error: null,
+      sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
+      date,
+    };
   }
 
   const { data: sessions, error: sessionsError } = await supabase
     .from("session")
     .select("id, start_ts, end_ts, activity_id, max_registrations")
-    .in("activity_id", courseActivityIds)
+    .in("activity_id", activityIds)
     .gte("start_ts", dayStart)
     .lt("start_ts", dayEnd)
     .order("start_ts");
 
   if (sessionsError) {
-    return { error: sessionsError.message, sessions: [] as TodayCourseSession[], date };
+    return {
+      error: sessionsError.message,
+      sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
+      date,
+    };
   }
 
   if (!sessions?.length) {
-    return { error: null, sessions: [] as TodayCourseSession[], date };
+    return {
+      error: null,
+      sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
+      date,
+    };
   }
 
   const sessionIds = sessions.map((session) => session.id);
 
   const { data: registrations, error: registrationsError } = await supabase
     .from("registration")
-    .select("id, user_id, session_id")
+    .select("id, user_id, session_id, created_at, reserved_start_ts, reserved_end_ts")
     .in("session_id", sessionIds);
 
   if (registrationsError) {
-    return { error: registrationsError.message, sessions: [] as TodayCourseSession[], date };
+    return {
+      error: registrationsError.message,
+      sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
+      date,
+    };
   }
 
   const registrationIds = (registrations ?? []).map((registration) => registration.id);
@@ -1115,7 +1194,12 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
       .order("created_at", { ascending: false });
 
     if (statusesError) {
-      return { error: statusesError.message, sessions: [] as TodayCourseSession[], date };
+      return {
+        error: statusesError.message,
+        sessions: [] as TodayCourseSession[],
+        visitors: [] as TodayVisitor[],
+        date,
+      };
     }
 
     statuses.push(...(statusChunk ?? []));
@@ -1125,13 +1209,14 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
 
   const { data: publicSubscriptions, error: publicSubscriptionsError } = await supabase
     .from("public_session_subscription")
-    .select("id, session_id, name, phone")
+    .select("id, session_id, name, phone, created_at")
     .in("session_id", sessionIds);
 
   if (publicSubscriptionsError) {
     return {
       error: publicSubscriptionsError.message,
       sessions: [] as TodayCourseSession[],
+      visitors: [] as TodayVisitor[],
       date,
     };
   }
@@ -1141,10 +1226,11 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
   const usersMap = new Map(allUsers.map((user) => [user.id, user] as const));
 
   const todaySessions: TodayCourseSession[] = [];
+  const visitors: TodayVisitor[] = [];
 
   for (const session of sessions) {
-    const activityName = activitiesById.get(session.activity_id);
-    if (!activityName) continue;
+    const activity = activitiesById.get(session.activity_id);
+    if (!activity) continue;
 
     const sessionRegistrations = (registrations ?? []).filter(
       (registration) =>
@@ -1160,31 +1246,79 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
 
     const startDate = new Date(session.start_ts);
     const endDate = new Date(session.end_ts);
+    const sessionStartLabel = formatParisTime(startDate);
+    const sessionEndLabel = formatParisTime(endDate);
+
+    const registeredUsers = sessionRegistrations.map((registration) => {
+      const user = usersMap.get(registration.user_id);
+      const arrivalTs = registration.reserved_start_ts ?? session.start_ts;
+      const departureTs = registration.reserved_end_ts ?? session.end_ts;
+      const isSameDayBooking = formatParisDate(new Date(registration.created_at)) === date;
+      const name = formatRegisteredUserName(user);
+      const email = user?.email ?? "";
+      const arrival = formatParisTime(new Date(arrivalTs));
+      const departure = formatParisTime(new Date(departureTs));
+
+      visitors.push({
+        name,
+        email: email || undefined,
+        activity_name: activity.name,
+        activity_type: activity.type,
+        arrival,
+        departure,
+        isSameDayBooking,
+        source: "registration",
+      });
+
+      return {
+        name,
+        email,
+        isSameDayBooking,
+        arrival,
+        departure,
+      };
+    });
+
+    const publicRegisteredUsers = sessionPublicSubscriptions.map((subscription) => {
+      const isSameDayBooking =
+        formatParisDate(new Date(subscription.created_at)) === date;
+
+      visitors.push({
+        name: subscription.name,
+        phone: subscription.phone,
+        activity_name: activity.name,
+        activity_type: activity.type,
+        arrival: sessionStartLabel,
+        departure: sessionEndLabel,
+        isSameDayBooking,
+        source: "public",
+      });
+
+      return {
+        name: subscription.name,
+        phone: subscription.phone,
+        isSameDayBooking,
+      };
+    });
 
     todaySessions.push({
       id: session.id,
       date,
-      start: formatParisTime(startDate),
-      end: formatParisTime(endDate),
+      start: sessionStartLabel,
+      end: sessionEndLabel,
       activity_id: session.activity_id,
-      activity_name: activityName,
+      activity_name: activity.name,
+      activity_type: activity.type,
       max_registrations: session.max_registrations,
       registrationCount,
-      registeredUsers: sessionRegistrations.map((registration) => {
-        const user = usersMap.get(registration.user_id);
-        return {
-          name: formatRegisteredUserName(user),
-          email: user?.email ?? "",
-        };
-      }),
-      publicRegisteredUsers: sessionPublicSubscriptions.map((subscription) => ({
-        name: subscription.name,
-        phone: subscription.phone,
-      })),
+      registeredUsers,
+      publicRegisteredUsers,
     });
   }
 
-  return { error: null, sessions: todaySessions, date };
+  visitors.sort((left, right) => left.arrival.localeCompare(right.arrival));
+
+  return { error: null, sessions: todaySessions, visitors, date };
 }
 
 function toCreditAmount(value: unknown): number {
@@ -1315,14 +1449,9 @@ export async function addUserToSession(
   if (!data) {
     return { error: "Failed to create registration", registration: null };
   }
-  
-  // Create initial registration status
-  await supabase
-    .from("registration_status")
-    .insert({
-      registration_id: data.id,
-      status: "CONFIRMED",
-    });
+
+  // CONFIRMED status (+ credit deduction) is created by
+  // auto_create_registration_status_trigger — do not insert it again.
   
   revalidatePath("/admin");
   if (paymentType === "credits") {
@@ -1383,6 +1512,10 @@ export async function getPreviousWeekSessions(activityId: string, weekOffset: nu
   return getWeekSessions(activityId, weekOffset);
 }
 
+function sessionSlotKey(startTs: string, endTs: string): string {
+  return `${new Date(startTs).getTime()}|${new Date(endTs).getTime()}`;
+}
+
 // Create a single session
 export async function createSession(
   activityId: string,
@@ -1392,7 +1525,27 @@ export async function createSession(
 ) {
   await checkAdmin();
   const supabase = await createClient();
-  
+
+  const { data: existing, error: existingError } = await supabase
+    .from("session")
+    .select("id, start_ts, end_ts")
+    .eq("activity_id", activityId)
+    .eq("start_ts", start_ts)
+    .eq("end_ts", end_ts)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Error checking duplicate session:", existingError);
+    return { error: existingError.message, session: null };
+  }
+
+  if (existing) {
+    return {
+      error: "Un créneau identique existe déjà pour cette activité (même horaires).",
+      session: null,
+    };
+  }
+
   const { data, error } = await supabase
     .from("session")
     .insert({
@@ -1441,16 +1594,43 @@ export async function createActivitiesBatch(activityId: string, weekOffset: numb
   const targetWeekStart = parseParisDateTime(targetWeekMonday, "00:00");
   const targetWeekEnd = parseParisDateTime(addParisCalendarDays(targetWeekMonday, 7), "00:00");
 
-  const { count: existingCount } = await supabase
+  const { data: existingSessions, error: existingError } = await supabase
     .from("session")
-    .select("id", { count: "exact", head: true })
+    .select("id, start_ts, end_ts")
     .eq("activity_id", activityId)
     .gte("start_ts", targetWeekStart.toISOString())
     .lt("start_ts", targetWeekEnd.toISOString());
 
+  if (existingError) {
+    console.error("Error fetching existing target sessions:", existingError);
+    return { error: existingError.message, created: 0, warning: null };
+  }
+
+  const existingKeys = new Set(
+    (existingSessions ?? []).map((session) =>
+      sessionSlotKey(session.start_ts, session.end_ts),
+    ),
+  );
+
+  const sessionsToInsert = newSessions.filter(
+    (session) => !existingKeys.has(sessionSlotKey(session.start_ts, session.end_ts)),
+  );
+  const skipped = newSessions.length - sessionsToInsert.length;
+
+  if (sessionsToInsert.length === 0) {
+    return {
+      created: 0,
+      error: null,
+      warning:
+        skipped > 0
+          ? `${skipped} créneau${skipped > 1 ? "x" : ""} ignoré${skipped > 1 ? "s" : ""} (déjà présent${skipped > 1 ? "s" : ""} dans la semaine cible).`
+          : null,
+    };
+  }
+
   const { data, error } = await supabase
     .from("session")
-    .insert(newSessions)
+    .insert(sessionsToInsert)
     .select();
 
   if (error) {
@@ -1461,8 +1641,8 @@ export async function createActivitiesBatch(activityId: string, weekOffset: numb
   revalidatePath("/admin");
 
   const warning =
-    existingCount && existingCount > 0
-      ? `Attention : ${existingCount} créneau${existingCount > 1 ? "x" : ""} existaient déjà dans la semaine cible.`
+    skipped > 0
+      ? `${skipped} créneau${skipped > 1 ? "x" : ""} ignoré${skipped > 1 ? "s" : ""} (déjà présent${skipped > 1 ? "s" : ""} dans la semaine cible).`
       : null;
 
   return { created: data?.length || 0, error: null, warning };
@@ -1907,6 +2087,62 @@ export async function deleteSession(sessionId: string) {
   
   revalidatePath("/admin");
   return { error: null };
+}
+
+export async function deleteSessions(sessionIds: string[]) {
+  await checkAdmin();
+
+  const uniqueIds = [
+    ...new Set(
+      sessionIds
+        .map((id) => id.trim())
+        .filter((id) => UUID_RE.test(id)),
+    ),
+  ];
+
+  if (uniqueIds.length === 0) {
+    return {
+      error: "Aucun créneau sélectionné",
+      deleted: 0,
+      skipped: 0,
+      failures: [] as { sessionId: string; error: string }[],
+    };
+  }
+
+  const failures: { sessionId: string; error: string }[] = [];
+  let deleted = 0;
+  let skipped = 0;
+
+  for (const sessionId of uniqueIds) {
+    const result = await deleteSession(sessionId);
+    if (result.error) {
+      if (
+        result.error.includes("inscriptions") ||
+        result.error.includes("inscriptions publiques")
+      ) {
+        skipped += 1;
+      }
+      failures.push({ sessionId, error: result.error });
+      continue;
+    }
+    deleted += 1;
+  }
+
+  revalidatePath("/admin");
+
+  if (deleted === 0 && failures.length > 0) {
+    return {
+      error:
+        failures.length === 1
+          ? failures[0].error
+          : `${failures.length} créneaux n'ont pas pu être supprimés (souvent parce qu'ils ont des inscriptions).`,
+      deleted,
+      skipped,
+      failures,
+    };
+  }
+
+  return { error: null, deleted, skipped, failures };
 }
 
 export type InternalProductRow = {

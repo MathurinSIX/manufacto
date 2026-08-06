@@ -70,7 +70,9 @@ async function handleSquareWebhook(payload: SquareWebhookPayload) {
     return;
   }
 
-  if (payload.type !== "payment.updated" && payload.type !== "payment.created") {
+  // Prefer payment.updated: payment.created can race with incomplete status
+  // and double-fulfill with reconcile/import paths.
+  if (payload.type !== "payment.updated") {
     return;
   }
 

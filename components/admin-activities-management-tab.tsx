@@ -469,6 +469,7 @@ export function AdminActivitiesManagementTab({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Débutant.e">Débutant.e</SelectItem>
+                        <SelectItem value="Intermédiaire">Intermédiaire</SelectItem>
                         <SelectItem value="Avancé.e">Avancé.e</SelectItem>
                       </SelectContent>
                     </Select>

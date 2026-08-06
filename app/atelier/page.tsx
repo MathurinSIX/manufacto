@@ -46,12 +46,6 @@ const universes = [
     height: 140,
   },
   {
-    label: "électronique",
-    image: "/assets/picto/electronique/electronique.png",
-    width: 180,
-    height: 140,
-  },
-  {
     label: "céramique",
     image: "/assets/picto/ceramique/ceramique.png",
     width: 180,
@@ -148,8 +142,8 @@ async function DiscoveryPackBanner() {
   );
 
   return (
-    <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
-      <div className="mx-auto max-w-[1274px] px-5 py-5 md:py-6">
+    <section className="mb-10 mt-10 w-full rounded-[18px] bg-[#fff8f0]">
+      <div className="px-5 py-5 md:px-6 md:py-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-6 md:max-w-[55%]">
             <h2 className="shrink-0 text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
@@ -160,7 +154,7 @@ async function DiscoveryPackBanner() {
               <p className="text-xl leading-normal text-black/75">
                 Une première venue pour tester l&apos;atelier.
               </p>
-              <p className="mt-2 text-xs leading-tight text-black/65">
+              <p className="mt-2 text-base font-semibold leading-snug text-black/80 md:text-lg">
                 limitée à un achat par personne
               </p>
             </div>
@@ -240,23 +234,21 @@ export default function AtelierPage() {
               Manufacto est né d&apos;une envie : proposer un{" "}
               <strong>lieu accessible</strong> à des{" "}
               <strong>particuliers et amateurs, amatrices</strong> qui
-              voudraient travailler le bois, le textile, la terre, ou
-              l&apos;électronique dans un espace adapté et avec des machines de
-              qualité.
+              voudraient travailler le bois, le textile ou la terre dans un
+              espace adapté et avec des machines de qualité.
             </p>
             <p>
               Situé au cœur du 5ème arrondissement, l&apos;atelier rassemble
-              plusieurs espaces de pratique: menuiserie, couture, électronique
-              et céramique.
+              plusieurs espaces de pratique: menuiserie, couture et céramique.
             </p>
           </div>
         </section>
 
         <section className="mx-auto w-full max-w-[1030px] px-5 pb-12">
           <h1 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
-            un atelier, quatre univers
+            un atelier, trois univers
           </h1>
-          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-8">
+          <div className="mt-6 grid grid-cols-3 gap-4 md:gap-8">
             {universes.map((universe) => (
               <div key={universe.label} className="text-center">
                 <div className="flex h-[112px] items-center justify-center p-4 md:h-[156px]">
@@ -278,7 +270,7 @@ export default function AtelierPage() {
             <div>
             <MarketingBody className="max-w-[920px] space-y-8">
               <p>
-                Manufacto est organisé autour de quatre univers techniques et
+                Manufacto est organisé autour de trois univers techniques et
                 créatifs distincts. Chacun d&apos;entre eux a son espace, ses
                 outils, ses machines.
               </p>
@@ -324,16 +316,6 @@ export default function AtelierPage() {
             />
           </div>
         </section>
-
-        <Suspense
-          fallback={
-            <section className="mb-10 mt-10 w-full bg-[#fff8f0]">
-              <div className="mx-auto min-h-[193px] max-w-[1274px] animate-pulse px-5 py-5 md:py-6" />
-            </section>
-          }
-        >
-          <DiscoveryPackBanner />
-        </Suspense>
 
         <section id="fonctionnement" className="w-full scroll-mt-28 bg-[#fff8f0]">
           <div className="mx-auto max-w-[1030px] px-5 py-10 md:py-14">
@@ -439,7 +421,7 @@ export default function AtelierPage() {
               <p>Mardi : 13h / 20h</p>
               <p>Mercredi : 9h / 21h</p>
               <p>Jeudi : 13h / 21h</p>
-              <p>Vendredi : 9h / 17h</p>
+              <p>Vendredi : 9h / 16h</p>
               <p>Samedi* : 9h / 12h &amp; 13h / 17h</p>
             </div>
             <p className="relative mt-5 text-xs">
@@ -448,10 +430,20 @@ export default function AtelierPage() {
           </div>
         </section>
 
-        <section id="tarifs" className="mx-auto w-full max-w-[1030px] px-5 pb-20">
+        <section id="tarifs" className="mx-auto w-full max-w-[1030px] scroll-mt-28 px-5 pb-20">
           <MarketingSectionTitle className="text-black">
             tarifs
           </MarketingSectionTitle>
+
+          <Suspense
+            fallback={
+              <section className="mb-10 mt-10 w-full rounded-[18px] bg-[#fff8f0]">
+                <div className="mx-auto min-h-[193px] max-w-[1274px] animate-pulse px-5 py-5 md:py-6" />
+              </section>
+            }
+          >
+            <DiscoveryPackBanner />
+          </Suspense>
 
           <div className="mt-16 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
             <div>
@@ -469,8 +461,7 @@ export default function AtelierPage() {
                   compétence... ou autre selon votre choix.
                 </p>
                 <p>
-                  Les crédits s&apos;achètent par lots, et sont{" "}
-                  <strong>valables un an.</strong>
+                  Les crédits sont <strong>valables un an.</strong>
                   <br />
                   Les tarifs sont dégressifs.
                 </p>
@@ -550,6 +541,10 @@ export default function AtelierPage() {
                     <span>autonomie complète</span>
                     <span>2 crédits / heure</span>
                   </div>
+                  <div className="flex justify-between gap-6">
+                    <span>autonomie encadrée</span>
+                    <span>3 crédits / heure</span>
+                  </div>
                   <div>
                     <p>cuissons</p>
                     <div className="flex justify-between gap-6">
@@ -561,22 +556,6 @@ export default function AtelierPage() {
                       (terres acceptées, taille du four etc), allez sur notre
                       page cuisson.
                     </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#20b75a]">
-                  électronique
-                </h3>
-                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie complète</span>
-                    <span>1 crédit / heure</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>repair café</span>
-                    <span>prix libre</span>
                   </div>
                 </div>
               </div>
@@ -600,12 +579,6 @@ export default function AtelierPage() {
                   </div>
                 </div>
               </div>
-
-              <p className="pt-8 text-lg leading-tight text-black/75">
-                À savoir : en pratique libre{" "}
-                <strong>(autonomie complète &amp; encadrée)</strong> la durée
-                minimale de réservation est de deux heures consécutives.
-              </p>
             </div>
           </div>
 
@@ -626,7 +599,7 @@ export default function AtelierPage() {
             </div>
             <Suspense
               fallback={
-                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-5" />
+                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-3 lg:grid-cols-6" />
               }
             >
               <AtelierCreditPackGrid />
@@ -657,12 +630,20 @@ export default function AtelierPage() {
                   disposez de 3 mois pour utiliser votre solde de crédits.
                 </p>
               </div>
-              <p className="mt-14 max-w-[390px] text-xs leading-tight text-black/75">
-                15% de réduction sur tous nos tarifs pour les personnes
-                étudiantes, au chômages, bénéficiaires du RSA. Et si vous ne
-                rentrez dans aucune de ces cases mais que nos tarifs sont à
-                freins à votre venue, venez nous rencontrer et discutons en.
-              </p>
+              <div className="mt-14 max-w-[470px] rounded-[18px] border border-[#f56800]/50 bg-[#fff8f0] px-6 py-5 text-base leading-normal text-black/80">
+                <p className="font-semibold">
+                  15% de réduction sur tous nos tarifs pour les personnes
+                  étudiantes, au chômage, bénéficiaires du RSA.
+                </p>
+                <p className="mt-3">
+                  Réductions appliquées uniquement pour les paiements sur place.
+                </p>
+                <p className="mt-3 text-sm leading-snug text-black/70">
+                  Et si vous ne rentrez dans aucune de ces cases mais que nos
+                  tarifs sont un frein à votre venue, venez nous rencontrer et
+                  discutons-en.
+                </p>
+              </div>
             </div>
             <Suspense
               fallback={

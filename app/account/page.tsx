@@ -40,7 +40,7 @@ const subscriptionPlans = [
     price: "90€",
     credits: "20 crédits / mois",
     description:
-      "Idéal si vous utilisez l'espace couture ou électronique régulièrement.",
+      "Idéal si vous utilisez l'espace couture régulièrement.",
   },
   {
     id: "formule-02",
@@ -446,6 +446,9 @@ async function AccountContent() {
       return sum + amount;
     }, 0) || 0;
 
+  const { getUserLegalCompliance } = await import("@/lib/legal/status");
+  const legalStatus = await getUserLegalCompliance(supabase, user.id);
+
   return (
     <div className="flex-1 w-full bg-[#fff8f0] text-black">
       <div className="mx-auto w-full max-w-[1274px] px-5 pb-20 pt-16 md:pb-[140px] md:pt-[86px]">
@@ -473,6 +476,24 @@ async function AccountContent() {
             </div>
           </div>
         </div>
+
+        {!legalStatus.complete ? (
+          <div className="mb-8 rounded-[19px] border border-[#f56800]/40 bg-white p-5 shadow-sm ring-1 ring-black/5">
+            <p className="text-lg font-semibold text-black/80">
+              Documents à signer avant votre première réservation
+            </p>
+            <p className="mt-2 text-sm text-black/65">
+              Règlement intérieur, décharge de responsabilité et choix pour le
+              droit à l’image.
+            </p>
+            <Link
+              href="/account/documents?next=/account"
+              className="mt-4 inline-flex text-base font-semibold text-[#4a56dd] underline underline-offset-2"
+            >
+              Signer maintenant
+            </Link>
+          </div>
+        ) : null}
 
         <div className="space-y-8 md:space-y-10">
           {/* Reservations with Tabs */}

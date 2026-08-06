@@ -75,7 +75,7 @@ async function getCourses() {
       supabase
         .from("session")
         .select("activity_id, start_ts, end_ts")
-        .gte("start_ts", new Date().toISOString())
+        .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
         .order("start_ts", { ascending: true }),
       supabase
         .from("session")
@@ -117,9 +117,9 @@ async function getUpcomingSessions(activityId: string): Promise<CourseSession[]>
     .from("session")
     .select("id, start_ts, end_ts")
     .eq("activity_id", activityId)
-    .gte("start_ts", new Date().toISOString())
+    .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
     .order("start_ts", { ascending: true })
-    .limit(3);
+    .limit(20);
 
   if (error) {
     console.error("Error fetching course sessions", error);
@@ -171,7 +171,7 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
       </div>
       <section className="grid gap-10 lg:grid-cols-[594px_1fr] lg:gap-[82px]">
         <div>
-          <div className="relative h-[332px] w-full overflow-hidden rounded-[6px] bg-[#d9d9d9] md:h-[495px]">
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[6px] bg-[#d9d9d9]">
             <CourseImageCarousel
               images={course.images}
               alt={course.title}

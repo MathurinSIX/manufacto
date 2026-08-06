@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 
 import { toggleCourseInterest } from "@/app/cours/actions";
+import { AuthModal } from "@/components/auth-modal";
 import { cn } from "@/lib/utils";
 
 type CourseInterestButtonProps = {
@@ -25,22 +25,7 @@ export function CourseInterestButton({
   const [isInterested, setIsInterested] = useState(initialIsInterested);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  if (!isLoggedIn) {
-    const loginHref = `/auth/login?next=${encodeURIComponent(redirectPath)}`;
-
-    return (
-      <Link
-        href={loginHref}
-        className={cn(
-          "inline-flex items-center justify-center rounded-full border border-[#4a56dd] px-4 py-2 text-base font-semibold text-[#4a56dd] transition hover:bg-[#4a56dd]/5",
-          className,
-        )}
-      >
-        je suis intéressé·e
-      </Link>
-    );
-  }
+  const [authOpen, setAuthOpen] = useState(false);
 
   const handleToggle = () => {
     setError(null);
@@ -55,6 +40,42 @@ export function CourseInterestButton({
       setIsInterested(result.interested);
     });
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={() => setAuthOpen(true)}
+          className={cn(
+            "inline-flex items-center justify-center rounded-full border border-[#4a56dd] px-4 py-2 text-base font-semibold text-[#4a56dd] transition hover:bg-[#4a56dd]/5",
+          )}
+        >
+          je suis intéressé·e
+        </button>
+        <AuthModal
+          open={authOpen}
+          onOpenChange={setAuthOpen}
+          defaultView="login"
+          onSuccess={() => {
+            setAuthOpen(false);
+            // After login, immediately record interest then stay on the course page.
+            startTransition(async () => {
+              const result = await toggleCourseInterest(activityId);
+              if (result.error) {
+                setError(result.error);
+                return;
+              }
+              setIsInterested(result.interested);
+              window.history.replaceState({}, "", redirectPath);
+              window.location.reload();
+            });
+          }}
+        />
+        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

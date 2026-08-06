@@ -66,7 +66,7 @@ export async function getSquareProductByCatalogObjectId(
     products.find(
       (product) =>
         product.catalogObjectId?.trim() === normalizedCatalogId &&
-        product.kind === "credit_pack",
+        (product.kind === "credit_pack" || product.kind === "discovery"),
     ) ?? null
   );
 }

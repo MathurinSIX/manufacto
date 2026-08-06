@@ -19,12 +19,24 @@ export async function createSessionSubscription(formData: FormData) {
   const participantCount = clampParticipantCount(
     Number.parseInt(String(formData.get("participant_count") ?? "1"), 10),
   );
+  const companionFirstNames =
+    participantCount > 1
+      ? formData
+          .getAll("companion_first_names")
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+          .slice(0, participantCount - 1)
+      : [];
 
   if (!UUID_RE.test(sessionId)) {
     redirect("/reserver?error=session");
   }
 
   if (!name) {
+    redirect(`/reserver?session=${encodeURIComponent(sessionId)}&error=required`);
+  }
+
+  if (participantCount > 1 && companionFirstNames.length < participantCount - 1) {
     redirect(`/reserver?session=${encodeURIComponent(sessionId)}&error=required`);
   }
 
@@ -57,6 +69,7 @@ export async function createSessionSubscription(formData: FormData) {
     name,
     phone: phone || "",
     participant_count: participantCount,
+    companion_first_names: companionFirstNames,
   });
 
   if (error) {

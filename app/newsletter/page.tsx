@@ -53,11 +53,9 @@ export async function NewsletterPanel({
 
       <MarketingPageHeader title="s'inscrire à la newsletter">
         <p>
-          Laissez-nous votre nom et votre adresse email pour recevoir les
-          nouvelles de Manufacto une fois par trimestre.
-        </p>
-        <p>
-          Vous pouvez aussi demander le calendrier mensuel des cours proposés.
+          Pour rester au courant de nos actualités, laissez-nous votre mail. On
+          ne vous inondera pas c&apos;est promis, vous recevrez de nos nouvelles
+          une fois par mois.
         </p>
       </MarketingPageHeader>
 

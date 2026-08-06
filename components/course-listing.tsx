@@ -15,7 +15,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
-const COURSES_PER_PAGE = 9;
+const COURSES_PER_PAGE = 15;
 
 type AvailabilityFilter =
   | typeof ALL

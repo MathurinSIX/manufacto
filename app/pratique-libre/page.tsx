@@ -26,9 +26,8 @@ const PRACTICE_ACTIVITY_NAMES = [
   "Couture en autonomie",
   "Couture en autonomie encadrée",
   "Céramique en autonomie",
+  "Céramique en autonomie encadrée",
   "Cuisson céramique",
-  "Électronique en autonomie",
-  "Repair Café",
 ] as const;
 
 type PracticeActivityName = (typeof PRACTICE_ACTIVITY_NAMES)[number];
@@ -40,7 +39,7 @@ type PracticeOfferInput = {
   detail?: string | ReactNode;
   image?: string;
   detailImage?: string;
-  /** When false, no online reservation link is shown (e.g. cuisson). */
+  /** When false, no online reservation link is shown. */
   reservable?: boolean;
 };
 
@@ -66,7 +65,6 @@ const disciplineRows = [
   ["menuiserie", "text-[#f56800]", "menuiserie"],
   ["couture", "text-[#4a56dd]", "couture"],
   ["céramique", "text-[#d73459]", "ceramique"],
-  ["électronique", "text-[#20b75a]", "electronique"],
 ];
 
 const menuiserieOffers: PracticeOfferInput[] = [
@@ -76,7 +74,7 @@ const menuiserieOffers: PracticeOfferInput[] = [
     summary:
       "Ce créneau d’une heure permet d’être accompagné par un professionnel dans la phase de conception du projet.",
     detail:
-      "En menuiserie, la phase de conception est une étape essentielle du projet. Réfléchir à ses plans, à ses assemblages, préparer ses fiches de débit, sont des étapes fondamentales avant de s’engager dans un projet, et permettent de se donner toutes les chances de réussir à le mener à bien.\nLes créneaux de préparation au projet sont des créneaux dédiés à cette réflexion, accompagnés d’un professionnel. Nous vous accompagnons pour réfléchir à votre projet, échanger sur ses orientations, commenter vos plans et vérifier qu’ils correspondent bien à vos ambitions et à vos compétences.\n\nBien préparer son projet en amont, c’est gagner beaucoup de temps une fois que vous commencerez à lui donner vie.\nSi vous débutez, nous vous invitons vivement à prendre quelques séances de préparation au projet pour apprendre à mener à bien un projet de menuiserie, dès les premières étapes.\n\nTarif :\n4 crédits / heure.\n\nCréneaux disponibles :\nmardi de 17h à 18h\nmercredi, de 17h à 19h",
+      "En menuiserie, la phase de conception est une étape essentielle du projet. Réfléchir à ses plans, à ses assemblages, préparer ses fiches de débit, sont des étapes fondamentales avant de s’engager dans un projet, et permettent de se donner toutes les chances de réussir à le mener à bien.\nLes créneaux de préparation au projet sont des créneaux dédiés à cette réflexion, accompagnés d’un professionnel. Nous vous accompagnons pour réfléchir à votre projet, échanger sur ses orientations, commenter vos plans et vérifier qu’ils correspondent bien à vos ambitions et à vos compétences.\n\nBien préparer son projet en amont, c’est gagner beaucoup de temps une fois que vous commencerez à lui donner vie.\nSi vous débutez, nous vous invitons vivement à prendre une ou plusieurs séances de préparation au projet pour apprendre à mener à bien un projet de menuiserie, dès les premières étapes.\n\nSi vous êtes intéressés, veuillez nous contacter à l’adresse suivante :\ncontact@manufacto-marseille.fr\n\nTarif :\n4 crédits / heure.",
     image: "/assets/pratique libre/Frame 29.jpg",
     detailImage: "/assets/pratique libre/Frame 19.jpg",
   },
@@ -86,7 +84,7 @@ const menuiserieOffers: PracticeOfferInput[] = [
     summary:
       "Des créneaux à réserver dès que vous passez à la phase de réalisation de votre projet, et que vous vous sentez autonome pour le mener à bien.",
     detail:
-      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. L’autonomie complète s’adresse à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique mobilisable. Sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet dans les espaces établis.\n\nL’autonomie n’est pas un statut en soi : vous pouvez tout à fait alterner des créneaux d’autonomie encadrée avec des créneaux d’autonomie complète, selon les phases de votre projet. C’est à vous de juger de vos compétences par rapport à un objectif donné.\n\nTarif :\n2 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 13h à 20h\nmercredi, de 9h à 13h et de 17h à 21h\njeudi, de 13h à 17h,\nvendredi, de 9h à 17h,\nsamedi*, de 13h à 17h, et parfois le matin (selon calendrier)\nnous sommes fermés les derniers samedi du mois.",
+      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. L’autonomie complète s’adresse à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique mobilisable. Sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet dans les espaces établis.\n\nL’autonomie n’est pas un statut en soi : vous pouvez tout à fait alterner des créneaux d’autonomie encadrée avec des créneaux d’autonomie complète, selon les phases de votre projet. C’est à vous de juger de vos compétences par rapport à un objectif donné.\n\nDans l’atelier de menuiserie, il est impératif de venir avec des chaussures fermées.\n\nTarif :\n2 crédits / heure.",
     image: "/assets/pratique libre/Frame 34.jpg",
     detailImage: "/assets/pratique libre/Frame 21.jpg",
   },
@@ -96,7 +94,7 @@ const menuiserieOffers: PracticeOfferInput[] = [
     summary:
       "Des créneaux à réserver pour donner vie à votre projet, tout en ayant un encadrant technique de référence que vous pourrez mobiliser si nécessaire.",
     detail:
-      "A la différence de l’autonomie complète, lors des créneaux d’autonomie encadrée, un encadrant technique est présent dans l’espace établi, et peut répondre à vos questions si besoin est. Cette personne de référence peut-être mobilisée pour vous conseiller sur certaines étapes de votre projet, vous donner un regard sur la manière dont vous envisagez de le réaliser, vous conseiller sur l’utilisation de certaines machines.\nEn revanche, ces créneaux n’ont pas vocation à vous apprendre à utiliser des machines spécifiques, ni à faire votre projet à votre place. Si vous voulez apprendre à utiliser de nouveaux outils, réservez plutôt le cours de montée en compétences correspondant.\n\nTarif :\n3 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 18h à 20h\nmercredi, de 19h à 21h",
+      "A la différence de l’autonomie complète, lors des créneaux d’autonomie encadrée, un encadrant technique est présent dans l’espace établi, et peut répondre à vos questions si besoin est. Cette personne de référence peut-être mobilisée pour vous conseiller sur certaines étapes de votre projet, vous donner un regard sur la manière dont vous envisagez de le réaliser, vous conseiller sur l’utilisation de certaines machines.\nEn revanche, ces créneaux n’ont pas vocation à vous apprendre à utiliser des machines spécifiques, ni à faire votre projet à votre place. Si vous n’avez jamais utilisé de machines de menuiserie, nous vous conseillons de commencer par un des cours de notre catalogue pour vous familiariser avec des premiers outils.\n\nDans l’atelier de menuiserie, il est impératif de venir avec des chaussures fermées.\n\nTarif :\n3 crédits / heure.",
     image: "/assets/pratique libre/Frame 30.jpg",
     detailImage: "/assets/pratique libre/Frame 20.jpg",
   },
@@ -109,7 +107,7 @@ const coutureOffers: PracticeOfferInput[] = [
     summary:
       "Des créneaux à réserver pour réaliser vos projets, dès que vous vous sentez autonome pour le mener à bien.",
     detail:
-      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. L’autonomie complète s’adresse à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique mobilisable. Sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet.\nL’autonomie complète n’est pas un statut en soi : vous pouvez tout à fait réserver des créneaux en autonomie complète sur certains projets, ou étapes de votre projet, et préférer l’autonomie encadrée une prochaine fois. C’est à vous de juger de vos compétences par rapport à un objectif donné.\n\nTarif :\n1 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 13h à 20h\nmercredi, de 17h à 21h\njeudi, de 13h à 21h\nvendredi, de 9h à 17h\nsamedi, de 9h à 12h et de 13h à 17h",
+      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. L’autonomie complète s’adresse à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique mobilisable. Sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet.\nL’autonomie complète n’est pas un statut en soi : vous pouvez tout à fait réserver des créneaux en autonomie complète sur certains projets, ou étapes de votre projet, et préférer l’autonomie encadrée une prochaine fois. C’est à vous de juger de vos compétences par rapport à un objectif donné.\n\nTarif :\n1 crédits / heure.",
     image: "/assets/pratique libre/Frame 31.jpg",
     detailImage: "/assets/pratique libre/Frame 22.jpg",
   },
@@ -117,9 +115,9 @@ const coutureOffers: PracticeOfferInput[] = [
     title: "Autonomie encadrée",
     activityName: "Couture en autonomie encadrée",
     summary:
-      "Des créneaux à réserver pour donner vie à votre projet, tout en ayant un encadrant technique de référence que vous pourrez mobiliser si nécessaire.",
+      "Des créneaux à réserver pour donner vie à votre projet, tout en ayant un encadrant technique de référence sur place que vous pourrez mobiliser si nécessaire.",
     detail:
-      "A la différence de l’autonomie complète, lors des créneaux d’autonomie encadrée, un encadrant ou une encadrante est présente dans l’espace couture, et peut répondre à vos questions si besoin est. Cette personne de référence peut-être mobilisée pour vous conseiller sur certaines étapes de votre projet, vous donner un regard critique sur la manière dont vous envisagez de le réaliser, vous conseiller sur l’utilisation de certaines techniques.\nCes créneaux n’ont pas vocation, en revanche, à vous apprendre à utiliser des machines spécifiques, ni à faire votre projet à votre place.\n\nTarif :\n2 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 18h à 20h\nmercredi, de 9h à 12h\njeudi, de 19h à 21h",
+      "A la différence de l’autonomie complète, lors des créneaux d’autonomie encadrée, un encadrant ou une encadrante est présente dans l’espace couture, et peut répondre à vos questions si besoin est. Cette personne de référence peut-être mobilisée pour vous conseiller sur certaines étapes de votre projet, vous donner un regard critique sur la manière dont vous envisagez de le réaliser, vous conseiller sur l’utilisation de certaines techniques.\nCes créneaux n’ont pas vocation, en revanche, à vous apprendre à utiliser des machines spécifiques, ni à faire votre projet à votre place. Pour prendre un créneau en autonomie encadrée, vous devez avoir déjà utilisé une machine à coudre. Vous devez savoir installer votre fil correctement et recharger une canette. Si ça n’est pas le cas, nous vous invitons à suivre le cours d’initiation “apprendre à utiliser une machine à coudre”, ou autre cours débutant, avant de prendre un créneau en autonomie encadrée.\n\nTarif :\n2 crédits / heure.",
     image: "/assets/pratique libre/Vector.jpg",
     detailImage: "/assets/pratique libre/Frame 23.jpg",
   },
@@ -132,42 +130,29 @@ const ceramiqueOffers: PracticeOfferInput[] = [
     summary:
       "Des créneaux à réserver pour donner vie à vos projets, de manière autonome.",
     detail:
-      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. En céramique, nous ne proposons que des créneaux d’autonomie complète, qui s’adressent à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique.\nL’équipe de manufacto est toujours présente dans les locaux, mais sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet.\nLa cuisson est incluse dans le tarif pour les pièces qui seront réalisées à l’atelier.\n\nTarif :\n2 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 13h à 20h\nmercredi, de 9h à 21h\njeudi, de 13h à 21h\nvendredi, de 9h à 17h\nsamedi, de 9h à 12h et de 13h à 17h",
+      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. L’autonomie complète s’adresse à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique mobilisable. Sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet.\nL’autonomie n’est pas un statut en soi : vous pouvez tout à fait alterner des créneaux d’autonomie encadrée avec des créneaux d’autonomie complète, selon les phases de votre projet. C’est à vous de juger de vos compétences par rapport à un objectif donné.\nLa cuisson est incluse dans le tarif pour les pièces qui seront réalisées à l’atelier.\n\nTarif :\n2 crédits / heure.",
+    image: "/assets/pratique libre/Frame 32.jpg",
+    detailImage: "/assets/pratique libre/Frame 25.jpg",
+  },
+  {
+    title: "Autonomie encadrée",
+    activityName: "Céramique en autonomie encadrée",
+    summary:
+      "Des créneaux à réserver pour donner vie à votre projet, tout en ayant une encadrante technique de référence que vous pourrez mobiliser si nécessaire.",
+    detail:
+      "À la différence de l’autonomie complète, lors des créneaux d’autonomie encadrée, une encadrante est présente dans l’espace établi, et peut répondre à vos questions si besoin est. Cette personne de référence peut-être mobilisée pour vous conseiller sur certaines étapes de votre projet, vous donner un regard sur la manière dont vous envisagez de le réaliser, vous conseiller sur l’utilisation de certaines techniques.\n\nTarif :\n3 crédits / heure.",
     image: "/assets/pratique libre/Frame 32.jpg",
     detailImage: "/assets/pratique libre/Frame 25.jpg",
   },
   {
     title: "Cuisson",
     activityName: "Cuisson céramique",
-    reservable: false,
+    reservable: true,
     summary:
       "Cuisez les pièces que vous avez réalisées hors de l’atelier.\n\nLes cuissons sont incluses pour les pièces ayant été réalisées chez nous.",
     detail: <CuissonOfferDetail />,
     image: "/assets/pratique libre/Frame 36.jpg",
     detailImage: "/assets/pratique libre/Frame 26.jpg",
-  },
-];
-
-const electroniqueOffers: PracticeOfferInput[] = [
-  {
-    title: "Autonomie complète",
-    activityName: "Électronique en autonomie",
-    summary:
-      "Des créneaux à réserver pour donner vie à vos projets, de manière autonome.",
-    detail:
-      "Chez manufacto, nous partons du principe que chacun est apte à juger de sa capacité à mener à bien son projet. En électronique, nous ne proposons que des créneaux d’autonomie complète, qui s’adressent à celles et ceux qui cherchent un espace où pratiquer sans avoir besoin de la présence d’un encadrant technique.\nL’équipe de manufacto est toujours présente dans les locaux, mais sur ces créneaux, il n’y a pas de professionnel dédié à l’accompagnement au projet. Vous aurez accès à l’espace et aux outils nécessaires pour réparer ou fabriquer de petits objets électriques / électroniques.\n\nTarif :\n1 crédits / heure.\n\nCréneaux disponibles :\nmardi, de 13h à 20h\nmercredi, de 17h à 21h\njeudi, de 13h à 21h\nvendredi, de 9h à 17h\nsamedi, de 9h à 12h et de 13h à 17h",
-    image: "/assets/pratique libre/Frame 35.jpg",
-    detailImage: "/assets/pratique libre/Frame 28.jpg",
-  },
-  {
-    title: "Repair Café",
-    activityName: "Repair Café",
-    summary:
-      "Des créneaux collectifs pour vous aider à réparer vos petits objets ménagers.",
-    detail:
-      "Les Repair Café, ce sont des moments conviviaux et collectifs pour apprendre à réparer ensemble. Vous venez avec un objet abîmé, et vous apprendrez, épaulé par nos bénévoles, à le réparer et à lui donner une deuxième vie.\n\nTarif :\nprix libre. Une adhésion à l’association vous sera demandée sur place.\n\nCréneaux disponibles :\ndates à ajouter",
-    image: "/assets/pratique libre/Frame 33.jpg",
-    detailImage: "/assets/pratique libre/Frame 27.jpg",
   },
 ];
 
@@ -214,7 +199,6 @@ const ASSETS = {
   menuiserie: "/assets/pratique libre/Rectangle 11.jpg",
   couture: "/assets/pratique libre/Rectangle 12.jpg",
   ceramique: "/assets/pratique libre/Rectangle 15.jpg",
-  electronique: "/assets/pratique libre/Rectangle 16.jpg",
 } as const;
 
 function InfoSection({
@@ -381,7 +365,7 @@ async function PratiqueLibreContent() {
                 <p className="text-xl leading-normal text-black/75">
                   Une première venue pour tester l&apos;atelier.
                 </p>
-                <p className="mt-2 text-xs leading-tight text-black/65">
+                <p className="mt-2 text-base font-semibold leading-snug text-black/80 md:text-lg">
                   limitée à un achat par personne
                 </p>
               </div>
@@ -515,7 +499,7 @@ async function PratiqueLibreContent() {
                         Machines à disposition :
                       </h3>
                       <ul className="mt-6 max-w-[690px] list-disc space-y-1 pl-5 text-xl leading-normal text-black/75">
-                        <li>piqueuse industrielle (PFAFF 463)</li>
+                        <li>piqueuses industrielles</li>
                         <li>machines à coudre familiales</li>
                         <li>surjeteuse</li>
                       </ul>
@@ -558,7 +542,7 @@ async function PratiqueLibreContent() {
                       </p>
 
                       <h3 className="mt-10 text-[28px] font-bold leading-tight text-black">
-                        Outils à disposition :
+                        Outils et matières à disposition:
                       </h3>
                       <ul className="mt-6 max-w-[690px] list-disc space-y-1 pl-5 text-xl leading-normal text-black/75">
                         <li>
@@ -570,6 +554,8 @@ async function PratiqueLibreContent() {
                           tables de travail pour le modelage et l’assemblage
                         </li>
                         <li>four</li>
+                        <li>Emaux, engobes</li>
+                        <li>Terres grès</li>
                       </ul>
                     </div>
 
@@ -586,51 +572,7 @@ async function PratiqueLibreContent() {
                     </h3>
                     <OfferCardTabs
                       offers={withActivityIds(ceramiqueOffers)}
-                      columns={2}
-                      isLoggedIn={!!user}
-                    />
-                  </section>
-                </div>
-              ) : null}
-              {label === "électronique" ? (
-                <div className="pb-10 pt-8">
-                  <div className="grid gap-10 lg:grid-cols-[1fr_520px]">
-                    <div>
-                      <p className="max-w-[690px] text-xl leading-normal text-black/75">
-                        L&apos;espace électronique est organisé autour de
-                        plusieurs tables de travail, que chacun peut réserver
-                        pour la durée et l&apos;usage de son choix.
-                      </p>
-
-                      <h3 className="mt-10 text-[28px] font-bold leading-tight text-black">
-                        Outils à disposition :
-                      </h3>
-                      <ul className="mt-6 max-w-[690px] list-disc space-y-1 pl-5 text-xl leading-normal text-black/75">
-                        <li>Caisse à outils de précisions</li>
-                        <li>Fer à souder</li>
-                        <li>Station à air chaud</li>
-                        <li>Multimètre</li>
-                        <li>
-                          Consommables courants (gaine thermorétractable,
-                          câble,…)
-                        </li>
-                      </ul>
-                    </div>
-
-                    <ImageTile
-                      src={ASSETS.electronique}
-                      alt="Réparation électronique sur carte"
-                      className="min-h-[560px] rounded-[18px]"
-                    />
-                  </div>
-
-                  <section className="mt-10">
-                    <h3 className="text-[28px] font-bold leading-tight text-black">
-                      Notre offre :
-                    </h3>
-                    <OfferCardTabs
-                      offers={withActivityIds(electroniqueOffers)}
-                      columns={2}
+                      columns={3}
                       isLoggedIn={!!user}
                     />
                   </section>
@@ -707,12 +649,20 @@ async function PratiqueLibreContent() {
                 disposez de 3 mois pour utiliser votre solde de crédits.
               </p>
             </div>
-            <p className="mt-14 max-w-[390px] text-xs leading-tight text-black/75">
-              15% de réduction sur tous nos tarifs pour les personnes
-              étudiantes, au chômages, bénéficiaires du RSA. Et si vous ne
-              rentrez dans aucune de ces cases mais que nos tarifs sont à freins
-              à votre venue, venez nous rencontrer et discutons en.
-            </p>
+            <div className="mt-14 max-w-[470px] rounded-[18px] border border-[#f56800]/50 bg-[#fff8f0] px-6 py-5 text-base leading-normal text-black/80">
+              <p className="font-semibold">
+                15% de réduction sur tous nos tarifs pour les personnes
+                étudiantes, au chômage, bénéficiaires du RSA.
+              </p>
+              <p className="mt-3">
+                Réductions appliquées uniquement pour les paiements sur place.
+              </p>
+              <p className="mt-3 text-sm leading-snug text-black/70">
+                Et si vous ne rentrez dans aucune de ces cases mais que nos
+                tarifs sont un frein à votre venue, venez nous rencontrer et
+                discutons-en.
+              </p>
+            </div>
           </div>
           <AtelierSubscriptionList returnPath="/pratique-libre" />
         </div>
@@ -725,11 +675,8 @@ async function PratiqueLibreContent() {
 
         <InfoSection title="la gestion du temps" star={ASSETS.starGreen}>
           <p>
-            La durée minimale de réservation en pratique libre est de{" "}
-            <strong>deux heures consécutives.</strong>
-            <br />
-            Vous pouvez ensuite, <strong>par palier d&apos;une heure</strong>,
-            rester aussi longtemps que nos horaires le permettent.
+            Vous pouvez réserver <strong>par palier d&apos;une heure</strong>,
+            et rester aussi longtemps que nos horaires le permettent.
           </p>
           <p>
             Le temps de rangement et de nettoyage de votre espace est compris
@@ -753,6 +700,10 @@ async function PratiqueLibreContent() {
             embout de chaussure de sécurité). Toutefois, si vous êtes un
             pratiquant régulier, nous vous invitons à venir avec votre
             équipement.
+          </p>
+          <p>
+            L&apos;accès en menuiserie se fait uniquement avec des chaussures
+            fermées.
           </p>
           <p>
             Certaines machines en menuiserie notamment, ne sont accessibles

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,11 +18,13 @@ import {
   getAllUsers,
   updateSession,
   deleteSession,
+  deleteSessions,
 } from "@/app/admin/actions";
 import { Loader2, Plus, X, ChevronLeft, ChevronRight, Users, Pencil, Calendar, Trash2, Search } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -40,6 +42,7 @@ import {
   formatParisDate,
   formatParisTime,
   getParisHour,
+  getParisWeekOffset,
   getParisWeekMonday,
   isSameParisDay,
   PARIS_TIMEZONE,
@@ -58,10 +61,28 @@ import {
 
 const PRACTICE_ACTIVITY_FILTER_ALL = "__all__";
 
+type RegistrationPresenceFilter = "all" | "with" | "without";
+
+const REGISTRATION_PRESENCE_OPTIONS: {
+  value: RegistrationPresenceFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "Tous les créneaux" },
+  { value: "with", label: "Avec inscrits" },
+  { value: "without", label: "Sans inscrits" },
+];
+
 function parseWeekOffsetParam(value: string | null): number {
   if (value === null || value.trim() === "") return 0;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseSelectedDateParam(value: string | null): string {
+  if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+  return formatParisDate(new Date());
 }
 
 type User = {
@@ -81,6 +102,8 @@ type RegisteredUser = {
   name: string;
   reservedStartTs?: string | null;
   reservedEndTs?: string | null;
+  participantCount?: number;
+  companionFirstNames?: string[];
 };
 
 type PublicRegisteredUser = {
@@ -88,6 +111,8 @@ type PublicRegisteredUser = {
   name: string;
   phone: string;
   createdAt: string;
+  participantCount?: number;
+  companionFirstNames?: string[];
 };
 
 type SessionWithUsers = {
@@ -102,12 +127,38 @@ type SessionWithUsers = {
   activity_type: string | null;
 };
 
+function getSessionParticipantTotal(session: SessionWithUsers) {
+  const registeredTotal = (session.registeredUsers ?? []).reduce(
+    (sum, user) => sum + (user.participantCount ?? 1),
+    0,
+  );
+  const publicTotal = (session.publicRegisteredUsers ?? []).reduce(
+    (sum, user) => sum + (user.participantCount ?? 1),
+    0,
+  );
+  return registeredTotal + publicTotal;
+}
+
+function sessionHasRegistrations(session: SessionWithUsers) {
+  return getSessionParticipantTotal(session) > 0;
+}
+
+function matchesRegistrationPresenceFilter(
+  session: SessionWithUsers,
+  filter: RegistrationPresenceFilter,
+) {
+  if (filter === "all") return true;
+  const hasRegistrations = sessionHasRegistrations(session);
+  return filter === "with" ? hasRegistrations : !hasRegistrations;
+}
+
 function toPracticeReservationSlots(
   users: RegisteredUser[],
 ): PracticeReservationSlot[] {
   return users.map((user) => ({
     reservedStartTs: user.reservedStartTs,
     reservedEndTs: user.reservedEndTs,
+    participantCount: user.participantCount ?? 1,
   }));
 }
 
@@ -177,14 +228,11 @@ function canAdminAddUserToSession(
     return true;
   }
 
-  const publicCount = session.publicRegisteredUsers?.length || 0;
-  const totalCount = (session.registeredUsers?.length || 0) + publicCount;
-
   if (isPracticeView) {
     return !getPracticeSessionCapacity(session).areAllHoursFull;
   }
 
-  return totalCount < session.max_registrations;
+  return getSessionParticipantTotal(session) < session.max_registrations;
 }
 
 function getPracticeSessionCapacity(session: SessionWithUsers) {
@@ -291,7 +339,7 @@ function WeekViewSessions({
                       : null;
                     const registeredCount = isPracticeView
                       ? (practiceCapacity?.peakHourCount ?? 0) + publicCount
-                      : (session.registeredUsers?.length || 0) + publicCount;
+                      : getSessionParticipantTotal(session);
                     const isFull = isPracticeView
                       ? (practiceCapacity?.isAnyHourFull ?? false)
                       : maxReg !== null && registeredCount >= maxReg;
@@ -389,12 +437,15 @@ export function AdminActivitiesTab({
   onCopyWeeks,
   onSessionsCreated,
 }: AdminActivitiesTabProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [selectedDate, setSelectedDate] = useState(() => formatParisDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() =>
+    parseSelectedDateParam(searchParams.get("selectedDate")),
+  );
   const [selectedSession, setSelectedSession] = useState<SessionWithUsers | null>(null);
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -422,18 +473,87 @@ export function AdminActivitiesTab({
     setEditStartTime(`${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
   };
   const [viewMode, setViewMode] = useState<"day" | "week">("week");
-  const [weekOffset, setWeekOffset] = useState(() =>
-    parseWeekOffsetParam(searchParams.get("weekOffset")),
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(
+    () => new Set(),
   );
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(() => {
+    const fromUrl = searchParams.get("weekOffset");
+    if (fromUrl !== null && fromUrl.trim() !== "") {
+      return parseWeekOffsetParam(fromUrl);
+    }
+    const dateFromUrl = searchParams.get("selectedDate");
+    if (dateFromUrl && /^\d{4}-\d{2}-\d{2}$/.test(dateFromUrl)) {
+      return getParisWeekOffset(dateFromUrl);
+    }
+    return 0;
+  });
   const [selectedPracticeActivityId, setSelectedPracticeActivityId] = useState(
     PRACTICE_ACTIVITY_FILTER_ALL,
   );
+  const [registrationPresenceFilter, setRegistrationPresenceFilter] =
+    useState<RegistrationPresenceFilter>("all");
   const isPracticeView = activityTypes?.some((type) =>
     PRACTICE_ACTIVITY_TYPES.has(type),
   ) ?? false;
 
+  const syncCalendarToUrl = useCallback(
+    (nextWeekOffset: number, nextSelectedDate: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextWeekOffset === 0) {
+        params.delete("weekOffset");
+      } else {
+        params.set("weekOffset", String(nextWeekOffset));
+      }
+      if (nextSelectedDate === formatParisDate(new Date())) {
+        params.delete("selectedDate");
+      } else {
+        params.set("selectedDate", nextSelectedDate);
+      }
+      setTimeout(() => {
+        router.replace(`/admin?${params.toString()}`, { scroll: false });
+      }, 0);
+    },
+    [router, searchParams],
+  );
+
+  const handleWeekOffsetChange = useCallback(
+    (nextOffset: number) => {
+      setWeekOffset(nextOffset);
+      setSelectedSessionIds(new Set());
+      const weekMonday = getParisWeekMonday(nextOffset);
+      const weekSunday = addParisCalendarDays(weekMonday, 6);
+      const nextSelectedDate =
+        selectedDate >= weekMonday && selectedDate <= weekSunday
+          ? selectedDate
+          : weekMonday;
+      setSelectedDate(nextSelectedDate);
+      syncCalendarToUrl(nextOffset, nextSelectedDate);
+    },
+    [selectedDate, syncCalendarToUrl],
+  );
+
+  const handleSelectedDateChange = useCallback(
+    (nextDate: string) => {
+      setSelectedDate(nextDate);
+      setSelectedSessionIds(new Set());
+      const nextWeekOffset = getParisWeekOffset(nextDate);
+      setWeekOffset(nextWeekOffset);
+      syncCalendarToUrl(nextWeekOffset, nextDate);
+    },
+    [syncCalendarToUrl],
+  );
+
   useEffect(() => {
-    setWeekOffset(parseWeekOffsetParam(searchParams.get("weekOffset")));
+    const urlWeek = searchParams.get("weekOffset");
+    const urlDate = searchParams.get("selectedDate");
+    if (urlWeek !== null && urlWeek.trim() !== "") {
+      setWeekOffset(parseWeekOffsetParam(urlWeek));
+    }
+    if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+      setSelectedDate(urlDate);
+    }
   }, [searchParams]);
 
   const visibleActivities = useMemo(() => {
@@ -568,10 +688,14 @@ export function AdminActivitiesTab({
       }
     });
     
-    return allSessions.sort((a, b) => 
-      new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime()
-    );
-  }, [visibleActivities, selectedDate]);
+    return allSessions
+      .filter((session) =>
+        matchesRegistrationPresenceFilter(session, registrationPresenceFilter),
+      )
+      .sort((a, b) => 
+        new Date(a.start_ts).getTime() - new Date(b.start_ts).getTime()
+      );
+  }, [visibleActivities, selectedDate, registrationPresenceFilter]);
 
   // Get all sessions for the selected week
   const sessionsForWeek = useMemo(() => {
@@ -588,12 +712,21 @@ export function AdminActivitiesTab({
         const dayData = activity.sessionsByDate.find(d => d.date === dateKey);
         if (dayData) {
           dayData.sessions.forEach(session => {
-            daySessions.push({
+            const withActivity = {
               ...session,
               activity_id: activity.id,
               activity_name: activity.name,
               activity_type: activity.type,
-            });
+            };
+            if (
+              !matchesRegistrationPresenceFilter(
+                withActivity,
+                registrationPresenceFilter,
+              )
+            ) {
+              return;
+            }
+            daySessions.push(withActivity);
           });
         }
       });
@@ -603,12 +736,20 @@ export function AdminActivitiesTab({
     });
     
     return weekSessions;
-  }, [visibleActivities, weekOffset]);
+  }, [visibleActivities, weekOffset, registrationPresenceFilter]);
 
   const practiceWeekCalendarSessions = useMemo((): AdminWeekCalendarSession[] => {
     const sessions: AdminWeekCalendarSession[] = [];
     sessionsForWeek.forEach((daySessions, dateKey) => {
       for (const session of daySessions) {
+        const publicCount = session.publicRegisteredUsers?.length || 0;
+        const practiceCapacity = isPracticeView
+          ? getPracticeSessionCapacity(session)
+          : null;
+        const registrationCount = isPracticeView
+          ? (practiceCapacity?.peakHourCount ?? 0) + publicCount
+          : getSessionParticipantTotal(session);
+
         sessions.push({
           id: session.id,
           date: dateKey,
@@ -617,11 +758,12 @@ export function AdminActivitiesTab({
           activity_id: session.activity_id,
           activity_name: session.activity_name,
           max_registrations: session.max_registrations,
+          registrationCount,
         });
       }
     });
     return sessions;
-  }, [sessionsForWeek]);
+  }, [sessionsForWeek, isPracticeView]);
 
   const weekSessionById = useMemo(() => {
     const map = new Map<string, SessionWithUsers>();
@@ -834,10 +976,112 @@ export function AdminActivitiesTab({
       if (result.error) {
         setError(result.error);
       } else {
+        setSelectedSessionIds((prev) => {
+          if (!prev.has(session.id)) return prev;
+          const next = new Set(prev);
+          next.delete(session.id);
+          return next;
+        });
         await loadData();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    }
+  };
+
+  const toggleSessionSelection = useCallback((sessionId: string) => {
+    setSelectedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const daySessionIds = useMemo(
+    () => sessionsForDate.map((session) => session.id),
+    [sessionsForDate],
+  );
+
+  const weekSessionIds = useMemo(() => {
+    const ids: string[] = [];
+    sessionsForWeek.forEach((daySessions) => {
+      for (const session of daySessions) {
+        ids.push(session.id);
+      }
+    });
+    return ids;
+  }, [sessionsForWeek]);
+
+  const selectableSessionIds =
+    viewMode === "day" ? daySessionIds : weekSessionIds;
+
+  const allVisibleSelected =
+    selectableSessionIds.length > 0 &&
+    selectableSessionIds.every((id) => selectedSessionIds.has(id));
+
+  const someVisibleSelected =
+    selectableSessionIds.some((id) => selectedSessionIds.has(id)) &&
+    !allVisibleSelected;
+
+  const toggleSelectAllVisible = () => {
+    setSelectedSessionIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const id of selectableSessionIds) {
+          next.delete(id);
+        }
+        return next;
+      }
+      const next = new Set(prev);
+      for (const id of selectableSessionIds) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDeleteSessions = async () => {
+    const ids = [...selectedSessionIds];
+    if (ids.length === 0) return;
+
+    if (
+      !confirm(
+        `Supprimer ${ids.length} créneau${ids.length > 1 ? "x" : ""} sélectionné${ids.length > 1 ? "s" : ""} ?\n\nLes créneaux qui ont déjà des inscriptions seront ignorés.\nCette action est irréversible.`,
+      )
+    ) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    setError(null);
+    try {
+      const result = await deleteSessions(ids);
+      if (result.deleted > 0) {
+        await loadData();
+      }
+
+      const remaining = new Set(
+        result.failures.map((failure) => failure.sessionId),
+      );
+      setSelectedSessionIds(remaining);
+
+      if (result.error && result.deleted === 0) {
+        setError(result.error);
+      } else if (result.failures.length > 0) {
+        setError(
+          `${result.deleted} supprimé${result.deleted > 1 ? "s" : ""}, ${result.failures.length} non supprimé${result.failures.length > 1 ? "s" : ""} (inscriptions présentes).`,
+        );
+      } else {
+        setSelectionMode(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -882,14 +1126,13 @@ export function AdminActivitiesTab({
   };
 
   const navigateDay = (direction: 'prev' | 'next') => {
-    setSelectedDate(
+    handleSelectedDateChange(
       addParisCalendarDays(selectedDate, direction === "next" ? 1 : -1),
     );
   };
 
   const goToToday = () => {
-    setSelectedDate(formatParisDate(new Date()));
-    setWeekOffset(0);
+    handleSelectedDateChange(formatParisDate(new Date()));
   };
 
   if (loading) {
@@ -905,6 +1148,30 @@ export function AdminActivitiesTab({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h3 className="text-lg font-semibold">{title}</h3>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => manualCreate.openManualCreate(selectedDate)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Ajouter un créneau
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={selectionMode || selectedSessionIds.size > 0 ? "default" : "outline"}
+            onClick={() => {
+              setSelectionMode((prev) => {
+                if (prev) {
+                  setSelectedSessionIds(new Set());
+                }
+                return !prev;
+              });
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {selectionMode ? "Annuler la sélection" : "Sélectionner"}
+          </Button>
           {onCopyWeeks ? (
             <button
               type="button"
@@ -914,7 +1181,14 @@ export function AdminActivitiesTab({
               Recopier des semaines complètes
             </button>
           ) : null}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "day" | "week")}>
+          <Tabs
+            value={viewMode}
+            onValueChange={(v) => {
+              setViewMode(v as "day" | "week");
+              setSelectedSessionIds(new Set());
+              setSelectionMode(false);
+            }}
+          >
             <TabsList>
               <TabsTrigger value="day">
                 <Calendar className="h-4 w-4 mr-2" />
@@ -929,11 +1203,93 @@ export function AdminActivitiesTab({
         </div>
       </div>
 
+      {(selectionMode || selectedSessionIds.size > 0) && (
+        <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={
+                  allVisibleSelected
+                    ? true
+                    : someVisibleSelected
+                      ? "indeterminate"
+                      : false
+                }
+                onCheckedChange={() => toggleSelectAllVisible()}
+              />
+              <span>
+                {selectedSessionIds.size > 0
+                  ? `${selectedSessionIds.size} créneau${selectedSessionIds.size > 1 ? "x" : ""} sélectionné${selectedSessionIds.size > 1 ? "s" : ""}`
+                  : viewMode === "day"
+                    ? "Tout sélectionner (jour)"
+                    : "Tout sélectionner (semaine)"}
+              </span>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedSessionIds(new Set());
+                setSelectionMode(false);
+              }}
+            >
+              Effacer
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={selectedSessionIds.size === 0 || bulkDeleting}
+              onClick={() => void handleBulkDeleteSessions()}
+            >
+              {bulkDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Supprimer la sélection
+            </Button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="text-sm text-destructive p-4 bg-destructive/10 rounded-md">
           {error}
         </div>
       )}
+
+      <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Filtrer par inscriptions
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {REGISTRATION_PRESENCE_OPTIONS.map((option) => {
+            const isActive = registrationPresenceFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setRegistrationPresenceFilter(option.value);
+                  setSelectedSessionIds(new Set());
+                }}
+                className={cn(
+                  "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-foreground opacity-80 hover:opacity-100",
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {isPracticeView ? (
         <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
@@ -1030,7 +1386,7 @@ export function AdminActivitiesTab({
       {viewMode === "week" && (
         <AdminWeekNavigator
           weekOffset={weekOffset}
-          onWeekOffsetChange={setWeekOffset}
+          onWeekOffsetChange={handleWeekOffsetChange}
         />
       )}
 
@@ -1040,8 +1396,16 @@ export function AdminActivitiesTab({
           <div className="text-center py-12 text-muted-foreground border rounded-lg">
             <p>
               {isPracticeView
-                ? "Aucun créneau d'ouverture prévu pour ce jour"
-                : "Aucune session prévue pour ce jour"}
+                ? registrationPresenceFilter === "with"
+                  ? "Aucun créneau avec inscrits pour ce jour"
+                  : registrationPresenceFilter === "without"
+                    ? "Aucun créneau sans inscrits pour ce jour"
+                    : "Aucun créneau d'ouverture prévu pour ce jour"
+                : registrationPresenceFilter === "with"
+                  ? "Aucune session avec inscrits pour ce jour"
+                  : registrationPresenceFilter === "without"
+                    ? "Aucune session sans inscrits pour ce jour"
+                    : "Aucune session prévue pour ce jour"}
             </p>
           </div>
         ) : (
@@ -1071,7 +1435,7 @@ export function AdminActivitiesTab({
                                 toPracticeReservationSlots(session.registeredUsers ?? []),
                                 hourStart.getTime(),
                               )
-                            : (session.registeredUsers?.length || 0) + publicCount;
+                            : getSessionParticipantTotal(session);
                           const registeredCount = isPracticeView ? hourCount + publicCount : hourCount;
                           const isFull = isPracticeView
                             ? maxReg !== null && hourCount >= maxReg
@@ -1090,11 +1454,23 @@ export function AdminActivitiesTab({
                             <div
                               key={session.id}
                               className={cn(
-                                "flex items-center justify-between p-3 border rounded-md hover:shadow-sm transition-shadow",
+                                "flex items-center justify-between gap-3 p-3 border rounded-md hover:shadow-sm transition-shadow",
                                 sessionColorClass,
+                                selectedSessionIds.has(session.id) &&
+                                  "ring-2 ring-destructive/60",
                               )}
                             >
-                              <div className="flex-1">
+                              <div className="flex min-w-0 flex-1 items-start gap-3">
+                                <Checkbox
+                                  checked={selectedSessionIds.has(session.id)}
+                                  onCheckedChange={() => {
+                                    setSelectionMode(true);
+                                    toggleSessionSelection(session.id);
+                                  }}
+                                  aria-label={`Sélectionner ${session.activity_name}`}
+                                  className="mt-1"
+                                />
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="font-medium">{session.activity_name}</span>
                                   <span className="text-sm text-muted-foreground">
@@ -1113,6 +1489,7 @@ export function AdminActivitiesTab({
                                     {isFull && <span className="text-red-600">(Complet)</span>}
                                   </span>
                                 </div>
+                              </div>
                               </div>
                               <div className="flex gap-2">
                                 <Button
@@ -1173,8 +1550,11 @@ export function AdminActivitiesTab({
             activityColorIds={weekActivityColorIds}
             selectedDays={manualCreate.selectedDays}
             onToggleDay={manualCreate.onToggleDay}
-            selectable
-            onSelectSlot={manualCreate.onSelectSlot}
+            selectable={!selectionMode}
+            onSelectSlot={selectionMode ? undefined : manualCreate.onSelectSlot}
+            selectionMode={selectionMode}
+            selectedSessionIds={selectedSessionIds}
+            onToggleSessionSelection={toggleSessionSelection}
             onExistingSessionClick={(session) => {
               const fullSession = session.id ? weekSessionById.get(session.id) : undefined;
               if (fullSession) {
@@ -1186,6 +1566,9 @@ export function AdminActivitiesTab({
           {manualCreate.dialog}
         </>
       )}
+
+      {/* Keep create dialog mounted in day view too */}
+      {viewMode === "day" ? manualCreate.dialog : null}
 
       {/* Edit Session Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
@@ -1353,8 +1736,12 @@ export function AdminActivitiesTab({
               <p className="text-sm text-muted-foreground">
                 {(() => {
                   const publicCount = selectedSession?.publicRegisteredUsers?.length || 0;
-                  const reservationCount = selectedSession?.registeredUsers?.length || 0;
-                  const totalCount = reservationCount + publicCount;
+                  const reservationCount = selectedSession
+                    ? getSessionParticipantTotal(selectedSession) - publicCount
+                    : 0;
+                  const totalCount = selectedSession
+                    ? getSessionParticipantTotal(selectedSession)
+                    : 0;
                   const maxReg = selectedSession?.max_registrations;
 
                   if (isPracticeView && selectedSession) {
@@ -1407,6 +1794,14 @@ export function AdminActivitiesTab({
                       <p className="text-sm text-muted-foreground">
                         {user.phone}
                       </p>
+                      {(user.participantCount ?? 1) > 1 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {(user.participantCount ?? 1)} inscriptions
+                          {user.companionFirstNames?.length
+                            ? ` · avec ${user.companionFirstNames.join(", ")}`
+                            : ""}
+                        </p>
+                      ) : null}
                     </div>
                     <span className="rounded-full bg-[#fff8f0] px-2.5 py-1 text-xs font-medium text-[#f56800]">
                       Nom + téléphone
@@ -1425,6 +1820,14 @@ export function AdminActivitiesTab({
                       <p className="text-xs text-muted-foreground">
                         Réservé: {formatTime(user.reservedStartTs)} -{" "}
                         {formatTime(user.reservedEndTs)}
+                      </p>
+                    ) : null}
+                    {(user.participantCount ?? 1) > 1 ? (
+                      <p className="text-xs font-medium text-[#4a56dd]">
+                        {(user.participantCount ?? 1)} inscriptions
+                        {user.companionFirstNames?.length
+                          ? ` · avec ${user.companionFirstNames.join(", ")}`
+                          : ""}
                       </p>
                     ) : null}
                     </div>

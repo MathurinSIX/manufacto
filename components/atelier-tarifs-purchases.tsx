@@ -29,7 +29,7 @@ const ATELIER_SUBSCRIPTION_PLANS = [
     label: "abonnement 01",
     price: "90€",
     credits: "20 crédits",
-    copy: "L’abonnement idéal si vous voulez utiliser l’espace couture ou électronique de manière régulière.",
+    copy: "L’abonnement idéal si vous voulez utiliser l’espace couture de manière régulière.",
   },
   {
     id: "formule-02",
@@ -130,7 +130,7 @@ export async function AtelierCreditPackGrid({
     .sort((a, b) => a.amountCents - b.amountCents);
 
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
       {creditPacks.map((pack) => (
         <div
           key={pack.id}

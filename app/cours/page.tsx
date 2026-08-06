@@ -14,14 +14,96 @@ import {
   sortCoursesForListing,
 } from "./course-data";
 
+const SESSIONS_PAGE_SIZE = 1000;
+
+async function fetchAllFutureCourseSessions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  courseActivityIds: string[],
+) {
+  if (courseActivityIds.length === 0) {
+    return [] as { activity_id: string; start_ts: string; end_ts: string }[];
+  }
+
+  const nowIso = new Date().toISOString();
+  const allRows: { activity_id: string; start_ts: string; end_ts: string }[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("session")
+      .select("activity_id, start_ts, end_ts")
+      .in("activity_id", courseActivityIds)
+      .gte("start_ts", nowIso)
+      .order("start_ts", { ascending: true })
+      .range(offset, offset + SESSIONS_PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Error fetching future course sessions", error);
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    allRows.push(...data);
+
+    if (data.length < SESSIONS_PAGE_SIZE) {
+      break;
+    }
+
+    offset += SESSIONS_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+async function fetchAllCourseSessionsForDuration(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  courseActivityIds: string[],
+) {
+  if (courseActivityIds.length === 0) {
+    return [] as { activity_id: string; start_ts: string; end_ts: string }[];
+  }
+
+  const allRows: { activity_id: string; start_ts: string; end_ts: string }[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("session")
+      .select("activity_id, start_ts, end_ts")
+      .in("activity_id", courseActivityIds)
+      .order("start_ts", { ascending: false })
+      .range(offset, offset + SESSIONS_PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Error fetching course session durations", error);
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    allRows.push(...data);
+
+    if (data.length < SESSIONS_PAGE_SIZE) {
+      break;
+    }
+
+    offset += SESSIONS_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
 async function CoursContent() {
   unstable_noStore();
   const supabase = await createClient();
 
   const [
     { data: activities, error },
-    { data: futureSessions, error: sessionsError },
-    { data: sessionsForDuration, error: durationSessionsError },
     {
       data: { user },
     },
@@ -34,15 +116,6 @@ async function CoursContent() {
       .eq("type", "cours")
       .is("deleted_at", null)
       .order("name"),
-    supabase
-      .from("session")
-      .select("activity_id, start_ts, end_ts")
-      .gte("start_ts", new Date().toISOString())
-      .order("start_ts", { ascending: true }),
-    supabase
-      .from("session")
-      .select("activity_id, start_ts, end_ts")
-      .order("start_ts", { ascending: false }),
     supabase.auth.getUser(),
   ]);
 
@@ -50,13 +123,11 @@ async function CoursContent() {
     console.error("Error fetching activities", error);
   }
 
-  if (sessionsError) {
-    console.error("Error fetching future course sessions", sessionsError);
-  }
-
-  if (durationSessionsError) {
-    console.error("Error fetching course session durations", durationSessionsError);
-  }
+  const courseActivityIds = (activities ?? []).map((activity) => activity.id);
+  const [futureSessions, sessionsForDuration] = await Promise.all([
+    fetchAllFutureCourseSessions(supabase, courseActivityIds),
+    fetchAllCourseSessionsForDuration(supabase, courseActivityIds),
+  ]);
 
   const courses = sortCoursesForListing(
     enrichCoursesForListing(
@@ -66,8 +137,8 @@ async function CoursContent() {
           durationMinutes: null,
         })),
       ),
-      futureSessions ?? [],
-      sessionsForDuration ?? [],
+      futureSessions,
+      sessionsForDuration,
     ),
   );
 

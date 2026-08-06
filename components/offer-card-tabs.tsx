@@ -38,7 +38,7 @@ export function OfferCardTabs({
 
   const reserveControl = showReservation ? (
     <Link href={reservationHref} className={reserveLinkClass}>
-      réserver
+      voir les créneaux disponibles et réserver
     </Link>
   ) : null;
 

@@ -139,6 +139,9 @@ interface AdminWeekTimeGridProps {
   selectable?: boolean;
   onSelectSlot?: (selection: CalendarSlotSelection) => void;
   onExistingSessionClick?: (session: AdminWeekCalendarSession) => void;
+  selectionMode?: boolean;
+  selectedSessionIds?: Set<string>;
+  onToggleSessionSelection?: (sessionId: string) => void;
   title?: string;
   activityLegend?: ActivityLegendItem[];
   selectedActivityIds?: Set<string>;
@@ -166,6 +169,9 @@ export function AdminWeekTimeGrid({
   selectable = false,
   onSelectSlot,
   onExistingSessionClick,
+  selectionMode = false,
+  selectedSessionIds,
+  onToggleSessionSelection,
   title,
   activityLegend,
   selectedActivityIds,
@@ -356,9 +362,28 @@ export function AdminWeekTimeGrid({
         ? "bg-green-500/20 border-green-500/50 text-green-950"
         : "bg-primary/15 border-primary/40 text-foreground";
 
-    const isClickable = variant === "existing" && Boolean(onExistingSessionClick);
+    const isSelected =
+      variant === "existing" &&
+      Boolean(session.id) &&
+      Boolean(selectedSessionIds?.has(session.id!));
+    const isSelectable =
+      variant === "existing" &&
+      selectionMode &&
+      Boolean(session.id) &&
+      Boolean(onToggleSessionSelection);
+    const isClickable =
+      (variant === "existing" && Boolean(onExistingSessionClick) && !selectionMode) ||
+      isSelectable;
     const widthPercent = 100 / totalColumns;
     const leftPercent = (column / totalColumns) * 100;
+
+    const handleSessionActivate = () => {
+      if (isSelectable && session.id) {
+        onToggleSessionSelection?.(session.id);
+        return;
+      }
+      onExistingSessionClick?.(session);
+    };
 
     return (
       <div
@@ -372,7 +397,7 @@ export function AdminWeekTimeGrid({
           isClickable
             ? (event) => {
                 event.stopPropagation();
-                onExistingSessionClick?.(session);
+                handleSessionActivate();
               }
             : undefined
         }
@@ -382,7 +407,7 @@ export function AdminWeekTimeGrid({
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   event.stopPropagation();
-                  onExistingSessionClick?.(session);
+                  handleSessionActivate();
                 }
               }
             : undefined
@@ -394,6 +419,7 @@ export function AdminWeekTimeGrid({
           variant === "existing" && "z-10",
           variant === "preview" && selectable && "pointer-events-none",
           isClickable && "pointer-events-auto cursor-pointer hover:brightness-95",
+          isSelected && "ring-2 ring-destructive ring-offset-1",
           !isActivitySelected && "opacity-30",
         )}
         style={{
@@ -404,11 +430,31 @@ export function AdminWeekTimeGrid({
         }}
         title={`${session.activity_name ?? "Session"} · ${session.start} – ${session.end}`}
       >
-        <p className="font-semibold tabular-nums truncate">
-          {session.start} – {session.end}
-        </p>
+        {isSelectable ? (
+          <div className="mb-0.5 flex items-center gap-1">
+            <Checkbox
+              checked={isSelected}
+              className="pointer-events-none h-3 w-3"
+              aria-hidden
+            />
+            <span className="truncate text-[9px] font-semibold tabular-nums">
+              {session.start} – {session.end}
+            </span>
+          </div>
+        ) : (
+          <p className="font-semibold tabular-nums truncate">
+            {session.start} – {session.end}
+          </p>
+        )}
         {session.activity_name ? (
           <p className="truncate opacity-90">{session.activity_name}</p>
+        ) : null}
+        {session.registrationCount != null ? (
+          <p className="truncate text-[9px] font-semibold opacity-80">
+            {session.max_registrations != null
+              ? `${session.registrationCount}/${session.max_registrations}`
+              : `${session.registrationCount} inscrit${session.registrationCount > 1 ? "s" : ""}`}
+          </p>
         ) : null}
         {variant === "preview" ? (
           <p className="truncate text-[9px] uppercase tracking-wide opacity-70">Nouveau</p>
@@ -528,9 +574,14 @@ export function AdminWeekTimeGrid({
             · Cliquez ou glissez sur un créneau libre
           </span>
         ) : null}
-        {onExistingSessionClick ? (
+        {onExistingSessionClick && !selectionMode ? (
           <span className="text-muted-foreground">
             · Cliquez sur un créneau existant pour le gérer
+          </span>
+        ) : null}
+        {selectionMode ? (
+          <span className="text-muted-foreground">
+            · Mode sélection : cliquez sur les créneaux à supprimer
           </span>
         ) : null}
       </div>

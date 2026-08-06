@@ -75,6 +75,8 @@ export function SquareCheckoutButton({
       const payload = (await response.json()) as {
         url?: string;
         error?: string;
+        redirectTo?: string;
+        message?: string;
       };
 
       if (response.status === 401) {
@@ -85,8 +87,14 @@ export function SquareCheckoutButton({
         return;
       }
 
+      if (response.status === 403 && payload.redirectTo) {
+        const next = window.location.pathname;
+        window.location.href = `${payload.redirectTo}?next=${encodeURIComponent(next)}`;
+        return;
+      }
+
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Paiement indisponible");
+        throw new Error(payload.message ?? payload.error ?? "Paiement indisponible");
       }
 
       window.location.href = payload.url;

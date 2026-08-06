@@ -18,7 +18,7 @@ export function CourseCard({ course, isLoggedIn, isInterested }: CourseCardProps
   return (
     <article>
       <Link href={`/cours/${course.slug}`} className="group block">
-        <div className="relative h-[180px] w-full overflow-hidden bg-[#d9d9d9] md:h-[230px]">
+        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#d9d9d9]">
           <Image
             src={course.image}
             alt={course.title}

@@ -14,9 +14,18 @@ import {
 } from "@/lib/participant-count";
 import { revalidatePath } from "next/cache";
 import { notifyRegistrationConfirmed } from "@/lib/email/registration-emails";
+import { isSameParisDay } from "@/lib/paris-time";
+import { notifyAdminSameDayRegistration } from "@/lib/email/admin-same-day-notify";
+import {
+  getUserLegalCompliance,
+  legalDocsRequiredError,
+} from "@/lib/legal/status";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Allow booking up to 15 minutes after a session/hour has started. */
+const BOOKING_GRACE_MS = 15 * 60 * 1000;
 
 type PaymentType = "credits" | "stripe";
 
@@ -28,6 +37,7 @@ type RegistrationStatusRow = {
 
 type ActivityRow = {
   id: string;
+  name?: string | null;
   nb_credits: number | string | null;
   type: string | null;
 };
@@ -115,8 +125,24 @@ export async function registerForSession(
   paymentType: PaymentType,
   reservation?: { start: string; end: string },
   participantCountInput = 1,
+  companionFirstNamesInput: string[] = [],
 ) {
   const participantCount = clampParticipantCount(participantCountInput);
+  const companionFirstNames =
+    participantCount > 1
+      ? companionFirstNamesInput
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .slice(0, participantCount - 1)
+      : [];
+
+  if (participantCount > 1 && companionFirstNames.length < participantCount - 1) {
+    return {
+      error: "Indiquez le prénom de chaque personne supplémentaire.",
+      registrationId: null,
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -126,6 +152,12 @@ export async function registerForSession(
     return { error: "Non authentifié", registrationId: null };
   }
 
+  const compliance = await getUserLegalCompliance(supabase, user.id);
+  if (!compliance.complete) {
+    const required = legalDocsRequiredError();
+    return { error: required.error, registrationId: null };
+  }
+
   if (!UUID_RE.test(sessionId)) {
     return { error: "Session invalide", registrationId: null };
   }
@@ -133,7 +165,7 @@ export async function registerForSession(
   const { data: session, error: sessionError } = await supabase
     .from("session")
     .select(
-      "id, start_ts, end_ts, max_registrations, activity:activity_id(id, nb_credits, type)",
+      "id, start_ts, end_ts, max_registrations, activity:activity_id(id, name, nb_credits, type)",
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -197,10 +229,10 @@ export async function registerForSession(
       };
     }
 
-    if (reservationStart.getTime() <= Date.now()) {
+    if (reservationStart.getTime() <= Date.now() - BOOKING_GRACE_MS) {
       return { error: "Ce créneau n'est plus réservable", registrationId: null };
     }
-  } else if (sessionStart.getTime() <= Date.now()) {
+  } else if (sessionStart.getTime() <= Date.now() - BOOKING_GRACE_MS) {
     return { error: "Cette session n'est plus réservable", registrationId: null };
   } else if (reservationStart || reservationEnd) {
     return { error: "Cette activité se réserve sur une session fixe.", registrationId: null };
@@ -327,6 +359,7 @@ export async function registerForSession(
       user_id: user.id,
       payment_type: paymentType,
       participant_count: participantCount,
+      companion_first_names: companionFirstNames,
       reserved_start_ts: isPracticeActivity ? reservationStart!.toISOString() : null,
       reserved_end_ts: isPracticeActivity ? reservationEnd!.toISOString() : null,
     })
@@ -347,6 +380,25 @@ export async function registerForSession(
   void notifyRegistrationConfirmed(data.id).catch((err) => {
     console.error("Failed to send registration confirmation email:", err);
   });
+
+  const bookingStart = isPracticeActivity
+    ? reservationStart!
+    : sessionStart;
+  if (isSameParisDay(bookingStart)) {
+    void notifyAdminSameDayRegistration({
+      registrationId: data.id,
+      userEmail: user.email ?? undefined,
+      userName:
+        [user.user_metadata?.first_name, user.user_metadata?.last_name]
+          .filter(Boolean)
+          .join(" ") || user.email || "Participant",
+      activityName: activity?.name ?? "Activité",
+      startTs: bookingStart.toISOString(),
+      endTs: (isPracticeActivity ? reservationEnd! : sessionEnd).toISOString(),
+    }).catch((err) => {
+      console.error("Failed to send same-day admin notification:", err);
+    });
+  }
 
   return { error: null, registrationId: data.id };
 }
@@ -375,8 +427,24 @@ export async function registerForPracticeReservation(
   blocks: PracticeReservationBlock[],
   paymentType: PaymentType,
   participantCountInput = 1,
+  companionFirstNamesInput: string[] = [],
 ) {
   const participantCount = clampParticipantCount(participantCountInput);
+  const companionFirstNames =
+    participantCount > 1
+      ? companionFirstNamesInput
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .slice(0, participantCount - 1)
+      : [];
+
+  if (participantCount > 1 && companionFirstNames.length < participantCount - 1) {
+    return {
+      error: "Indiquez le prénom de chaque personne supplémentaire.",
+      registrationIds: [] as string[],
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -384,6 +452,12 @@ export async function registerForPracticeReservation(
 
   if (!user) {
     return { error: "Non authentifié", registrationIds: [] as string[] };
+  }
+
+  const compliance = await getUserLegalCompliance(supabase, user.id);
+  if (!compliance.complete) {
+    const required = legalDocsRequiredError();
+    return { error: required.error, registrationIds: [] as string[] };
   }
 
   if (!blocks.length) {
@@ -434,7 +508,7 @@ export async function registerForPracticeReservation(
   const { data: sessionRows, error: sessionsError } = await supabase
     .from("session")
     .select(
-      "id, start_ts, end_ts, max_registrations, activity_id, activity:activity_id(id, nb_credits, type)",
+      "id, start_ts, end_ts, max_registrations, activity_id, activity:activity_id(id, name, nb_credits, type)",
     )
     .in("id", sessionIds);
 
@@ -481,7 +555,7 @@ export async function registerForPracticeReservation(
     ) {
       return { error: "Le créneau choisi n'est pas disponible.", registrationIds: [] };
     }
-    if (block.start.getTime() <= Date.now()) {
+    if (block.start.getTime() <= Date.now() - BOOKING_GRACE_MS) {
       return { error: "Ce créneau n'est plus réservable", registrationIds: [] };
     }
   }
@@ -628,6 +702,7 @@ export async function registerForPracticeReservation(
         user_id: user.id,
         payment_type: paymentType,
         participant_count: participantCount,
+        companion_first_names: companionFirstNames,
         reserved_start_ts: block.start.toISOString(),
         reserved_end_ts: block.end.toISOString(),
       })),
@@ -647,6 +722,22 @@ export async function registerForPracticeReservation(
   revalidatePath("/reserver");
   revalidatePath("/admin");
   revalidatePath(`/admin/users/${user.id}`);
+
+  if (isSameParisDay(totalStart) && inserted[0]) {
+    void notifyAdminSameDayRegistration({
+      registrationId: inserted[0].id,
+      userEmail: user.email ?? undefined,
+      userName:
+        [user.user_metadata?.first_name, user.user_metadata?.last_name]
+          .filter(Boolean)
+          .join(" ") || user.email || "Participant",
+      activityName: firstActivity.name ?? "Pratique libre",
+      startTs: totalStart.toISOString(),
+      endTs: totalEnd.toISOString(),
+    }).catch((err) => {
+      console.error("Failed to send same-day admin notification:", err);
+    });
+  }
 
   return {
     error: null as string | null,

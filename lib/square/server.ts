@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { getPasswordSetupRedirectUrl } from "@/lib/auth-redirect";
 import { resolveSquareSubscriptionFromItemVariation } from "@/lib/square/catalog-api";
 import { getSquareApiBaseUrl, getSquareEnvironment } from "@/lib/square/environment";
 import { getSquareProduct } from "@/lib/square/load-products";
@@ -143,6 +144,9 @@ export async function createSquareCatalogPaymentLink({
         quantity: normalizedQuantity,
       },
     ],
+    pricing_options: {
+      auto_apply_taxes: true,
+    },
   };
   if (buyer.squareCustomerId) {
     orderBody.customer_id = buyer.squareCustomerId;
@@ -216,6 +220,9 @@ export async function createSquareSubscriptionPaymentLink({
         quantity: "1",
       },
     ],
+    pricing_options: {
+      auto_apply_taxes: true,
+    },
   };
   if (buyer.squareCustomerId) {
     orderBody.customer_id = buyer.squareCustomerId;
@@ -949,7 +956,7 @@ export async function syncSquareCustomerToBackend(
     const { data: invitedUser, error: inviteError } =
       await supabase.auth.admin.inviteUserByEmail(emailAddress, {
         data: metadata,
-        redirectTo: `${getSiteUrl()}/auth/update-password`,
+        redirectTo: getPasswordSetupRedirectUrl(getSiteUrl()),
       });
 
     if (inviteError) {
@@ -1559,7 +1566,7 @@ async function registerUserForCourseSession({
     }
   }
 
-  if ((reservationStart ?? new Date(session.start_ts)).getTime() <= Date.now()) {
+  if ((reservationStart ?? new Date(session.start_ts)).getTime() <= Date.now() - 15 * 60 * 1000) {
     throw new Error("Cette session n'est plus réservable");
   }
 

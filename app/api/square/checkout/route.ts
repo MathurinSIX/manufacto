@@ -78,6 +78,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
+    if (user) {
+      const { getUserLegalCompliance } = await import("@/lib/legal/status");
+      const { LEGAL_REQUIRED_ERROR, LEGAL_DOCS_PATH } = await import(
+        "@/lib/legal/types"
+      );
+      const compliance = await getUserLegalCompliance(supabase, user.id);
+      if (!compliance.complete) {
+        return NextResponse.json(
+          {
+            error: LEGAL_REQUIRED_ERROR,
+            redirectTo: LEGAL_DOCS_PATH,
+            message:
+              "Avant de réserver, merci de signer le règlement intérieur et la décharge.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const siteUrl = getSiteUrl(request);
     const redirectPath = user
       ? "/account/square/return"

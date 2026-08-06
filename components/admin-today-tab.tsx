@@ -7,6 +7,7 @@ import { Calendar, ChevronLeft, ChevronRight, Loader2, RefreshCw, Users } from "
 import {
   getTodayCoursesWithSubscriptions,
   type TodayCourseSession,
+  type TodayVisitor,
 } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +28,21 @@ import {
   PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
+import { cn } from "@/lib/utils";
 
 function parseDateParam(value: string | null): string {
   if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
   }
   return formatParisDate(new Date());
+}
+
+function SameDayBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+      Jour J
+    </span>
+  );
 }
 
 export function AdminTodayTab() {
@@ -42,6 +52,7 @@ export function AdminTodayTab() {
     parseDateParam(searchParams.get("date")),
   );
   const [sessions, setSessions] = useState<TodayCourseSession[]>([]);
+  const [visitors, setVisitors] = useState<TodayVisitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +93,7 @@ export function AdminTodayTab() {
           setError(result.error);
         } else {
           setSessions(result.sessions);
+          setVisitors(result.visitors ?? []);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Une erreur s'est produite");
@@ -166,7 +178,7 @@ export function AdminTodayTab() {
         <div>
           <h3 className="text-lg font-semibold">Aujourd&apos;hui</h3>
           <p className="text-sm text-muted-foreground">
-            Cours avec au moins une inscription
+            Cours, pratique libre et visiteurs avec au moins une inscription
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -213,6 +225,44 @@ export function AdminTodayTab() {
         </div>
       ) : null}
 
+      {visitors.length > 0 ? (
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold">Présents à l&apos;atelier</h4>
+            <p className="text-xs text-muted-foreground">
+              Arrivée et départ prévus ({visitors.length} personne
+              {visitors.length > 1 ? "s" : ""})
+            </p>
+          </div>
+          <div className="divide-y rounded-lg border">
+            {visitors.map((visitor, index) => (
+              <div
+                key={`${visitor.name}-${visitor.arrival}-${index}`}
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-medium">{visitor.name}</p>
+                    {visitor.isSameDayBooking ? <SameDayBadge /> : null}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {visitor.activity_name}
+                    {visitor.email
+                      ? ` · ${visitor.email}`
+                      : visitor.phone
+                        ? ` · ${visitor.phone}`
+                        : ""}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                  {visitor.arrival} – {visitor.departure}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {sessions.length > 0 ? (
         <>
           <div className="flex flex-wrap gap-2">
@@ -224,7 +274,10 @@ export function AdminTodayTab() {
               return (
                 <span
                   key={activityId}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${colorClass}`}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+                    colorClass,
+                  )}
                 >
                   <span className="max-w-[180px] truncate font-medium">
                     {session.activity_name}
@@ -247,7 +300,7 @@ export function AdminTodayTab() {
         </>
       ) : (
         <div className="rounded-lg border py-12 text-center text-muted-foreground">
-          <p>Aucun cours avec inscription prévu pour ce jour</p>
+          <p>Aucune session avec inscription prévue pour ce jour</p>
         </div>
       )}
 
@@ -279,11 +332,17 @@ export function AdminTodayTab() {
                 className="flex items-center gap-3 rounded-md border px-3 py-2"
               >
                 <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{user.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-medium">{user.name}</p>
+                    {user.isSameDayBooking ? <SameDayBadge /> : null}
+                  </div>
                   {user.email ? (
                     <p className="truncate text-sm text-muted-foreground">{user.email}</p>
                   ) : null}
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {user.arrival} – {user.departure}
+                  </p>
                 </div>
               </div>
             ))}
@@ -293,8 +352,11 @@ export function AdminTodayTab() {
                 className="flex items-center gap-3 rounded-md border px-3 py-2"
               >
                 <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{user.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-medium">{user.name}</p>
+                    {user.isSameDayBooking ? <SameDayBadge /> : null}
+                  </div>
                   <p className="truncate text-sm text-muted-foreground">{user.phone}</p>
                 </div>
               </div>

@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
-import { ParticipantCountSelector } from "@/components/participant-count-selector";
+import {
+  ParticipantCountSelector,
+  companionNamesAreValid,
+} from "@/components/participant-count-selector";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +38,10 @@ import {
   maxSelectableCount,
 } from "@/lib/participant-count";
 import { canUserCancelRegistration } from "@/lib/cancellation-policy";
+import {
+  legalDocsUserMessage,
+  redirectToLegalDocsIfRequired,
+} from "@/lib/legal/client";
 
 const PARIS_TIMEZONE = "Europe/Paris";
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -265,6 +272,7 @@ export function ActivitySessionPicker({
     Record<string, { id: string; participantCount: number }>
   >({});
   const [participantCount, setParticipantCount] = useState(1);
+  const [companionFirstNames, setCompanionFirstNames] = useState<string[]>([]);
   const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
@@ -351,7 +359,7 @@ export function ActivitySessionPicker({
         .from("session")
         .select("id, start_ts, end_ts, max_registrations")
         .eq("activity_id", activityId)
-        .gte("start_ts", new Date().toISOString())
+        .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
         .order("start_ts", { ascending: true });
       if (ignore) return;
       if (error) {
@@ -560,6 +568,7 @@ export function ActivitySessionPicker({
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
     setParticipantCount(1);
+    setCompanionFirstNames([]);
     setShowAuthStep(false);
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -599,6 +608,13 @@ export function ActivitySessionPicker({
       setErrorMessage("Vous êtes déjà inscrit à cette session.");
       return;
     }
+
+    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+      setErrorMessage(
+        "Indiquez le prénom de chaque personne supplémentaire.",
+      );
+      return;
+    }
     
     setIsRegistering(true);
     setErrorMessage(null);
@@ -608,10 +624,14 @@ export function ActivitySessionPicker({
       paymentType,
       undefined,
       participantCount,
+      companionFirstNames,
     );
     setIsRegistering(false);
     if (result.error) {
-      setErrorMessage(result.error);
+      if (redirectToLegalDocsIfRequired(result.error, window.location.pathname)) {
+        return;
+      }
+      setErrorMessage(legalDocsUserMessage(result.error));
       return;
     }
     
@@ -893,6 +913,8 @@ export function ActivitySessionPicker({
               <ParticipantCountSelector
                 value={participantCount}
                 onChange={setParticipantCount}
+                companionFirstNames={companionFirstNames}
+                onCompanionFirstNamesChange={setCompanionFirstNames}
                 max={maxParticipantsForSelection}
                 className="w-full sm:mr-auto"
               />
@@ -929,7 +951,13 @@ export function ActivitySessionPicker({
                       reservationEnd={selectedSession?.end_ts}
                       participantCount={participantCount}
                       isLoggedIn={effectiveIsLoggedIn}
-                      disabled={maxParticipantsForSelection < 1}
+                      disabled={
+                        maxParticipantsForSelection < 1 ||
+                        !companionNamesAreValid(
+                          participantCount,
+                          companionFirstNames,
+                        )
+                      }
                       className="w-full sm:w-auto"
                     >
                       {participantCount > 1
@@ -971,7 +999,13 @@ export function ActivitySessionPicker({
                       reservationEnd={selectedSession?.end_ts}
                       participantCount={participantCount}
                       isLoggedIn={effectiveIsLoggedIn}
-                      disabled={maxParticipantsForSelection < 1}
+                      disabled={
+                        maxParticipantsForSelection < 1 ||
+                        !companionNamesAreValid(
+                          participantCount,
+                          companionFirstNames,
+                        )
+                      }
                       className="w-full sm:w-auto"
                     >
                       {participantCount > 1
@@ -997,6 +1031,8 @@ export function ActivitySessionPicker({
               <ParticipantCountSelector
                 value={participantCount}
                 onChange={setParticipantCount}
+                companionFirstNames={companionFirstNames}
+                onCompanionFirstNamesChange={setCompanionFirstNames}
                 max={maxParticipantsForSelection}
               />
               {isSquareOnlyActivity && squareCatalogProductId ? (

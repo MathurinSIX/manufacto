@@ -78,6 +78,7 @@ type WeekSessionRow = {
 interface AdminAddActivitiesTabProps {
   activityTypes?: string[];
   allowManualRepeat?: boolean;
+  initialSourceWeekOffset?: number;
   initialTargetWeekOffset?: number;
   initialActivityId?: string;
   onSessionsCreated?: () => void;
@@ -87,14 +88,19 @@ interface AdminAddActivitiesTabProps {
 export function AdminAddActivitiesTab({
   activityTypes,
   allowManualRepeat = false,
-  initialTargetWeekOffset = 0,
+  initialSourceWeekOffset = -1,
+  initialTargetWeekOffset,
   initialActivityId,
   onSessionsCreated,
   mode = "all",
 }: AdminAddActivitiesTabProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(-1);
-  const [targetWeekOffset, setTargetWeekOffset] = useState<number>(initialTargetWeekOffset);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(
+    initialSourceWeekOffset,
+  );
+  const [targetWeekOffset, setTargetWeekOffset] = useState<number>(
+    initialTargetWeekOffset ?? initialSourceWeekOffset + 1,
+  );
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +112,9 @@ export function AdminAddActivitiesTab({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const initialSelectionAppliedRef = useRef(false);
   const [manualActivityId, setManualActivityId] = useState<string>(initialActivityId ?? "");
-  const [manualWeekOffset, setManualWeekOffset] = useState<number>(initialTargetWeekOffset);
+  const [manualWeekOffset, setManualWeekOffset] = useState<number>(
+    initialTargetWeekOffset ?? initialSourceWeekOffset + 1,
+  );
   const [manualStartTime, setManualStartTime] = useState<string>("");
   const [manualDuration, setManualDuration] = useState<string>("60"); // Duration in minutes
   const [manualMaxRegistrations, setManualMaxRegistrations] = useState<string>("");
@@ -128,9 +136,11 @@ export function AdminAddActivitiesTab({
   const sessionWordPlural = isPracticeMode ? "créneaux" : "sessions";
 
   useEffect(() => {
-    setTargetWeekOffset(initialTargetWeekOffset);
-    setManualWeekOffset(initialTargetWeekOffset);
-  }, [initialTargetWeekOffset]);
+    setSelectedWeekOffset(initialSourceWeekOffset);
+    const nextTarget = initialTargetWeekOffset ?? initialSourceWeekOffset + 1;
+    setTargetWeekOffset(nextTarget);
+    setManualWeekOffset(nextTarget);
+  }, [initialSourceWeekOffset, initialTargetWeekOffset]);
 
   useEffect(() => {
     if (initialActivityId) {
