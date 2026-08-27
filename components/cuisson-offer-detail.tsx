@@ -56,9 +56,8 @@ export function CuissonOfferDetail() {
       <div className="space-y-2">
         <p className="font-bold">Fonctionnement</p>
         <p>
-          Dépôts les jeudis et vendredis à partir du 25 juin. Sinon prendre
-          rendez-vous par mail. Se présenter à l’accueil avant tout accès à
-          l’atelier.
+          Dépôts sur nos heures d’ouverture. Se présenter à l’accueil avant tout
+          accès à l’atelier.
         </p>
         <p>
           Pour toute demande spécifique, veuillez envoyer un mail ou venir à

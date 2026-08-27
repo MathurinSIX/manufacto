@@ -1154,7 +1154,7 @@ export function AdminActivitiesTab({
             onClick={() => manualCreate.openManualCreate(selectedDate)}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Ajouter un créneau
+            {isPracticeView ? "Ajouter des créneaux" : "Ajouter des sessions"}
           </Button>
           <Button
             type="button"

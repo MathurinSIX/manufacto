@@ -10,6 +10,10 @@ import {
   syncSupabaseUserToSquare,
 } from "@/lib/square/server";
 import { clampParticipantCount } from "@/lib/participant-count";
+import {
+  clampCreditUnitQuantity,
+  isUnitCreditPack,
+} from "@/lib/square/products";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,6 +25,7 @@ type CheckoutBody = {
   reservationStart?: string;
   reservationEnd?: string;
   participantCount?: number;
+  quantity?: number;
 };
 
 function isBookingProductKind(kind: string) {
@@ -54,10 +59,11 @@ function buildPurchaseContextColumns({
 
 export async function POST(request: Request) {
   try {
-    const { productId, activityId, sessionId, reservationStart, reservationEnd, participantCount: participantCountInput } =
+    const { productId, activityId, sessionId, reservationStart, reservationEnd, participantCount: participantCountInput, quantity: quantityInput } =
       (await request.json()) as CheckoutBody;
 
     const participantCount = clampParticipantCount(participantCountInput ?? 1);
+    const requestedQuantity = clampCreditUnitQuantity(quantityInput ?? 1);
 
     if (!productId?.trim()) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 400 });
@@ -238,7 +244,9 @@ export async function POST(request: Request) {
       if (catalogProduct.catalogObjectId) {
         const checkoutQuantity = isBookingProductKind(catalogProduct.kind)
           ? participantCount
-          : 1;
+          : isUnitCreditPack(catalogProduct)
+            ? requestedQuantity
+            : 1;
         const paymentLink = await createSquareCatalogPaymentLink({
           catalogObjectId: catalogProduct.catalogObjectId,
           buyer,
@@ -257,7 +265,7 @@ export async function POST(request: Request) {
             product_id: catalogProduct.id,
             product_kind: catalogProduct.kind,
             amount_cents: catalogProduct.amountCents * checkoutQuantity,
-            credits: catalogProduct.credits,
+            credits: catalogProduct.credits * checkoutQuantity,
             currency: "EUR",
             status: "pending",
             square_payment_link_id: paymentLink.paymentLinkId,

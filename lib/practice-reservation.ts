@@ -1,5 +1,5 @@
 /** Minimum consecutive hours for a standard pratique libre reservation. */
-export const MIN_PRACTICE_RESERVATION_HOURS = 2;
+export const MIN_PRACTICE_RESERVATION_HOURS = 1;
 
 export const ACCOMPAGNEMENT_ACTIVITY_TYPE = "accompagnement";
 

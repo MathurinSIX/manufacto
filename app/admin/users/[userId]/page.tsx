@@ -262,10 +262,23 @@ async function UserAccountContent({
   // Fetch credit history
   const { data: creditHistory, error: creditError } = await adminClient
     .from("credit")
-    .select("id, amount, created_at")
+    .select("id, amount, payment_type, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
+  const { data: squarePurchases, error: squarePurchasesError } = await adminClient
+    .from("square_purchase")
+    .select(
+      "id, product_id, product_kind, credits, amount_cents, status, square_payment_id, created_at, fulfilled_at",
+    )
+    .eq("user_id", userId)
+    .neq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (squarePurchasesError) {
+    console.error("Error fetching Square purchases:", squarePurchasesError);
+  }
   // Fetch registration_status linked to these credits
   const creditIds = creditHistory?.map((c) => c.id) || [];
   const { data: registrationStatusesWithCredits } = creditIds.length > 0
@@ -440,6 +453,74 @@ async function UserAccountContent({
                   />
                 </TabsContent>
               </Tabs>
+            </CardContent>
+          </Card>
+
+          {/* Square purchases */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Achats Square</CardTitle>
+              <CardDescription>
+                Paiements en ligne et sur place importés depuis Square
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!squarePurchases || squarePurchases.length === 0 ? (
+                <p className="text-muted-foreground">Aucun achat Square</p>
+              ) : (
+                <div className="space-y-3">
+                  {squarePurchases.map((purchase) => {
+                    const amountEuros =
+                      typeof purchase.amount_cents === "number"
+                        ? (purchase.amount_cents / 100).toFixed(2)
+                        : null;
+                    const fulfilledLabel = purchase.fulfilled_at
+                      ? new Date(purchase.fulfilled_at).toLocaleString("fr-FR", {
+                          timeZone: "Europe/Paris",
+                        })
+                      : new Date(purchase.created_at).toLocaleString("fr-FR", {
+                          timeZone: "Europe/Paris",
+                        });
+                    const kindLabel =
+                      purchase.product_kind === "credit_pack"
+                        ? "Pack crédits"
+                        : purchase.product_kind === "subscription"
+                          ? "Formule"
+                          : purchase.product_kind === "discovery"
+                            ? "Découverte"
+                            : purchase.product_kind === "course"
+                              ? "Cours"
+                              : purchase.product_kind;
+                    return (
+                      <div
+                        key={purchase.id}
+                        className="flex flex-col gap-1 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {kindLabel} · {purchase.product_id}
+                            {purchase.credits != null
+                              ? ` · ${Math.round(Number(purchase.credits))} crédit${Number(purchase.credits) !== 1 ? "s" : ""}`
+                              : ""}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {fulfilledLabel}
+                            {amountEuros ? ` · ${amountEuros} €` : ""}
+                          </p>
+                          {purchase.square_payment_id ? (
+                            <p className="mt-1 font-mono text-xs text-muted-foreground">
+                              {purchase.square_payment_id}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {purchase.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 

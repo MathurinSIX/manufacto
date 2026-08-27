@@ -28,6 +28,9 @@ import {
   updateActivity,
   deleteActivity,
   uploadActivityImage,
+  getUpcomingSessionsForActivity,
+  createSessionsForActivity,
+  deleteSession,
 } from "@/app/admin/actions";
 import { Plus, Loader2, Pencil, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import Image from "next/image";
@@ -40,7 +43,48 @@ import {
 } from "@/lib/course-disciplines";
 import { SquareVariationPicker } from "@/components/square-variation-picker";
 import type { SquareCatalogVariationOption } from "@/lib/square/catalog-api";
+import {
+  formatParisTime,
+  parseParisDateTime,
+} from "@/lib/paris-time";
 
+type DraftSessionSlot = {
+  key: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  maxRegistrations: string;
+};
+
+type ExistingSession = {
+  id: string;
+  start_ts: string;
+  end_ts: string;
+  max_registrations: number | null;
+};
+
+function createEmptySlot(): DraftSessionSlot {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    date: "",
+    startTime: "14:00",
+    endTime: "17:00",
+    maxRegistrations: "",
+  };
+}
+
+function formatExistingSessionLabel(session: ExistingSession) {
+  const start = new Date(session.start_ts);
+  const end = new Date(session.end_ts);
+  const dateLabel = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Paris",
+  }).format(start);
+
+  return `${dateLabel} - ${formatParisTime(start)} / ${formatParisTime(end)}`;
+}
 function priceFromSquareVariation(
   variationId: string,
   variations: SquareCatalogVariationOption[],
@@ -110,6 +154,10 @@ export function AdminActivitiesManagementTab({
   const [squareVariations, setSquareVariations] = useState<SquareCatalogVariationOption[]>([]);
   const [activityLevel, setActivityLevel] = useState("");
   const [activityAudience, setActivityAudience] = useState("");
+  const [draftSlots, setDraftSlots] = useState<DraftSessionSlot[]>([]);
+  const [existingSessions, setExistingSessions] = useState<ExistingSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   // Group activities by discipline
   const activitiesByDiscipline = useMemo(() => {
@@ -170,7 +218,11 @@ export function AdminActivitiesManagementTab({
     loadActivities();
   }, [loadActivities]);
 
-  const handleOpenDialog = (activity?: Activity) => {
+  const handleOpenDialog = async (activity?: Activity) => {
+    setDraftSlots([]);
+    setExistingSessions([]);
+    setDeletingSessionId(null);
+
     if (activity) {
       setEditingActivity(activity);
       setActivityName(activity.name);
@@ -189,6 +241,21 @@ export function AdminActivitiesManagementTab({
       setActivitySquareProductId(activity.square_product_id || "");
       setActivityLevel(activity.level || "");
       setActivityAudience(activity.audience || "");
+      setDialogOpen(true);
+      setError(null);
+      setLoadingSessions(true);
+      try {
+        const sessionsResult = await getUpcomingSessionsForActivity(activity.id);
+        if (sessionsResult.error) {
+          setError(sessionsResult.error);
+        } else {
+          setExistingSessions(sessionsResult.sessions);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Impossible de charger les dates");
+      } finally {
+        setLoadingSessions(false);
+      }
     } else {
       setEditingActivity(null);
       setActivityName("");
@@ -199,9 +266,10 @@ export function AdminActivitiesManagementTab({
       setActivitySquareProductId("");
       setActivityLevel("");
       setActivityAudience("");
+      setDraftSlots([createEmptySlot()]);
+      setDialogOpen(true);
+      setError(null);
     }
-    setDialogOpen(true);
-    setError(null);
   };
 
   const handleCloseDialog = () => {
@@ -215,7 +283,89 @@ export function AdminActivitiesManagementTab({
     setActivitySquareProductId("");
     setActivityLevel("");
     setActivityAudience("");
+    setDraftSlots([]);
+    setExistingSessions([]);
+    setDeletingSessionId(null);
     setError(null);
+  };
+
+  const updateDraftSlot = (
+    key: string,
+    patch: Partial<Omit<DraftSessionSlot, "key">>,
+  ) => {
+    setDraftSlots((current) =>
+      current.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)),
+    );
+  };
+
+  const handleDeleteExistingSession = async (sessionId: string) => {
+    if (!confirm("Supprimer cette date du cours ?")) {
+      return;
+    }
+
+    setDeletingSessionId(sessionId);
+    setError(null);
+    try {
+      const result = await deleteSession(sessionId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setExistingSessions((current) =>
+        current.filter((session) => session.id !== sessionId),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impossible de supprimer la date");
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
+  const buildSlotsToCreate = () => {
+    const slotsToCreate: Array<{
+      start_ts: string;
+      end_ts: string;
+      max_registrations: number | null;
+    }> = [];
+
+    for (const [index, slot] of draftSlots.entries()) {
+      if (!slot.date) {
+        continue;
+      }
+
+      if (!slot.startTime || !slot.endTime) {
+        throw new Error(`Les horaires sont requis pour la ligne ${index + 1}`);
+      }
+
+      const start = parseParisDateTime(slot.date, slot.startTime);
+      const end = parseParisDateTime(slot.date, slot.endTime);
+      if (end <= start) {
+        throw new Error(
+          `L'heure de fin doit être après l'heure de début (ligne ${index + 1})`,
+        );
+      }
+
+      const maxRegistrations =
+        slot.maxRegistrations.trim() === ""
+          ? null
+          : parseInt(slot.maxRegistrations, 10);
+      if (
+        maxRegistrations !== null &&
+        (Number.isNaN(maxRegistrations) || maxRegistrations < 0)
+      ) {
+        throw new Error(
+          `Le nombre max d'inscriptions doit être un nombre positif (ligne ${index + 1})`,
+        );
+      }
+
+      slotsToCreate.push({
+        start_ts: start.toISOString(),
+        end_ts: end.toISOString(),
+        max_registrations: maxRegistrations,
+      });
+    }
+
+    return slotsToCreate;
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -289,10 +439,39 @@ export function AdminActivitiesManagementTab({
 
       if (result.error) {
         setError(result.error);
-      } else {
-        handleCloseDialog();
-        await loadActivities();
+        return;
       }
+
+      const activityId = editingActivity?.id ?? result.activity?.id;
+      let slotsToCreate: ReturnType<typeof buildSlotsToCreate> = [];
+      try {
+        slotsToCreate = buildSlotsToCreate();
+      } catch (slotError) {
+        setError(
+          slotError instanceof Error
+            ? slotError.message
+            : "Dates invalides",
+        );
+        return;
+      }
+
+      if (activityId && slotsToCreate.length > 0) {
+        const sessionsResult = await createSessionsForActivity(
+          activityId,
+          slotsToCreate,
+        );
+        if (sessionsResult.error && sessionsResult.created === 0) {
+          setError(sessionsResult.error);
+          await loadActivities();
+          return;
+        }
+        if (sessionsResult.error) {
+          setError(sessionsResult.error);
+        }
+      }
+
+      handleCloseDialog();
+      await loadActivities();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
     } finally {
@@ -355,9 +534,18 @@ export function AdminActivitiesManagementTab({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">liste des cours</h3>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              setDialogOpen(true);
+            } else {
+              handleCloseDialog();
+            }
+          }}
+        >
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()}>
+            <Button onClick={() => void handleOpenDialog()}>
               <Plus className="h-4 w-4 mr-2" />
               ajouter un cours
             </Button>
@@ -491,6 +679,171 @@ export function AdminActivitiesManagementTab({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Dates et horaires</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setDraftSlots((current) => [...current, createEmptySlot()])
+                      }
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Ajouter une date
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Ajoutez une ou plusieurs dates avec des horaires différents.
+                    Elles apparaîtront sous « Prochaines dates disponibles » sur la page du cours.
+                  </p>
+
+                  {editingActivity && (
+                    <div className="space-y-2 rounded-md border p-3">
+                      <p className="text-sm font-medium">Dates déjà planifiées</p>
+                      {loadingSessions ? (
+                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Chargement des dates...
+                        </p>
+                      ) : existingSessions.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Aucune date à venir pour ce cours.
+                        </p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {existingSessions.map((session) => (
+                            <li
+                              key={session.id}
+                              className="flex items-center justify-between gap-2 text-sm"
+                            >
+                              <span className="capitalize">
+                                {formatExistingSessionLabel(session)}
+                              </span>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 shrink-0"
+                                disabled={deletingSessionId === session.id}
+                                onClick={() =>
+                                  void handleDeleteExistingSession(session.id)
+                                }
+                                aria-label="Supprimer cette date"
+                              >
+                                {deletingSessionId === session.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {draftSlots.length > 0 ? (
+                    <div className="space-y-3">
+                      {draftSlots.map((slot, index) => (
+                        <div
+                          key={slot.key}
+                          className="grid gap-2 rounded-md border p-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">
+                              Date {index + 1}
+                              {editingActivity ? " (nouvelle)" : ""}
+                            </p>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              onClick={() =>
+                                setDraftSlots((current) =>
+                                  current.filter((entry) => entry.key !== slot.key),
+                                )
+                              }
+                              aria-label="Retirer cette date"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-1">
+                              <Label htmlFor={`slot-date-${slot.key}`}>Date</Label>
+                              <Input
+                                id={`slot-date-${slot.key}`}
+                                type="date"
+                                value={slot.date}
+                                onChange={(event) =>
+                                  updateDraftSlot(slot.key, {
+                                    date: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="grid gap-1">
+                              <Label htmlFor={`slot-max-${slot.key}`}>
+                                Max inscriptions
+                              </Label>
+                              <Input
+                                id={`slot-max-${slot.key}`}
+                                type="number"
+                                min="0"
+                                value={slot.maxRegistrations}
+                                onChange={(event) =>
+                                  updateDraftSlot(slot.key, {
+                                    maxRegistrations: event.target.value,
+                                  })
+                                }
+                                placeholder="Illimité"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-1">
+                              <Label htmlFor={`slot-start-${slot.key}`}>Début</Label>
+                              <Input
+                                id={`slot-start-${slot.key}`}
+                                type="time"
+                                value={slot.startTime}
+                                onChange={(event) =>
+                                  updateDraftSlot(slot.key, {
+                                    startTime: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="grid gap-1">
+                              <Label htmlFor={`slot-end-${slot.key}`}>Fin</Label>
+                              <Input
+                                id={`slot-end-${slot.key}`}
+                                type="time"
+                                value={slot.endTime}
+                                onChange={(event) =>
+                                  updateDraftSlot(slot.key, {
+                                    endTime: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    !editingActivity && (
+                      <p className="text-xs text-muted-foreground">
+                        Aucune date ajoutée. Vous pourrez aussi en ajouter plus tard
+                        depuis l&apos;onglet Sessions.
+                      </p>
+                    )
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="image">Images</Label>
@@ -731,7 +1084,7 @@ export function AdminActivitiesManagementTab({
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleOpenDialog(activity)}
+                              onClick={() => void handleOpenDialog(activity)}
                             >
                               <Pencil className="h-4 w-4 mr-2" />
                               Modifier

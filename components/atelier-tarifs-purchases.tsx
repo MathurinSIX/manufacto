@@ -1,6 +1,8 @@
+import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
+import { isUnitCreditPack } from "@/lib/square/products";
 import { createClient } from "@/lib/supabase/server";
 
 const DISCOVERY_PACKS = [
@@ -46,12 +48,6 @@ const ATELIER_SUBSCRIPTION_PLANS = [
     copy: "L’abonnement idéal si vous avez une pratique intensive de la menuiserie ou de la céramique.",
   },
 ] as const;
-
-const creditPackPriceFormatter = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
 
 const checkoutButtonClassName =
   "inline-flex w-full shrink-0 justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60";
@@ -130,33 +126,19 @@ export async function AtelierCreditPackGrid({
     .sort((a, b) => a.amountCents - b.amountCents);
 
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
       {creditPacks.map((pack) => (
-        <div
+        <CreditPackPurchaseCard
           key={pack.id}
-          className="flex min-h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-3 text-center"
-        >
-          <p className="text-[34px] leading-none">
-            {creditPackPriceFormatter.format(pack.amountCents / 100)}
-          </p>
-          <p className="text-lg leading-none">
-            {pack.credits} crédit{pack.credits > 1 ? "s" : ""}
-          </p>
-          {pack.catalogObjectId ? (
-            <SquareCheckoutButton
-              productId={pack.id}
-              isLoggedIn={!!user}
-              returnPath={returnPath}
-              className={`mt-3 ${checkoutButtonClassName}`}
-            >
-              Acheter
-            </SquareCheckoutButton>
-          ) : (
-            <p className="mt-3 text-xs leading-snug text-black/50">
-              Paiement indisponible
-            </p>
-          )}
-        </div>
+          productId={pack.id}
+          amountCents={pack.amountCents}
+          credits={pack.credits}
+          catalogObjectId={pack.catalogObjectId}
+          isLoggedIn={!!user}
+          returnPath={returnPath}
+          allowQuantity={isUnitCreditPack(pack)}
+          buttonClassName={checkoutButtonClassName}
+        />
       ))}
     </div>
   );

@@ -9,6 +9,14 @@ export function parseSquarePaymentId(paymentType: string | null | undefined): st
   return null;
 }
 
+/** Ledger payment_type for Square catalog fulfillments (idempotent per payment). */
+export function squareLedgerPaymentType(
+  kind: string,
+  paymentId: string,
+): string {
+  return `square:${kind}:${paymentId.trim()}`;
+}
+
 export function formatPaymentTypeLabel(paymentType: string): string {
   if (paymentType === "credits" || paymentType === "credit") {
     return "Crédits";

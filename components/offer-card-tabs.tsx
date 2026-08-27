@@ -15,6 +15,26 @@ type Offer = {
   reservable?: boolean;
 };
 
+/** Renders plain text with optional `**bold**` markers. */
+function DetailString({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return (
+    <p className="whitespace-pre-line">
+      {parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={index} className="font-bold text-black">
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </p>
+  );
+}
+
 export function OfferCardTabs({
   offers,
   columns = 3,
@@ -86,11 +106,7 @@ export function OfferCardTabs({
               {activeOffer.title}
             </h4>
             <div className="mt-6 text-base leading-normal text-black/75">
-              {typeof body === "string" ? (
-                <p className="whitespace-pre-line">{body}</p>
-              ) : (
-                body
-              )}
+              {typeof body === "string" ? <DetailString text={body} /> : body}
             </div>
             {reserveControl}
           </div>

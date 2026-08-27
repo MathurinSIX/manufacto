@@ -1,5 +1,19 @@
 export type SquareProductKind = "subscription" | "credit_pack" | "discovery";
 
+/** Max units of the single-credit product per checkout (Square cart). */
+export const MAX_CREDIT_UNIT_QUANTITY = 5;
+
+export function clampCreditUnitQuantity(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.min(
+    MAX_CREDIT_UNIT_QUANTITY,
+    Math.max(1, Math.trunc(value)),
+  );
+}
+
 export type SquareProduct = {
   id: string;
   kind: SquareProductKind;
@@ -17,6 +31,10 @@ export type SquareProduct = {
   catalogObjectId?: string | null;
   catalogLabel?: string | null;
 };
+
+export function isUnitCreditPack(product: Pick<SquareProduct, "kind" | "credits">) {
+  return product.kind === "credit_pack" && product.credits === 1;
+}
 
 export const DEFAULT_SQUARE_PRODUCTS = [
   {
@@ -47,14 +65,14 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     id: "credits-1",
     kind: "credit_pack",
     name: "1 crédit",
-    description: "1 crédit à 8€.",
+    description: "1 crédit à 8€. Jusqu’à 5 crédits par achat.",
     amountCents: 800,
     credits: 1,
   },
   {
     id: "credits-2",
     kind: "credit_pack",
-    name: "Pack de crédit 01",
+    name: "2 crédits",
     description: "Pack de 2 crédits.",
     amountCents: 1500,
     credits: 2,
@@ -62,7 +80,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
   {
     id: "credits-6",
     kind: "credit_pack",
-    name: "Pack de crédit 02",
+    name: "Pack de crédit 01",
     description: "Pack de 6 crédits.",
     amountCents: 3600,
     credits: 6,
@@ -70,7 +88,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
   {
     id: "credits-12",
     kind: "credit_pack",
-    name: "Pack de crédit 03",
+    name: "Pack de crédit 02",
     description: "Pack de 12 crédits.",
     amountCents: 6600,
     credits: 12,
@@ -78,7 +96,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
   {
     id: "credits-20",
     kind: "credit_pack",
-    name: "Pack de crédit 04",
+    name: "Pack de crédit 03",
     description: "Pack de 20 crédits.",
     amountCents: 10000,
     credits: 20,
@@ -86,7 +104,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
   {
     id: "credits-60",
     kind: "credit_pack",
-    name: "Pack de crédit 05",
+    name: "Pack de crédit 04",
     description: "Pack de 60 crédits.",
     amountCents: 27000,
     credits: 60,

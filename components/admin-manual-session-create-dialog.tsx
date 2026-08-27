@@ -31,7 +31,6 @@ import {
   getParisWeekMonday,
   getParisWeekOffset,
   getParisWeekdayIndex,
-  PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
 
@@ -240,15 +239,24 @@ export function useAdminManualSessionCreate({
     [allowManualRepeat, defaultActivityId, manualActivityId, repeatInterval],
   );
 
-  const slotDateLabel = useMemo(() => {
-    if (!slotSelection) return null;
-    return new Intl.DateTimeFormat("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      timeZone: PARIS_TIMEZONE,
-    }).format(parseParisDateTime(slotSelection.date, "12:00"));
-  }, [slotSelection]);
+  const handleManualDateChange = useCallback((dateKey: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+
+    const dayIndex = getParisWeekdayIndex(parseParisDateTime(dateKey, "12:00"));
+    const startTime = manualStartTime || "10:00";
+    const durationMinutes = parseInt(manualDuration, 10) || 60;
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const endTotalMinutes = startHour * 60 + startMinute + durationMinutes;
+    const endTime = `${String(Math.floor(endTotalMinutes / 60) % 24).padStart(2, "0")}:${String(endTotalMinutes % 60).padStart(2, "0")}`;
+
+    setSlotSelection({
+      dayIndex,
+      date: dateKey,
+      startTime,
+      endTime,
+    });
+    setSelectedDays([dayIndex]);
+  }, [manualDuration, manualStartTime]);
 
   const handleCreate = async () => {
     if (!manualActivityId || manualPreview.length === 0) return;
@@ -312,11 +320,9 @@ export function useAdminManualSessionCreate({
               {isPracticeMode ? "Nouveau créneau" : "Nouvelle session"}
             </DialogTitle>
             <DialogDescription>
-              {slotDateLabel && manualStartTime
-                ? `${slotDateLabel} · ${manualStartTime} (${manualDuration} min)`
-                : isPracticeMode
-                  ? "Configurez le créneau à créer"
-                  : "Configurez la session à créer"}
+              {isPracticeMode
+                ? "Choisissez la date, l'heure et l'univers du créneau à créer"
+                : "Choisissez la date, l'heure et l'activité de la session à créer"}
             </DialogDescription>
           </DialogHeader>
 
@@ -326,10 +332,18 @@ export function useAdminManualSessionCreate({
             ) : null}
 
             <div className="grid gap-2">
-              <Label htmlFor="manual-activity">Activité *</Label>
+              <Label htmlFor="manual-activity">
+                {isPracticeMode ? "Univers / offre *" : "Activité *"}
+              </Label>
               <Select value={manualActivityId} onValueChange={setManualActivityId}>
                 <SelectTrigger id="manual-activity">
-                  <SelectValue placeholder="Sélectionner une activité" />
+                  <SelectValue
+                    placeholder={
+                      isPracticeMode
+                        ? "Sélectionner un univers"
+                        : "Sélectionner une activité"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {activities.map((activity) => (
@@ -339,6 +353,17 @@ export function useAdminManualSessionCreate({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="manual-date">Date *</Label>
+              <Input
+                id="manual-date"
+                type="date"
+                value={slotSelection?.date ?? ""}
+                onChange={(event) => handleManualDateChange(event.target.value)}
+                required
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

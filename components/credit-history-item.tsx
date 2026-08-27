@@ -68,13 +68,15 @@ export function CreditHistoryItem({
   const registrationStatus = registration?.status;
   const isCancelled = registrationStatus?.status === "CANCELLED";
   const creditPaymentLabel =
-    paymentType === "square:subscription"
+    paymentType?.startsWith("square:subscription")
       ? "Square - formule"
-      : paymentType === "square:credit_pack"
+      : paymentType?.startsWith("square:credit_pack")
         ? "Square - crédits"
-        : paymentType === "square:discovery"
+        : paymentType?.startsWith("square:discovery")
           ? "Square - découverte"
-          : null;
+          : paymentType === "admin"
+            ? "Admin (manuel)"
+            : null;
 
   return (
     <div className="flex items-start justify-between p-4 border rounded-lg">

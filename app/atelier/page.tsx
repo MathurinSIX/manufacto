@@ -599,7 +599,7 @@ export default function AtelierPage() {
             </div>
             <Suspense
               fallback={
-                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-3 lg:grid-cols-6" />
+                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-3 lg:grid-cols-5" />
               }
             >
               <AtelierCreditPackGrid />

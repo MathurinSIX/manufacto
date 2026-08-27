@@ -1563,7 +1563,85 @@ export async function createSession(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/cours");
   return { session: data, error: null };
+}
+
+export type ActivitySessionSlotInput = {
+  start_ts: string;
+  end_ts: string;
+  max_registrations: number | null;
+};
+
+export async function getUpcomingSessionsForActivity(activityId: string) {
+  await checkAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("session")
+    .select("id, start_ts, end_ts, max_registrations")
+    .eq("activity_id", activityId)
+    .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
+    .order("start_ts", { ascending: true })
+    .limit(50);
+
+  if (error) {
+    console.error("Error fetching upcoming sessions for activity:", error);
+    return { error: error.message, sessions: [] as Array<{
+      id: string;
+      start_ts: string;
+      end_ts: string;
+      max_registrations: number | null;
+    }> };
+  }
+
+  return { sessions: data ?? [], error: null };
+}
+
+export async function createSessionsForActivity(
+  activityId: string,
+  slots: ActivitySessionSlotInput[],
+) {
+  await checkAdmin();
+
+  if (!UUID_RE.test(activityId)) {
+    return { error: "Activité invalide", created: 0 };
+  }
+
+  if (slots.length === 0) {
+    return { error: null, created: 0 };
+  }
+
+  const results = await Promise.all(
+    slots.map((slot) =>
+      createSession(
+        activityId,
+        slot.start_ts,
+        slot.end_ts,
+        slot.max_registrations,
+      ),
+    ),
+  );
+
+  const errors = results
+    .map((result) => result.error)
+    .filter((message): message is string => Boolean(message));
+  const created = results.filter((result) => result.session).length;
+
+  if (errors.length > 0 && created === 0) {
+    return { error: errors[0], created: 0 };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/cours");
+
+  return {
+    created,
+    error:
+      errors.length > 0
+        ? `${created} date${created > 1 ? "s" : ""} créée${created > 1 ? "s" : ""}, ${errors.length} ignorée${errors.length > 1 ? "s" : ""} (${errors[0]}).`
+        : null,
+  };
 }
 
 // Create activities by batch based on a source week
@@ -1941,6 +2019,7 @@ export async function updateSession(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/cours");
   return { session: data, error: null };
 }
 
@@ -2086,6 +2165,7 @@ export async function deleteSession(sessionId: string) {
   }
   
   revalidatePath("/admin");
+  revalidatePath("/cours");
   return { error: null };
 }
 

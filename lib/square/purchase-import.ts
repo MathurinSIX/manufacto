@@ -1,3 +1,4 @@
+import { squareLedgerPaymentType } from "@/lib/format-payment-type";
 import {
   getSquareProductByCatalogObjectId,
 } from "@/lib/square/load-products";
@@ -146,27 +147,112 @@ async function resolveUserIdForSquarePayment({
   return { userId: null, squareCustomerId: customerId };
 }
 
-async function isCreditPackPaymentAlreadyImported({
+type ExistingCreditPackPurchase = {
+  id: string;
+  user_id: string | null;
+  status: string;
+  credits: number | string;
+  product_kind: string;
+};
+
+async function findCreditPackPurchaseForPayment({
   paymentId,
   productId,
 }: {
   paymentId: string;
   productId: string;
-}) {
+}): Promise<ExistingCreditPackPurchase | null> {
   const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("square_purchase")
-    .select("id")
+    .select("id, user_id, status, credits, product_kind")
     .eq("square_payment_id", paymentId)
     .eq("product_id", productId)
-    .eq("status", "completed")
+    .in("status", ["completed", "processing"])
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return Boolean(data);
+  return (data as ExistingCreditPackPurchase | null) ?? null;
+}
+
+async function ensureSquareCreditGrant({
+  userId,
+  amount,
+  productKind,
+  paymentId,
+}: {
+  userId: string;
+  amount: number;
+  productKind: string;
+  paymentId: string;
+}): Promise<"inserted" | "already_exists"> {
+  const supabase = getAdminClient();
+  const paymentType = squareLedgerPaymentType(productKind, paymentId);
+
+  const { error: creditError } = await supabase.from("credit").insert({
+    user_id: userId,
+    amount,
+    payment_type: paymentType,
+  });
+
+  if (!creditError) {
+    return "inserted";
+  }
+
+  if (creditError.code === "23505") {
+    return "already_exists";
+  }
+
+  throw creditError;
+}
+
+async function completeImportedCreditPackPurchase({
+  purchaseId,
+  userId,
+  creditsGranted,
+  productKind,
+  paymentId,
+  orderId,
+  squareCustomerId,
+}: {
+  purchaseId: string;
+  userId: string;
+  creditsGranted: number;
+  productKind: string;
+  paymentId: string;
+  orderId: string;
+  squareCustomerId: string | null;
+}) {
+  const supabase = getAdminClient();
+
+  await ensureSquareCreditGrant({
+    userId,
+    amount: creditsGranted,
+    productKind,
+    paymentId,
+  });
+
+  const fulfilledAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("square_purchase")
+    .update({
+      status: "completed",
+      user_id: userId,
+      square_order_id: orderId,
+      square_customer_id: squareCustomerId,
+      fulfilled_at: fulfilledAt,
+    })
+    .eq("id", purchaseId)
+    .in("status", ["processing", "completed"]);
+
+  if (updateError) {
+    throw updateError;
+  }
 }
 
 export async function importSquareCreditPackPayment({
@@ -230,6 +316,10 @@ export async function importSquareCreditPackPayment({
     console.warn(
       "[square-import] No linkable Supabase user for payment:",
       normalizedPaymentId,
+      {
+        customerId: paymentCustomerId,
+        buyerEmail,
+      },
     );
     result.skipped += 1;
     return result;
@@ -242,6 +332,11 @@ export async function importSquareCreditPackPayment({
   for (const lineItem of order.line_items) {
     const catalogObjectId = lineItem.catalog_object_id?.trim();
     if (!catalogObjectId) {
+      console.warn(
+        "[square-import] Line item has no catalog_object_id; skipping:",
+        normalizedPaymentId,
+      );
+      result.skipped += 1;
       continue;
     }
 
@@ -250,59 +345,117 @@ export async function importSquareCreditPackPayment({
       supabase,
     );
     if (!product) {
+      console.warn(
+        "[square-import] Unmapped catalog item; skipping:",
+        catalogObjectId,
+        "payment:",
+        normalizedPaymentId,
+      );
+      result.skipped += 1;
       continue;
     }
 
     try {
-      if (
-        await isCreditPackPaymentAlreadyImported({
-          paymentId: normalizedPaymentId,
-          productId: product.id,
-        })
-      ) {
+      const existing = await findCreditPackPurchaseForPayment({
+        paymentId: normalizedPaymentId,
+        productId: product.id,
+      });
+
+      const quantity = Math.max(1, Number.parseInt(lineItem.quantity ?? "1", 10) || 1);
+      const creditsGranted = product.credits * quantity;
+
+      if (existing) {
+        if (existing.status === "completed") {
+          result.skipped += 1;
+          continue;
+        }
+
+        if (existing.status === "processing" && existing.user_id) {
+          await completeImportedCreditPackPurchase({
+            purchaseId: existing.id,
+            userId: existing.user_id,
+            creditsGranted:
+              typeof existing.credits === "number"
+                ? existing.credits
+                : Number(existing.credits) || creditsGranted,
+            productKind: existing.product_kind || product.kind,
+            paymentId: normalizedPaymentId,
+            orderId: resolvedOrderId,
+            squareCustomerId,
+          });
+          result.imported += 1;
+          continue;
+        }
+
         result.skipped += 1;
         continue;
       }
 
-      const quantity = Math.max(1, Number.parseInt(lineItem.quantity ?? "1", 10) || 1);
-      const creditsGranted = product.credits * quantity;
       const lineUid = lineItem.uid?.trim() || catalogObjectId;
       const idempotencyKey = `import:${normalizedPaymentId}:${catalogObjectId}:${lineUid}`;
-      const fulfilledAt = new Date().toISOString();
 
-      const { error: purchaseError } = await supabase.from("square_purchase").insert({
-        user_id: userId,
-        product_id: product.id,
-        product_kind: product.kind,
-        amount_cents: product.amountCents * quantity,
-        credits: creditsGranted,
-        currency: payment.total_money?.currency ?? "EUR",
-        status: "completed",
-        square_order_id: resolvedOrderId,
-        square_payment_id: normalizedPaymentId,
-        square_customer_id: squareCustomerId,
-        idempotency_key: idempotencyKey,
-        fulfilled_at: fulfilledAt,
-      });
+      const { data: claimedPurchase, error: purchaseError } = await supabase
+        .from("square_purchase")
+        .insert({
+          user_id: userId,
+          product_id: product.id,
+          product_kind: product.kind,
+          amount_cents: product.amountCents * quantity,
+          credits: creditsGranted,
+          currency: payment.total_money?.currency ?? "EUR",
+          status: "processing",
+          square_order_id: resolvedOrderId,
+          square_payment_id: normalizedPaymentId,
+          square_customer_id: squareCustomerId,
+          idempotency_key: idempotencyKey,
+        })
+        .select("id")
+        .maybeSingle();
 
       if (purchaseError) {
         if (purchaseError.code === "23505") {
-          result.skipped += 1;
+          // Another worker claimed this payment+product; finish their row if needed.
+          const raced = await findCreditPackPurchaseForPayment({
+            paymentId: normalizedPaymentId,
+            productId: product.id,
+          });
+          if (raced?.user_id && raced.status === "processing") {
+            await completeImportedCreditPackPurchase({
+              purchaseId: raced.id,
+              userId: raced.user_id,
+              creditsGranted:
+                typeof raced.credits === "number"
+                  ? raced.credits
+                  : Number(raced.credits) || creditsGranted,
+              productKind: raced.product_kind || product.kind,
+              paymentId: normalizedPaymentId,
+              orderId: resolvedOrderId,
+              squareCustomerId,
+            });
+            result.imported += 1;
+          } else {
+            result.skipped += 1;
+          }
           continue;
         }
 
         throw purchaseError;
       }
 
-      const { error: creditError } = await supabase.from("credit").insert({
-        user_id: userId,
-        amount: creditsGranted,
-        payment_type: `square:${product.kind}`,
-      });
-
-      if (creditError) {
-        throw creditError;
+      if (!claimedPurchase?.id) {
+        result.skipped += 1;
+        continue;
       }
+
+      await completeImportedCreditPackPurchase({
+        purchaseId: claimedPurchase.id,
+        userId,
+        creditsGranted,
+        productKind: product.kind,
+        paymentId: normalizedPaymentId,
+        orderId: resolvedOrderId,
+        squareCustomerId,
+      });
 
       result.imported += 1;
     } catch (error) {

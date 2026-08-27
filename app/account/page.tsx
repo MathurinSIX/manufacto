@@ -14,8 +14,10 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
+import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
+import { isUnitCreditPack } from "@/lib/square/products";
 import { getSquareEnvironment } from "@/lib/square/environment";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
 import { WeeklyActivitiesCalendar } from "@/components/weekly-activities-calendar";
@@ -59,12 +61,6 @@ const subscriptionPlans = [
       "Pour une pratique intensive, notamment en menuiserie ou céramique.",
   },
 ] as const;
-
-const creditPackPriceFormatter = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
 
 const PRACTICE_ACTIVITY_TYPES = new Set([
   "autonomie",
@@ -786,29 +782,16 @@ async function AccountContent() {
               </p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                 {creditPackProducts.map((pack) => (
-                  <div
+                  <CreditPackPurchaseCard
                     key={pack.id}
-                    className="flex min-h-[180px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-4 text-center"
-                  >
-                    <p className="text-[34px] font-semibold leading-none text-black">
-                      {creditPackPriceFormatter.format(pack.amountCents / 100)}
-                    </p>
-                    <p className="mt-2 text-lg font-semibold leading-tight text-black/75">
-                      {pack.credits} crédit{pack.credits > 1 ? "s" : ""}
-                    </p>
-                    {pack.catalogObjectId ? (
-                      <SquareCheckoutButton
-                        productId={pack.id}
-                        className="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Acheter
-                      </SquareCheckoutButton>
-                    ) : (
-                      <p className="mt-4 text-xs leading-snug text-black/50">
-                        Paiement indisponible
-                      </p>
-                    )}
-                  </div>
+                    productId={pack.id}
+                    amountCents={pack.amountCents}
+                    credits={pack.credits}
+                    catalogObjectId={pack.catalogObjectId}
+                    allowQuantity={isUnitCreditPack(pack)}
+                    className="min-h-[180px] p-4"
+                    buttonClassName="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
                 ))}
               </div>
               <p className="mt-5 text-sm leading-normal text-black/60">

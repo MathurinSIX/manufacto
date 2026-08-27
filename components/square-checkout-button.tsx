@@ -13,6 +13,8 @@ type SquareCheckoutButtonProps = {
   reservationStart?: string;
   reservationEnd?: string;
   participantCount?: number;
+  /** Quantity for unit credit packs (1–5). Ignored for other products. */
+  quantity?: number;
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
@@ -29,6 +31,7 @@ export function SquareCheckoutButton({
   reservationStart,
   reservationEnd,
   participantCount = 1,
+  quantity = 1,
   children,
   className,
   disabled = false,
@@ -70,6 +73,7 @@ export function SquareCheckoutButton({
           reservationStart,
           reservationEnd,
           participantCount,
+          quantity,
         }),
       });
       const payload = (await response.json()) as {

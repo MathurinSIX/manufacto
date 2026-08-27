@@ -755,7 +755,7 @@ export function PracticeReservationPicker({
     if (!hasRequiredHourCount) {
       setIsRegistering(false);
       setErrorMessage(
-        isAccompagnement
+        isAccompagnement || minHourCount <= 1
           ? "Sélectionnez au moins une heure."
           : requiresExactHourCount
             ? `Sélectionnez ${minHourCount} heures consécutives.`
@@ -914,7 +914,7 @@ export function PracticeReservationPicker({
             Réserver en pratique libre
           </h2>
         <p className="mt-2 text-sm text-black/60">
-          {isAccompagnement
+          {isAccompagnement || minHourCount <= 1
             ? `Sélectionnez une ou plusieurs heures pour ${activityTitle}.`
             : `Sélectionnez au moins ${minHourCount} heures consécutives (ou plus) pour ${activityTitle}.`}
           </p>
@@ -1044,7 +1044,7 @@ export function PracticeReservationPicker({
                 Créneaux d&apos;une heure
               </p>
               <p className="mt-1 text-xs text-black/60">
-                {isAccompagnement
+                {isAccompagnement || (!requiresExactHourCount && minHourCount <= 1)
                   ? "Sélectionnez une ou plusieurs heures disponibles."
                   : requiresExactHourCount
                     ? `Sélectionnez ${minHourCount} heures consécutives.`
@@ -1258,7 +1258,7 @@ export function PracticeReservationPicker({
                       ? ` (${participantCount} personnes)`
                       : ""
                 }`
-              : isAccompagnement
+              : isAccompagnement || minHourCount <= 1
                 ? "Choisir au moins une heure"
                 : requiresExactHourCount
                   ? `Choisir ${minHourCount} heures consécutives`
@@ -1287,7 +1287,7 @@ export function PracticeReservationPicker({
                     ? ` (${participantCount} personnes)`
                     : ""
               }`
-            : isAccompagnement
+            : isAccompagnement || minHourCount <= 1
               ? "Choisir au moins une heure"
               : requiresExactHourCount
                 ? `Choisir ${minHourCount} heures consécutives`

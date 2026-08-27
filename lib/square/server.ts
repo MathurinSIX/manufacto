@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { getPasswordSetupRedirectUrl } from "@/lib/auth-redirect";
+import { squareLedgerPaymentType } from "@/lib/format-payment-type";
 import { resolveSquareSubscriptionFromItemVariation } from "@/lib/square/catalog-api";
 import { getSquareApiBaseUrl, getSquareEnvironment } from "@/lib/square/environment";
 import { getSquareProduct } from "@/lib/square/load-products";
@@ -1839,8 +1840,10 @@ export async function fulfillSquarePurchase({
     const { data: existingPaymentPurchase, error: existingPaymentError } =
       await supabase
         .from("square_purchase")
-        .select("id")
+        .select("*")
         .eq("square_payment_id", paymentId)
+        .in("status", ["completed", "processing"])
+        .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
 
@@ -1852,11 +1855,13 @@ export async function fulfillSquarePurchase({
       return;
     }
 
-    if (existingPaymentPurchase) {
+    if (existingPaymentPurchase?.status === "completed") {
       return;
     }
 
-    if (amountCents && buyerEmail) {
+    if (existingPaymentPurchase?.status === "processing") {
+      purchase = existingPaymentPurchase;
+    } else if (amountCents && buyerEmail) {
       const { data: usersList, error: usersError } = await supabase.auth.admin.listUsers({
         page: 1,
         perPage: 1000,
@@ -1956,11 +1961,22 @@ export async function fulfillSquarePurchase({
       square_customer_id: paymentCustomerId ?? purchase.square_customer_id ?? null,
     })
     .eq("id", purchase.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "processing"])
     .select()
     .maybeSingle();
 
   if (claimError) {
+    // Another worker already claimed this Square payment (POS import vs online).
+    if (claimError.code === "23505" && paymentId) {
+      const { importSquareCreditPackPayment } = await import(
+        "@/lib/square/purchase-import"
+      );
+      await importSquareCreditPackPayment({
+        paymentId,
+        orderId: orderId ?? null,
+      });
+      return;
+    }
     console.error("Error claiming Square purchase:", claimError);
     throw claimError;
   }
@@ -1998,13 +2014,29 @@ export async function fulfillSquarePurchase({
     return;
   }
 
+  const resolvedPaymentId =
+    paymentId ?? claimedPurchase.square_payment_id ?? null;
+
+  if (!resolvedPaymentId) {
+    console.error(
+      "Cannot grant Square credits without payment id:",
+      claimedPurchase.id,
+    );
+    throw new Error("Missing Square payment id for credit grant");
+  }
+
+  const creditAmount =
+    typeof claimedPurchase.credits === "number"
+      ? claimedPurchase.credits
+      : Number(claimedPurchase.credits) || product.credits;
+
   const { error: creditError } = await supabase.from("credit").insert({
     user_id: claimedPurchase.user_id,
-    amount: product.credits,
-    payment_type: `square:${product.kind}`,
+    amount: creditAmount,
+    payment_type: squareLedgerPaymentType(product.kind, resolvedPaymentId),
   });
 
-  if (creditError) {
+  if (creditError && creditError.code !== "23505") {
     console.error("Error fulfilling Square purchase:", creditError);
     throw creditError;
   }

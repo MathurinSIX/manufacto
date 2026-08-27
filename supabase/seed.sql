@@ -54,6 +54,10 @@ INSERT INTO activity (name, type, nb_credits, description)
 SELECT 'Céramique en autonomie', 'autonomie', 5, 'Accédez librement à l''atelier de céramique pour modeler, tourner et décorer vos créations en terre. Utilisez les tours de potier, fours et outils de modelage disponibles. Réalisez vos pièces en céramique, poterie ou sculpture avec l''assistance de l''équipe si nécessaire.'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Céramique en autonomie');
 
+INSERT INTO activity (name, type, nb_credits, description)
+SELECT 'Céramique en autonomie encadrée', 'autonomie_encadree', 3, 'Sessions de céramique en autonomie avec encadrement. Une encadrante est présente dans l''espace et peut répondre à vos questions si besoin.'
+WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Céramique en autonomie encadrée');
+
 INSERT INTO activity (name, type, nb_credits, description) 
 SELECT 'Cuisson céramique', 'cuisson', NULL, 'Service de cuisson pour vos pièces céramiques. Faites cuire vos créations en terre dans nos fours, même si elles n''ont pas été réalisées à l''atelier. Les pièces doivent être sèches et prêtes pour la cuisson. Contactez-nous pour connaître les modalités et tarifs.'
 WHERE NOT EXISTS (SELECT 1 FROM activity WHERE name = 'Cuisson céramique');

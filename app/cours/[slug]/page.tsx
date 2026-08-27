@@ -55,7 +55,14 @@ function formatSession(session: CourseSession) {
   const start = new Date(session.start_ts);
   const end = new Date(session.end_ts);
 
-  return `${sessionDateFormatter.format(start)} - ${sessionTimeFormatter.format(start)} / ${sessionTimeFormatter.format(end)}`;
+  const formatHour = (date: Date) => {
+    const parts = sessionTimeFormatter.formatToParts(date);
+    const hour = parts.find((part) => part.type === "hour")?.value ?? "0";
+    const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
+    return minute === "00" ? `${Number(hour)}h` : `${Number(hour)}h${minute}`;
+  };
+
+  return `${sessionDateFormatter.format(start)} - ${formatHour(start)} / ${formatHour(end)}`;
 }
 
 async function getCourses() {
