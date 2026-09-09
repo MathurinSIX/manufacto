@@ -46,6 +46,7 @@ export function DocumentSigningForm({
 
   const [acceptReglement, setAcceptReglement] = useState(false);
   const [acceptDecharge, setAcceptDecharge] = useState(false);
+  const [certifyInsurance, setCertifyInsurance] = useState(false);
   const [imageRights, setImageRights] = useState<"yes" | "no" | null>(
     profile?.image_rights === true
       ? "yes"
@@ -64,12 +65,6 @@ export function DocumentSigningForm({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(
     profile?.emergency_contact_phone ?? "",
   );
-  const [insuranceCompany, setInsuranceCompany] = useState(
-    profile?.insurance_company ?? "",
-  );
-  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState(
-    profile?.insurance_policy_number ?? "",
-  );
 
   const steps = ["Règlement", "Décharge", "Droit à l’image", "Signature"];
 
@@ -78,10 +73,9 @@ export function DocumentSigningForm({
     if (step === 1) {
       return (
         acceptDecharge &&
+        certifyInsurance &&
         emergencyContactName.trim() &&
-        emergencyContactPhone.trim() &&
-        insuranceCompany.trim() &&
-        insurancePolicyNumber.trim()
+        emergencyContactPhone.trim()
       );
     }
     if (step === 2) return imageRights !== null;
@@ -106,8 +100,7 @@ export function DocumentSigningForm({
         birthDate,
         emergencyContactName,
         emergencyContactPhone,
-        insuranceCompany,
-        insurancePolicyNumber,
+        certifyInsurance,
       });
 
       if (result.error) {
@@ -179,24 +172,6 @@ export function DocumentSigningForm({
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="insuranceCompany">Compagnie d’assurance *</Label>
-              <Input
-                id="insuranceCompany"
-                value={insuranceCompany}
-                onChange={(e) => setInsuranceCompany(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="insurancePolicy">N° de contrat *</Label>
-              <Input
-                id="insurancePolicy"
-                value={insurancePolicyNumber}
-                onChange={(e) => setInsurancePolicyNumber(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="emergencyName">Personne à prévenir *</Label>
               <Input
                 id="emergencyName"
@@ -240,6 +215,16 @@ export function DocumentSigningForm({
               />
             </div>
           </div>
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox
+              checked={certifyInsurance}
+              onCheckedChange={(value) => setCertifyInsurance(value === true)}
+            />
+            <span>
+              Je certifie avoir une assurance responsabilité civile en cours de
+              validité.
+            </span>
+          </label>
           <label className="flex items-start gap-3 text-sm">
             <Checkbox
               checked={acceptDecharge}

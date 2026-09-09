@@ -24,8 +24,7 @@ export type SubmitLegalPackInput = {
   birthDate?: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
-  insuranceCompany: string;
-  insurancePolicyNumber: string;
+  certifyInsurance: boolean;
 };
 
 function parseDataUrl(dataUrl: string) {
@@ -92,15 +91,19 @@ export async function submitLegalPack(input: SubmitLegalPackInput) {
     return { error: "Indiquez votre nom complet." };
   }
 
-  if (
-    !input.emergencyContactName.trim() ||
-    !input.emergencyContactPhone.trim() ||
-    !input.insuranceCompany.trim() ||
-    !input.insurancePolicyNumber.trim()
-  ) {
+  if (!input.certifyInsurance) {
     return {
       error:
-        "Renseignez l’assurance et la personne à prévenir (obligatoires pour la décharge).",
+        "Vous devez certifier disposer d’une assurance responsabilité civile.",
+    };
+  }
+
+  if (
+    !input.emergencyContactName.trim() ||
+    !input.emergencyContactPhone.trim()
+  ) {
+    return {
+      error: "Renseignez la personne à prévenir (obligatoire pour la décharge).",
     };
   }
 
@@ -155,8 +158,6 @@ export async function submitLegalPack(input: SubmitLegalPackInput) {
     birth_date: input.birthDate?.trim() || null,
     emergency_contact_name: input.emergencyContactName.trim(),
     emergency_contact_phone: input.emergencyContactPhone.trim(),
-    insurance_company: input.insuranceCompany.trim(),
-    insurance_policy_number: input.insurancePolicyNumber.trim(),
     image_rights: input.imageRights,
     updated_at: new Date().toISOString(),
   };

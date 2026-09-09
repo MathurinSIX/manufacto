@@ -182,24 +182,17 @@ export function AdminUserLegalSection({
                   : "Non renseigné"}
             </p>
           </div>
-          {(profile?.insurance_company || profile?.emergency_contact_name) && (
-            <div className="grid gap-2 p-3 text-sm sm:grid-cols-2">
-              <p>
-                <span className="font-medium">Assurance :</span>{" "}
-                {profile.insurance_company ?? "—"}{" "}
-                {profile.insurance_policy_number
-                  ? `(${profile.insurance_policy_number})`
-                  : ""}
-              </p>
+          {profile?.emergency_contact_name ? (
+            <div className="p-3 text-sm">
               <p>
                 <span className="font-medium">Urgence :</span>{" "}
-                {profile.emergency_contact_name ?? "—"}{" "}
+                {profile.emergency_contact_name}{" "}
                 {profile.emergency_contact_phone
                   ? `· ${profile.emergency_contact_phone}`
                   : ""}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
 
