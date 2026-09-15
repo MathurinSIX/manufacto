@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
+    // Bypass Vercel Image Optimization — Hobby plan returns 402 once the
+    // monthly transformation quota is exceeded (new photos-new assets hit it).
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
