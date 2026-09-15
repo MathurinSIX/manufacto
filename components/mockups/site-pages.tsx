@@ -160,12 +160,6 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
                   quel que soit votre niveau, vos besoins et vos envies.
                 </strong>
               </p>
-              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
-                <SecondaryCta href={h("/pratique-libre")}>
-                  Découvrir la pratique libre
-                </SecondaryCta>
-                <SecondaryCta href="/cours">Découvrir nos cours</SecondaryCta>
-              </div>
             </div>
             <ImageTile
               src={P.atelierVector}
