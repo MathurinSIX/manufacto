@@ -190,6 +190,86 @@ export async function createSquareCatalogPaymentLink({
   };
 }
 
+/** Fixed-amount checkout (e.g. gift card course tiers) without a Square catalog item. */
+export async function createSquareAdHocPaymentLink({
+  name,
+  amountCents,
+  buyer,
+  siteUrl,
+  redirectPath = "/offrir/merci",
+  paymentNote,
+}: {
+  name: string;
+  amountCents: number;
+  buyer: BuyerInfo;
+  siteUrl: string;
+  redirectPath?: string;
+  paymentNote?: string;
+}) {
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  const locationId = process.env.SQUARE_LOCATION_ID;
+
+  if (!accessToken || !locationId) {
+    throw new Error("Square configuration is missing");
+  }
+
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    throw new Error("Invalid gift card amount");
+  }
+
+  const idempotencyKey = crypto.randomUUID();
+  const orderBody: Record<string, unknown> = {
+    location_id: locationId,
+    line_items: [
+      {
+        name,
+        quantity: "1",
+        base_price_money: {
+          amount: Math.round(amountCents),
+          currency: "EUR",
+        },
+      },
+    ],
+  };
+  if (buyer.squareCustomerId) {
+    orderBody.customer_id = buyer.squareCustomerId;
+  }
+
+  const response = await fetch(`${getSquareApiBaseUrl()}/v2/online-checkout/payment-links`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": process.env.SQUARE_API_VERSION ?? "2026-01-22",
+    },
+    body: JSON.stringify({
+      idempotency_key: idempotencyKey,
+      order: orderBody,
+      checkout_options: {
+        redirect_url: `${siteUrl}${redirectPath}`,
+      },
+      pre_populated_data: buildPrePopulatedData(buyer),
+      payment_note: paymentNote ?? `Manufacto ${name}`,
+    }),
+  });
+
+  const payload = (await response.json()) as SquarePaymentLinkResponse;
+
+  if (!response.ok || !payload.payment_link?.url) {
+    const message =
+      payload.errors?.map((error) => error.detail).filter(Boolean).join(", ") ||
+      "Square ad-hoc payment link creation failed";
+    throw new Error(message);
+  }
+
+  return {
+    idempotencyKey,
+    paymentLinkId: payload.payment_link.id ?? null,
+    paymentLinkUrl: payload.payment_link.url,
+    orderId: payload.payment_link.order_id ?? null,
+  };
+}
+
 export async function createSquareSubscriptionPaymentLink({
   product,
   itemVariationId,
@@ -1809,6 +1889,13 @@ export async function fulfillSquarePurchase({
     return;
   }
 
+  const { fulfillGiftCardPurchase } = await import("@/lib/gift-cards/fulfill");
+  const giftCardResult = await fulfillGiftCardPurchase({ orderId, paymentId });
+
+  if (giftCardResult.fulfilled) {
+    return;
+  }
+
   const supabase = getAdminClient();
   const filters = [];
 
@@ -2120,6 +2207,16 @@ export async function fulfillSquarePurchaseFromRedirect({
       }
 
       resolvedOrderId = payment.order_id ?? resolvedOrderId;
+    }
+
+    const { fulfillGiftCardFromRedirect } = await import("@/lib/gift-cards/fulfill");
+    const giftCardResult = await fulfillGiftCardFromRedirect({
+      orderId: resolvedOrderId,
+      paymentId: paymentId ?? null,
+    });
+
+    if (giftCardResult.fulfilled) {
+      return { fulfilled: true } as const;
     }
 
     await fulfillSquarePurchase({

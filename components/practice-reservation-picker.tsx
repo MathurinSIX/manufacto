@@ -10,7 +10,9 @@ import {
 } from "@/app/account/actions";
 import { CancelRegistrationButton } from "@/components/cancel-registration-button";
 import { canUserCancelRegistration } from "@/lib/cancellation-policy";
+import { BookingPoliciesNotice } from "@/components/booking-policies-notice";
 import { ReservationAuthStep } from "@/components/reservation-auth-step";
+import { GiftCardPaymentOption } from "@/components/gift-card-payment-option";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import {
   ParticipantCountSelector,
@@ -740,8 +742,14 @@ export function PracticeReservationPicker({
     });
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (options?: {
+    paymentType?: "credits" | "gift_card";
+    giftCardCode?: string;
+  }) => {
     if (!selectedHourKeys.length) return;
+
+    const paymentType = options?.paymentType ?? "credits";
+    const giftCardCode = options?.giftCardCode;
 
     if (!userId) {
       handleAuthRequired();
@@ -784,13 +792,14 @@ export function PracticeReservationPicker({
         const hourEnd = new Date(hourStart.getTime() + HOUR_MS);
         const result = await registerForSession(
           option.sessionId,
-          "credits",
+          paymentType,
           {
             start: option.iso,
             end: hourEnd.toISOString(),
           },
           participantCount,
           companionFirstNames,
+          giftCardCode,
         );
 
         if (result.error) {
@@ -825,9 +834,10 @@ export function PracticeReservationPicker({
           start: block.startIso,
           end: block.endIso,
         })),
-        "credits",
+        paymentType,
         participantCount,
         companionFirstNames,
+        giftCardCode,
       );
 
       if (result.error) {
@@ -1180,6 +1190,10 @@ export function PracticeReservationPicker({
         />
       ) : null}
 
+      {hasSelectedHours && (showAuthStep || effectiveIsLoggedIn) ? (
+        <BookingPoliciesNotice context="booking" />
+      ) : null}
+
       {isSquareReservation ? (
         !effectiveIsLoggedIn && !showAuthStep ? (
           <Button
@@ -1241,7 +1255,7 @@ export function PracticeReservationPicker({
               !hasEnoughCredits ||
               maxParticipantsForSelection < 1
             }
-            onClick={handleRegister}
+            onClick={() => void handleRegister()}
           >
             {isRegistering ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1299,6 +1313,26 @@ export function PracticeReservationPicker({
           Vous avez {userCredits} crédit{userCredits !== 1 ? "s" : ""}, il en
           faut {totalCredits}.
         </p>
+      ) : null}
+      {effectiveIsLoggedIn && !isSquareReservation && totalCredits > 0 ? (
+        <GiftCardPaymentOption
+          activityId={activityId}
+          sessionId={checkoutSessionId ?? undefined}
+          requiredCredits={totalCredits}
+          participantCount={participantCount}
+          disabled={
+            isRegistering ||
+            !hasSelectableHours ||
+            selectedHourCount === 0 ||
+            hasFullHour ||
+            !hasRequiredHourCount ||
+            maxParticipantsForSelection < 1 ||
+            !companionNamesAreValid(participantCount, companionFirstNames)
+          }
+          onRedeem={async (code) => {
+            await handleRegister({ paymentType: "gift_card", giftCardCode: code });
+          }}
+        />
       ) : null}
     </div>
   );

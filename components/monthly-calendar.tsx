@@ -37,6 +37,7 @@ export type CalendarSessionItem = {
   nbCredits?: number | null;
   price?: number | null;
   squareProductId?: string | null;
+  imageUrl?: string | null;
 };
 
 const startOfMonthUTC = (date: Date) =>

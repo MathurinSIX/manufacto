@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
@@ -378,12 +379,19 @@ async function UserAccountContent({
     .order("label");
 
   return (
-    <div className="flex-1 w-full flex flex-col items-center px-5 py-16">
-        <div className="w-full max-w-6xl space-y-8">
-          <div className="flex items-center justify-between">
+    <div className="w-full space-y-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-4xl md:text-5xl font-bold">Compte de {userName}</h1>
-              <p className="text-lg text-muted-foreground mt-2">
+              <Link
+                href="/admin?tab=users"
+                className="text-sm font-semibold text-[#f56800] underline underline-offset-2"
+              >
+                ← utilisateurs
+              </Link>
+              <h1 className="mt-2 text-[28px] font-bold tracking-[-0.02em] md:text-[34px]">
+                Compte de {userName}
+              </h1>
+              <p className="mt-1 text-base text-black/60">
                 {targetUser.email}
               </p>
             </div>
@@ -539,8 +547,7 @@ async function UserAccountContent({
               />
             </CardContent>
           </Card>
-        </div>
-      </div>
+    </div>
   );
 }
 
@@ -550,11 +557,15 @@ export default async function UserAccountPage({
   params: Promise<{ userId: string }>;
 }) {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <Suspense fallback={<div className="flex-1 w-full flex items-center justify-center">Chargement...</div>}>
-        <UserAccountContent params={params} />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] w-full items-center justify-center text-black/60">
+          Chargement…
+        </div>
+      }
+    >
+      <UserAccountContent params={params} />
+    </Suspense>
   );
 }
 

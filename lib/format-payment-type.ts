@@ -30,5 +30,8 @@ export function formatPaymentTypeLabel(paymentType: string): string {
   if (paymentType === "square" || paymentType.startsWith("square:")) {
     return "Square";
   }
+  if (paymentType === "gift_card" || paymentType.startsWith("gift_card:")) {
+    return "Carte cadeau";
+  }
   return paymentType;
 }

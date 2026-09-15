@@ -1,667 +1,169 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
-import {
-  AtelierCreditPackGrid,
-  AtelierSubscriptionList,
-} from "@/components/atelier-tarifs-purchases";
-import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
-import {
-  MARKETING_LINK_CLASS,
-  MarketingBody,
-  MarketingSectionTitle,
-} from "@/components/marketing";
-import { DetailsHashOpener } from "@/components/details-hash-opener";
-import { loadSquareProducts } from "@/lib/square/load-products";
-import { createClient } from "@/lib/supabase/server";
+import { MockupAtelierPage } from "@/components/mockups/site-pages";
 
-const ASSETS = {
-  heroWood: "/assets/figma-landing/hero-wood.png",
-  heroCouture: "/assets/figma-landing/hero-couture.png",
-  heroElec: "/assets/figma-landing/hero-elec.png",
-  wordMenuiserie: "/assets/figma-landing/words-orange.png",
-  wordCouture: "/assets/figma-landing/words-blue.png",
-  wordElectronique: "/assets/figma-landing/words-green.png",
-  wordCeramique: "/assets/figma-landing/words-pink.png",
-  pictoVectoriel: "/assets/picto/picto_vectoriel.svg",
-  starBlue: "/assets/figma-landing/star-blue.png",
-  starOrange: "/assets/figma-landing/star-orange.png",
-  heroAtelier: "/assets/l_atelier/Frame 44.jpg",
-  universAtelier: "/assets/l_atelier/Vector.jpg",
-  creditSystem: "/assets/l_atelier/Frame 1321317462.jpg",
-  tarifs: "/assets/l_atelier/WhatsApp Image 2026-05-11 at 17.40.04 1.jpg",
-} as const;
-
-const universes = [
+const RATE_GROUPS = [
   {
-    label: "menuiserie",
-    image: "/assets/picto/menuiserie/menuiserie.png",
-    width: 180,
-    height: 140,
+    title: "Menuiserie",
+    color: "#f56800",
+    rows: [
+      { label: "Autonomie complète", value: "2 crédits / h" },
+      { label: "Autonomie encadrée", value: "3 crédits / h" },
+      { label: "Aide à la conception", value: "4 crédits / h" },
+    ],
   },
   {
-    label: "couture",
-    image: "/assets/picto/couture/couture.png",
-    width: 180,
-    height: 140,
+    title: "Couture",
+    color: "#4a56dd",
+    rows: [
+      { label: "Autonomie complète", value: "1 crédit / h" },
+      { label: "Autonomie encadrée", value: "2 crédits / h" },
+    ],
   },
   {
-    label: "céramique",
-    image: "/assets/picto/ceramique/ceramique.png",
-    width: 180,
-    height: 140,
-  },
-];
-
-const courseCards = [
-  {
-    number: "1.",
-    title: "créez un compte et achetez un pass manufacto,",
-    color: "text-[#f56800]",
-    copy: " que vous chargez avec le nombre de crédits de votre choix.",
+    title: "Céramique",
+    color: "#d73459",
+    rows: [
+      { label: "Autonomie complète", value: "2 crédits / h" },
+      { label: "Autonomie encadrée", value: "3 crédits / h" },
+      { label: "Cuisson (four entier)", value: "60 €" },
+    ],
   },
   {
-    number: "2.",
-    title: "avant votre première venue, nous vous enverrons un lien pour vous inscrire à une visite détaillée",
-    color: "text-[#f56800]",
-    copy: " de l’atelier. Elle sera l’occasion de se rencontrer, de vous faire faire le tour des lieux et de vous expliquer comment l’atelier fonctionne.",
-  },
-  {
-    number: "3.",
-    title: "réservez vos prochains créneaux / cours.",
-    color: "text-[#f56800]",
-    copy: " Vous serez débité du nombre de crédits correspondant, le solde reste disponible pour une prochaine fois, sur votre espace en ligne.",
-  },
-];
-
-const discoveryPacks = [
-  {
-    discipline: "couture",
-    title: "Pack découverte couture",
-    price: "15€",
-    line1: "2h de couture en",
-    line2: "autonomie encadrée",
-    borderClass: "border-[#4a56dd]/70",
-    cardClass: "bg-[#f0f1ff]",
-    priceClass: "text-[#4a56dd]",
-    linkClass: "text-[#4a56dd]",
-  },
-  {
-    discipline: "menuiserie",
-    title: "Pack découverte menuiserie",
-    price: "30€",
-    line1: "2h de menuiserie en",
-    line2: "autonomie encadrée",
-    borderClass: "border-[#f56800]/70",
-    cardClass: "bg-[#fff3e8]",
-    priceClass: "text-[#f56800]",
-    linkClass: "text-[#f56800]",
+    title: "Cours",
+    color: "#c9a227",
+    rows: [
+      { label: "Catégorie 01", value: "50 € / 10 crédits" },
+      { label: "Catégorie 02", value: "72 € / 15 crédits" },
+      { label: "Catégorie 03", value: "100 € / 20 crédits" },
+    ],
   },
 ] as const;
 
-function ImageTile({
-  src,
-  alt,
-  className = "",
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) {
-  return (
-    <div className={`relative overflow-hidden rounded-[6px] bg-[#d9d9d9] ${className}`}>
-      <Image src={src} alt={alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 520px" />
-    </div>
-  );
-}
+const SUBSCRIPTIONS = [
+  { label: "Abonnement 01", price: "90 €", credits: "20 crédits / mois" },
+  { label: "Abonnement 02", price: "170 €", credits: "40 crédits / mois" },
+  { label: "Abonnement 03", price: "240 €", credits: "60 crédits / mois" },
+] as const;
 
-async function DiscoveryPackBanner() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: activities } = await supabase
-    .from("activity")
-    .select("id, discipline, square_product_id")
-    .eq("type", "pack_decouverte")
-    .in(
-      "discipline",
-      discoveryPacks.map((pack) => pack.discipline),
-    )
-    .is("deleted_at", null);
-
-  const activityIdsByDiscipline = new Map(
-    (activities ?? []).map((activity) => [activity.discipline, activity]),
-  );
-  const products = await loadSquareProducts(supabase);
-  const mappedProductIds = new Set(
-    products
-      .filter((product) => product.catalogObjectId)
-      .map((product) => product.id),
-  );
-
-  return (
-    <section className="mb-10 mt-10 w-full rounded-[18px] bg-[#fff8f0]">
-      <div className="px-5 py-5 md:px-6 md:py-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-6 md:max-w-[55%]">
-            <h2 className="shrink-0 text-[30px] font-bold leading-none tracking-[-0.6px] text-[#f56800]">
-              pack <br />
-              découverte
-            </h2>
-            <div className="min-w-0">
-              <p className="text-xl leading-normal text-black/75">
-                Une première venue pour tester l&apos;atelier.
-              </p>
-              <p className="mt-2 text-base font-semibold leading-snug text-black/80 md:text-lg">
-                limitée à un achat par personne
-              </p>
-            </div>
-          </div>
-          <div className="grid w-full max-w-[440px] shrink-0 grid-cols-2 gap-3 md:w-auto">
-            {discoveryPacks.map((pack) => {
-              const activity = activityIdsByDiscipline.get(pack.discipline);
-              const squareProductId = activity?.square_product_id ?? null;
-              const hasSquareMapping = squareProductId
-                ? mappedProductIds.has(squareProductId)
-                : false;
-
-              return (
-                <div
-                  key={pack.discipline}
-                  className={`flex flex-col items-center justify-center rounded-[14px] border px-4 py-3 text-center ${pack.borderClass} ${pack.cardClass}`}
-                >
-                  <p className={`text-[34px] leading-none ${pack.priceClass}`}>
-                    {pack.price}
-                  </p>
-                  <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
-                    {pack.line1}
-                  </p>
-                  <p className="text-lg leading-tight text-black/75">
-                    {pack.line2}
-                  </p>
-                  {activity && squareProductId && hasSquareMapping ? (
-                    <DiscoveryPackReservationButton
-                      activityId={activity.id}
-                      activityTitle={pack.title}
-                      squareProductId={squareProductId}
-                      isLoggedIn={!!user}
-                      label="Réserver"
-                      className={`mt-2 text-lg font-semibold underline underline-offset-2 ${pack.linkClass}`}
-                    />
-                  ) : (
-                    <p className="mt-2 text-xs text-black/60">
-                      {!activity
-                        ? "Créneaux indisponibles"
-                        : !squareProductId
-                          ? "Produit Square manquant"
-                          : "Paiement indisponible"}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+const DISCOVERY = [
+  { label: "Couture", price: "15 €", detail: "2h autonomie encadrée" },
+  { label: "Menuiserie", price: "30 €", detail: "2h autonomie encadrée" },
+] as const;
 
 export default function AtelierPage() {
   return (
-    <main className="min-h-screen bg-white text-black">
-      <DetailsHashOpener />
-      <div className="flex min-h-screen w-full flex-col items-center">
-        <section className="relative h-[176px] w-full overflow-hidden bg-[#d9d9d9] md:h-[300px]">
-          <Image
-            src={ASSETS.heroAtelier}
-            alt="Manufacto, atelier partagé de menuiserie"
-            fill
-            className="object-cover"
-            priority
-            sizes="100vw"
-          />
-        </section>
-
-        <section id="concept" className="mx-auto w-full max-w-[990px] scroll-mt-28 px-5 pb-10 pt-8 text-center">
-          <h2 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
-            qu&apos;est-ce que manufacto?
-          </h2>
-          <div className="mx-auto mt-5 max-w-[620px] space-y-12 text-xl leading-normal text-black/75">
-            <p>
-              Manufacto est né d&apos;une envie : proposer un{" "}
-              <strong>lieu accessible</strong> à des{" "}
-              <strong>particuliers et amateurs, amatrices</strong> qui
-              voudraient travailler le bois, le textile ou la terre dans un
-              espace adapté et avec des machines de qualité.
-            </p>
-            <p>
-              Situé au cœur du 5ème arrondissement, l&apos;atelier rassemble
-              plusieurs espaces de pratique: menuiserie, couture et céramique.
+    <>
+      <MockupAtelierPage scope="site" />
+      <section
+        id="tarifs"
+        className="scroll-mt-28 border-t border-black/10 bg-white px-5 py-14"
+      >
+        <div className="mx-auto max-w-[1030px]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+            <div>
+              <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">
+                Tarifs
+              </h2>
+              <p className="mt-4 max-w-xl text-lg leading-normal text-black/65">
+                Système de crédits (valables un an). Achats et recharges dans{" "}
+                <Link
+                  href="/account?tab=credits"
+                  className="font-semibold text-[#4a56dd] underline"
+                >
+                  mon compte
+                </Link>
+                .
+              </p>
+            </div>
+            <p className="text-base leading-normal text-black/60 sm:max-w-xs sm:text-right">
+              <strong>15&nbsp;%</strong> étudiants / chômage / RSA — uniquement
+              sur place.
             </p>
           </div>
-        </section>
 
-        <section className="mx-auto w-full max-w-[1030px] px-5 pb-12">
-          <h1 className="text-center text-[28px] font-bold leading-none tracking-[-0.5px] text-[#f56800] md:text-[43px]">
-            un atelier, trois univers
-          </h1>
-          <div className="mt-6 grid grid-cols-3 gap-4 md:gap-8">
-            {universes.map((universe) => (
-              <div key={universe.label} className="text-center">
-                <div className="flex h-[112px] items-center justify-center p-4 md:h-[156px]">
-                  <Image
-                    src={universe.image}
-                    alt={universe.label}
-                    width={universe.width}
-                    height={universe.height}
-                    className="max-h-full w-auto object-contain"
-                  />
-                </div>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {RATE_GROUPS.map((group) => (
+              <div
+                key={group.title}
+                className="rounded-[14px] border border-black/8 bg-[#fff8f0]/70 px-4 py-3"
+              >
+                <h3
+                  className="border-b border-black/10 pb-1.5 text-sm font-bold uppercase tracking-wide"
+                  style={{ color: group.color }}
+                >
+                  {group.title}
+                </h3>
+                <ul className="mt-2 space-y-1.5 text-sm text-black/75">
+                  {group.rows.map((row) => (
+                    <li
+                      key={row.label}
+                      className="flex items-baseline justify-between gap-3"
+                    >
+                      <span className="min-w-0 leading-snug">{row.label}</span>
+                      <span className="shrink-0 font-semibold tabular-nums text-black/85">
+                        {row.value}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
-        </section>
 
-        <section className="mx-auto w-full max-w-[1030px] px-5 pb-16">
-          <div className="grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
-            <div>
-            <MarketingBody className="max-w-[920px] space-y-8">
-              <p>
-                Manufacto est organisé autour de trois univers techniques et
-                créatifs distincts. Chacun d&apos;entre eux a son espace, ses
-                outils, ses machines.
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[14px] border border-black/8 px-4 py-3">
+              <h3 className="text-sm font-bold text-[#f56800]">Pack découverte</h3>
+              <p className="mt-0.5 text-xs text-black/50">
+                Première venue — un achat par personne
               </p>
-              <p>
-                Chaque espace est organisé autour de{" "}
-                <strong>plusieurs postes de travail distincts</strong>, que
-                chacun peut réserver pour la durée et l&apos;usage de son choix,
-                pour <strong>réaliser ses propres projets</strong>, en autonomie
-                ou en autonomie encadrée.
-              </p>
-              <p>
-                En complément de ces temps de{" "}
-                <strong>pratique libre</strong>, nous vous proposons également
-                des <strong>cours ponctuels</strong> pour débloquer de nouvelles
-                compétences.
-              </p>
-              <p>
-                L&apos;objectif : se faire plaisir en donnant vie à ses projets,{" "}
-                <strong>
-                  quel que soit votre niveau, vos besoins et vos envies.
-                </strong>
-              </p>
-            </MarketingBody>
-            <div className="mt-12 flex flex-wrap gap-x-24 gap-y-4">
-              <Link
-                href="/pratique-libre"
-                className={MARKETING_LINK_CLASS}
-              >
-                découvrez la pratique libre
-              </Link>
-              <Link
-                href="/cours"
-                className="text-2xl font-semibold text-[#58a34d] underline underline-offset-2"
-              >
-                découvrez nos cours
-              </Link>
-            </div>
-            </div>
-            <ImageTile
-              src={ASSETS.universAtelier}
-              alt="Chaise en bois en cours de fabrication"
-              className="h-[380px] rounded-[16px]"
-            />
-          </div>
-        </section>
-
-        <section id="fonctionnement" className="w-full scroll-mt-28 bg-[#fff8f0]">
-          <div className="mx-auto max-w-[1030px] px-5 py-10 md:py-14">
-            <MarketingSectionTitle className="mb-12 text-black">
-              fonctionnement
-            </MarketingSectionTitle>
-
-            <div className="mb-7 flex items-center gap-5">
-              <Image
-                src={ASSETS.starBlue}
-                alt=""
-                width={120}
-                height={96}
-                className="h-16 w-20 object-contain"
-                aria-hidden
-              />
-              <p className="max-w-[760px] text-2xl font-bold leading-tight text-black/80">
-                vous êtes intéressé par la{" "}
-                <span className="text-[#58a34d]">pratique libre</span>, <br />
-                et peut être{" "}
-                <span className="text-[#58a34d]">quelques cours</span> de temps
-                en temps
-              </p>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-3">
-              {courseCards.map((card) => (
-                <article
-                  key={card.number}
-                  className="min-h-[280px] rounded-[28px] bg-white px-8 py-9 shadow-sm"
-                >
-                  <p className={`text-[64px] font-normal leading-none ${card.color}`}>
-                    {card.number}
-                  </p>
-                  <p className="mt-4 text-lg leading-normal text-black/75">
-                    <strong className="text-black/80">{card.title}</strong>
-                    {card.copy}
-                  </p>
-                </article>
-              ))}
-            </div>
-
-            <div className="mt-16">
-              <div className="mb-7 flex items-center gap-5">
-                <Image
-                  src={ASSETS.starOrange}
-                  alt=""
-                  width={120}
-                  height={100}
-                  className="h-16 w-20 object-contain"
-                  aria-hidden
-                />
-                <p className="max-w-[760px] text-2xl font-bold leading-tight text-black">
-                  vous voulez{" "}
-                  <span className="text-[#f6c51d]">
-                    simplement acheter un cours
-                  </span>
-                  <br />
-                  de montée en compétence
-                </p>
-              </div>
-              <p className="text-xl leading-normal text-black/75">
-                Que ce soit pour <strong>découvrir</strong> avant de pratiquer,
-                ou pour <strong>offrir</strong> (et c&apos;est une très bonne
-                idée !), alors rien de plus simple : Choisissez-le parmi nos
-                propositions, réglez et venez le jour dit.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 bg-white/55">
-            <div className="mx-auto grid max-w-[1030px] gap-6 px-5 py-8 md:grid-cols-[210px_1fr] md:items-center">
-              <p className="text-2xl font-bold text-[#f56800]">
-                besoin d&apos;aide ?
-              </p>
-              <p className="text-lg leading-normal text-black/75">
-                <strong className="text-black/80">
-                  Toutes ces démarches peuvent également être effectuées sur
-                  place
-                </strong>{" "}
-                à l&apos;atelier, si vous préférez. Passez dans nos heures
-                d&apos;ouvertures, nous pourrons vous aider.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section id="horaires-et-tarifs" className="mx-auto w-full max-w-[1030px] scroll-mt-28 px-5 py-14">
-          <MarketingSectionTitle className="text-black">
-            horaires
-          </MarketingSectionTitle>
-
-          <div className="relative mx-auto mt-12 max-w-[610px] rounded-[18px] border border-[#f56800]/60 bg-[#fff8f0] px-8 py-10 text-center text-xl leading-normal text-black/75">
-            <Image
-              src={ASSETS.starOrange}
-              alt=""
-              width={166}
-              height={138}
-              className="absolute -right-10 -top-10 h-[112px] w-[135px] object-contain"
-              aria-hidden
-            />
-            <div className="relative space-y-1 font-medium">
-              <p>Mardi : 13h / 20h</p>
-              <p>Mercredi : 9h / 21h</p>
-              <p>Jeudi : 13h / 21h</p>
-              <p>Vendredi : 9h / 16h</p>
-              <p>Samedi* : 9h / 12h &amp; 13h / 17h</p>
-            </div>
-            <p className="relative mt-5 text-xs">
-              *nous sommes fermés tous les derniers samedi du mois.
-            </p>
-          </div>
-        </section>
-
-        <section id="tarifs" className="mx-auto w-full max-w-[1030px] scroll-mt-28 px-5 pb-20">
-          <MarketingSectionTitle className="text-black">
-            tarifs
-          </MarketingSectionTitle>
-
-          <Suspense
-            fallback={
-              <section className="mb-10 mt-10 w-full rounded-[18px] bg-[#fff8f0]">
-                <div className="mx-auto min-h-[193px] max-w-[1274px] animate-pulse px-5 py-5 md:py-6" />
-              </section>
-            }
-          >
-            <DiscoveryPackBanner />
-          </Suspense>
-
-          <div className="mt-16 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
-            <div>
-              <h3 className="text-[28px] font-bold leading-none text-black">
-                manufacto fonctionne avec <br />
-                un système de crédit
-              </h3>
-              <MarketingBody className="mt-14 text-lg">
-                <p>
-                  Pour avoir accès à l&apos;atelier, il vous suffit de{" "}
-                  <strong>charger votre pass</strong> avec un certain nombre de
-                  crédits, avec lesquels vous pouvez ensuite{" "}
-                  <strong>acheter des heures de pratique libre</strong> en
-                  menuiserie, en couture, des ateliers de montée en
-                  compétence... ou autre selon votre choix.
-                </p>
-                <p>
-                  Les crédits sont <strong>valables un an.</strong>
-                  <br />
-                  Les tarifs sont dégressifs.
-                </p>
-                <p>
-                  Parmi nos activités, deux peuvent être payées en dehors de ce
-                  système de crédit :
-                </p>
-                <ul className="list-disc space-y-1 pl-6">
-                  <li>
-                    <strong>les ateliers de montée en compétence</strong>, si
-                    vous voulez simplement les offrir, ou découvrir le lieu, une
-                    pratique ou des outils spécifiques.
+              <ul className="mt-2 space-y-1 text-sm text-black/75">
+                {DISCOVERY.map((pack) => (
+                  <li
+                    key={pack.label}
+                    className="flex items-baseline justify-between gap-3"
+                  >
+                    <span>
+                      {pack.label}
+                      <span className="text-black/50"> — {pack.detail}</span>
+                    </span>
+                    <span className="font-semibold tabular-nums">{pack.price}</span>
                   </li>
-                  <li>
-                    <strong>les cuissons de céramique</strong> : elles sont
-                    facturées à l&apos;unité, en dehors du système de crédit.
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-[14px] border border-black/8 px-4 py-3">
+              <h3 className="text-sm font-bold text-[#f56800]">Abonnements</h3>
+              <p className="mt-0.5 text-xs text-black/50">
+                Engagement 3 mois, puis résiliation mensuelle
+              </p>
+              <ul className="mt-2 space-y-1 text-sm text-black/75">
+                {SUBSCRIPTIONS.map((plan) => (
+                  <li
+                    key={plan.label}
+                    className="flex items-baseline justify-between gap-3"
+                  >
+                    <span>
+                      {plan.label}
+                      <span className="text-black/50"> — {plan.credits}</span>
+                    </span>
+                    <span className="font-semibold tabular-nums">{plan.price}</span>
                   </li>
-                </ul>
-              </MarketingBody>
-            </div>
-            <ImageTile
-              src={ASSETS.creditSystem}
-              alt="Maillet et copeaux de bois"
-              className="h-[440px] rounded-[16px]"
-            />
-          </div>
-
-          <div className="mt-20 grid gap-10 md:grid-cols-[1fr_430px] md:items-start">
-            <ImageTile
-              src={ASSETS.tarifs}
-              alt="Outils de menuiserie sur un établi"
-              className="h-[760px] rounded-[16px]"
-            />
-            <div className="space-y-8">
-              <div>
-                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f56800]">
-                  menuiserie
-                </h3>
-                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie complète</span>
-                    <span>2 crédits / heure</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie encadrée</span>
-                    <span>3 crédits / heure</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>aide à la conception</span>
-                    <span>4 crédits / heure</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#4a56dd]">
-                  couture
-                </h3>
-                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie complète</span>
-                    <span>1 crédit / heure</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie encadrée</span>
-                    <span>2 crédits / heure</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#d73459]">
-                  céramique
-                </h3>
-                <div className="mt-4 space-y-3 text-lg leading-tight text-black/75">
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie complète</span>
-                    <span>2 crédits / heure</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>autonomie encadrée</span>
-                    <span>3 crédits / heure</span>
-                  </div>
-                  <div>
-                    <p>cuissons</p>
-                    <div className="flex justify-between gap-6">
-                      <span>· four entier</span>
-                      <span>60 €</span>
-                    </div>
-                    <p className="mt-2 max-w-[300px] text-xs leading-tight">
-                      pour retrouver le détail des modalités de nos cuissons
-                      (terres acceptées, taille du four etc), allez sur notre
-                      page cuisson.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="border-b border-black pb-1 text-[34px] font-bold leading-none text-[#f6c51d]">
-                  cours
-                </h3>
-                <div className="mt-4 space-y-1 text-lg leading-tight text-black/75">
-                  <div className="flex justify-between gap-6">
-                    <span>catégorie 01</span>
-                    <span>50 € / 10 crédits</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>catégorie 02</span>
-                    <span>72 € / 15 crédits</span>
-                  </div>
-                  <div className="flex justify-between gap-6">
-                    <span>catégorie 03</span>
-                    <span>100 € / 20 crédits</span>
-                  </div>
-                </div>
-              </div>
+                ))}
+              </ul>
             </div>
           </div>
 
-          <div className="mt-20 grid gap-10 md:grid-cols-[380px_1fr] md:items-center">
-            <div>
-              <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
-                les packs de crédits
-              </h3>
-              <p className="mt-6 text-lg leading-normal text-black/75">
-                Les crédits sont <strong>valables un an</strong> à partir de
-                leur date d&apos;achat.
-              </p>
-              <p className="mt-6 text-lg leading-normal text-black/75">
-                Ces recharges sont créditées directement sur votre compte
-                personnel. S&apos;il vous reste des crédits au moment de votre
-                achat, ils s&apos;ajoutent à ceux que vous venez d&apos;acheter.
-              </p>
-            </div>
-            <Suspense
-              fallback={
-                <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-2 rounded-[14px] bg-[#fff8f0] md:grid-cols-3 lg:grid-cols-5" />
-              }
-            >
-              <AtelierCreditPackGrid />
-            </Suspense>
-          </div>
-
-          <div className="mt-20 grid gap-10 md:grid-cols-[470px_1fr] md:items-start">
-            <div>
-              <h3 className="text-[28px] font-bold leading-tight text-[#f56800]">
-                les abonnements
-              </h3>
-              <div className="mt-6 space-y-5 text-lg leading-normal text-black/75">
-                <p>
-                  Les abonnements vous permettent d&apos;avoir un volume de
-                  crédit mensuel à utiliser à l&apos;atelier, à tarif
-                  préférentiel.
-                </p>
-                <p>
-                  Chaque mois, votre compte sera crédité du nombre de crédit
-                  correspondant. Si vous n&apos;utilisez pas tout sur le mois, le
-                  solde reste disponible et se cumule à celui du mois suivant.
-                  Vous devrez par ailleurs{" "}
-                  <strong>dans tous les cas réserver vos créneaux</strong> avant
-                  de venir à l&apos;atelier.
-                  <br />
-                  <strong>La durée d&apos;engagement est de 3 mois</strong>, vous
-                  pouvez ensuite résilier chaque mois. Après résiliation, vous
-                  disposez de 3 mois pour utiliser votre solde de crédits.
-                </p>
-              </div>
-              <div className="mt-14 max-w-[470px] rounded-[18px] border border-[#f56800]/50 bg-[#fff8f0] px-6 py-5 text-base leading-normal text-black/80">
-                <p className="font-semibold">
-                  15% de réduction sur tous nos tarifs pour les personnes
-                  étudiantes, au chômage, bénéficiaires du RSA.
-                </p>
-                <p className="mt-3">
-                  Réductions appliquées uniquement pour les paiements sur place.
-                </p>
-                <p className="mt-3 text-sm leading-snug text-black/70">
-                  Et si vous ne rentrez dans aucune de ces cases mais que nos
-                  tarifs sont un frein à votre venue, venez nous rencontrer et
-                  discutons-en.
-                </p>
-              </div>
-            </div>
-            <Suspense
-              fallback={
-                <div className="space-y-3">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="min-h-[120px] animate-pulse rounded-[14px] bg-[#fff8f0]"
-                    />
-                  ))}
-                </div>
-              }
-            >
-              <AtelierSubscriptionList />
-            </Suspense>
-          </div>
-        </section>
-      </div>
-    </main>
+          <p className="mt-6 text-base leading-normal text-black/60">
+            Packs de crédits : recharges dégressives, cumulables avec le solde
+            restant, valables un an — à acheter depuis{" "}
+            <Link href="/account?tab=credits" className="font-semibold text-[#4a56dd] underline">
+              mon compte
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+    </>
   );
 }

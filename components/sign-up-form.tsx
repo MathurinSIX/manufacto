@@ -40,9 +40,9 @@ export function SignUpForm({
   const emailId = useId();
   const passwordId = useId();
   const linkClass =
-    "font-semibold text-[#4a56dd] underline underline-offset-2 transition hover:text-[#2f3bcc]";
+    "font-semibold text-[#4a56dd] underline underline-offset-2 transition hover:text-[#3540bf]";
   const inputClass =
-    "h-12 rounded-[14px] border-black/20 bg-white px-4 text-base text-black shadow-none placeholder:text-black/35 focus-visible:ring-[#4a56dd]";
+    "h-12 rounded-[12px] border-black/15 bg-[#fff8f0] px-4 text-base text-black shadow-none placeholder:text-black/35 focus-visible:border-[#4a56dd]/40 focus-visible:ring-[#4a56dd]/30";
   const labelClass = "text-base font-semibold leading-none text-black/80";
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -166,7 +166,7 @@ export function SignUpForm({
               )}
               <Button
                 type="submit"
-                className="h-12 w-full rounded-[14px] bg-[#4a56dd] text-base font-semibold text-white shadow-none hover:bg-[#2f3bcc]"
+                className="h-12 w-full rounded-[12px] bg-[#f56800] text-base font-semibold text-white shadow-none transition hover:bg-[#d95700]"
                 disabled={isLoading}
               >
                 {isLoading ? "Création du compte..." : "S'inscrire"}

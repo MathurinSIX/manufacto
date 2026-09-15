@@ -17,54 +17,56 @@ const panelClassName =
 async function AdminContent() {
   unstable_noStore();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/auth/login?next=/admin");
   }
 
-  // Check if user is admin
   if (user.app_metadata?.role !== "admin") {
     redirect("/account");
   }
 
   return (
-    <div className="flex-1 w-full bg-[#fff8f0] text-black">
-      <div className="mx-auto w-full max-w-[1274px] px-5 pb-20 pt-16 md:pb-[140px] md:pt-[86px]">
-        <div className="mb-10 max-w-[760px] md:mb-14">
-          <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
-            administration
-          </h1>
-          <p className="mt-5 text-xl leading-normal text-black/75">
-            gérez les utilisateurs, les activités et les sessions
-          </p>
-        </div>
-
-        <Card className={panelClassName}>
-          <CardHeader className="border-b border-black/10 p-6 md:p-8">
-            <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-              panneau d'administration
-            </CardTitle>
-            <CardDescription className="mt-3 text-base leading-normal text-black/65">
-              accédez aux différentes fonctionnalités d'administration
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 md:p-8">
-            <AdminTabsWrapper />
-          </CardContent>
-        </Card>
+    <div className="w-full text-black">
+      <div className="mb-6 max-w-[760px] md:mb-8">
+        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em] md:text-[34px]">
+          Administration
+        </h1>
+        <p className="mt-2 text-base leading-normal text-black/65 md:text-lg">
+          Utilisateurs, activités et sessions.
+        </p>
       </div>
+
+      <Card className={panelClassName}>
+        <CardHeader className="border-b border-black/10 p-5 md:p-6">
+          <CardTitle className="text-[22px] font-semibold leading-tight text-black/80 md:text-[26px]">
+            Panneau
+          </CardTitle>
+          <CardDescription className="mt-2 text-sm leading-normal text-black/65">
+            Accédez aux fonctionnalités d&apos;administration
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 md:p-6">
+          <AdminTabsWrapper />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 export default function AdminPage() {
   return (
-    <main className="min-h-screen bg-white text-black">
-      <Suspense fallback={<div className="flex min-h-screen w-full items-center justify-center bg-[#fff8f0] text-black">Chargement...</div>}>
-        <AdminContent />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] w-full items-center justify-center text-base text-black/60">
+          Chargement…
+        </div>
+      }
+    >
+      <AdminContent />
+    </Suspense>
   );
 }
-

@@ -37,11 +37,11 @@ async function AdminSignContent({ params }: PageProps) {
     .join(" ");
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-5 py-10">
+    <div className="w-full max-w-3xl space-y-6">
       <div>
         <Link
           href={`/admin/users/${userId}`}
-          className="text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+          className="text-sm font-semibold text-[#f56800] underline underline-offset-2"
         >
           ← retour à la fiche
         </Link>

@@ -102,14 +102,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     credits: 20,
   },
   {
-    id: "credits-60",
-    kind: "credit_pack",
-    name: "Pack de crédit 04",
-    description: "Pack de 60 crédits.",
-    amountCents: 27000,
-    credits: 60,
-  },
-  {
     id: "decouverte-couture",
     kind: "discovery",
     name: "Pack découverte couture",

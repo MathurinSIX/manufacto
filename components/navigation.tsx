@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { User } from "lucide-react";
+import { headers } from "next/headers";
 import { NAV_LINKS } from "@/lib/nav-links";
 import { MobileNavDrawer } from "@/components/mobile-nav-drawer";
 import { HashLink } from "@/components/hash-link";
@@ -17,12 +18,31 @@ type ClaimsWithAppMetadata = {
   };
 };
 
+async function resolveIsAdmin(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const result = await Promise.race([
+      supabase.auth.getClaims(),
+      new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 400);
+      }),
+    ]);
+
+    if (!result) {
+      return false;
+    }
+
+    const claims = result.data?.claims as ClaimsWithAppMetadata | undefined;
+    return claims?.app_metadata?.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
 export async function Navigation() {
   unstable_noStore();
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims as ClaimsWithAppMetadata | undefined;
-  const isadmin = claims?.app_metadata?.role === "admin";
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isadmin = pathname.startsWith("/mockups") ? false : await resolveIsAdmin();
 
   return (
     <nav className="w-full bg-white">

@@ -1,24 +1,66 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { CourseInterestButton } from "@/components/course-interest-button";
-import { Course, formatCredits, formatPrice } from "./course-data";
+import { P } from "@/components/mockups/shared";
+import {
+  COURSE_DISCIPLINE_COLORS,
+  isCourseDiscipline,
+  type CourseDiscipline,
+} from "@/lib/course-disciplines";
+import {
+  Course,
+  formatCredits,
+  formatPrice,
+  blurbFromCourseDescription,
+} from "./course-data";
 
 type CourseCardProps = {
   course: Course;
-  isLoggedIn: boolean;
-  isInterested: boolean;
 };
 
-export function CourseCard({ course, isLoggedIn, isInterested }: CourseCardProps) {
+const DISCIPLINE_WORDS: Record<
+  CourseDiscipline,
+  { word: string; wordW: number; wordH: number }
+> = {
+  menuiserie: { word: P.wordMenuiserie, wordW: 496, wordH: 90 },
+  couture: { word: P.wordCouture, wordW: 400, wordH: 90 },
+  ceramique: { word: P.wordCeramique, wordW: 420, wordH: 90 },
+  electronique: { word: P.wordElectronique, wordW: 480, wordH: 90 },
+};
+
+function toDisciplineKey(label: string): CourseDiscipline {
+  const normalized = label
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (isCourseDiscipline(normalized)) {
+    return normalized;
+  }
+  if (normalized.includes("couture")) return "couture";
+  if (normalized.includes("ceramique")) return "ceramique";
+  if (normalized.includes("electronique")) return "electronique";
+  return "menuiserie";
+}
+
+export function CourseCard({ course }: CourseCardProps) {
+  const discipline = toDisciplineKey(course.discipline);
+  const colors = COURSE_DISCIPLINE_COLORS[discipline];
+  const wordMeta = DISCIPLINE_WORDS[discipline];
   const priceLabel = formatPrice(course.price);
   const creditsLabel = formatCredits(course.credits);
-  const metaLabel = priceLabel ?? creditsLabel;
+  const metaParts = [priceLabel ?? creditsLabel, course.duration].filter(Boolean);
+  const blurb = blurbFromCourseDescription(course.description);
 
   return (
-    <article>
-      <Link href={`/cours/${course.slug}`} className="group block">
-        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#d9d9d9]">
+    <article className="flex h-full flex-col">
+      <Link
+        href={`/cours/${course.slug}`}
+        className="group flex h-full flex-col overflow-hidden rounded-[19px] border border-black/8 transition hover:border-black/20 hover:shadow-sm"
+        style={{ backgroundColor: colors.tint }}
+      >
+        <div className="relative h-44 shrink-0 sm:h-48">
           <Image
             src={course.image}
             alt={course.title}
@@ -27,68 +69,60 @@ export function CourseCard({ course, isLoggedIn, isInterested }: CourseCardProps
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 407px"
           />
         </div>
-        <div className="mt-3 text-xl leading-normal text-black/75">
-          <p className="font-bold">{course.discipline} /</p>
-          <p>{course.title}</p>
-          {metaLabel || course.duration ? (
-            <p>
-              {[metaLabel, course.duration].filter(Boolean).join(" · ")}
+        <div className="flex flex-1 flex-col p-5">
+          <Image
+            src={wordMeta.word}
+            alt={course.discipline}
+            width={wordMeta.wordW}
+            height={wordMeta.wordH}
+            className="h-7 w-auto object-contain object-left"
+          />
+          <h3 className="mt-4 text-lg font-bold leading-snug text-black/90 sm:text-xl">
+            {course.title}
+          </h3>
+          {blurb ? (
+            <p className="mt-2 text-base leading-snug text-black/65">{blurb}</p>
+          ) : null}
+          {metaParts.length > 0 ? (
+            <p className="mt-2 text-sm font-medium text-black/55">
+              {metaParts.join(" · ")}
             </p>
           ) : null}
           {course.level ? (
-            <p className="mt-1 text-base leading-normal text-black/60">
-              <span className="font-semibold text-black/70">Niveau</span>
+            <p className="mt-1 text-sm text-black/50">
+              <span className="font-semibold text-black/60">Niveau</span>
               {" · "}
               {course.level}
             </p>
           ) : null}
           {course.audience ? (
-            <p className="mt-1 text-base leading-normal text-black/60">
-              <span className="font-semibold text-black/70">Public</span>
+            <p className="mt-1 text-sm text-black/50">
+              <span className="font-semibold text-black/60">Public</span>
               {" · "}
               {course.audience}
             </p>
           ) : null}
+          <span
+            className="mt-auto pt-6 text-base font-semibold underline underline-offset-2 sm:text-lg"
+            style={{ color: colors.fg }}
+          >
+            Voir le cours et les dates →
+          </span>
         </div>
       </Link>
-
-      {!course.hasUpcomingSessions ? (
-        <div className="mt-3 space-y-3">
-          <p className="text-base text-black/50">Aucune date pour le moment</p>
-          <CourseInterestButton
-            activityId={course.id}
-            isLoggedIn={isLoggedIn}
-            isInterested={isInterested}
-            redirectPath={`/cours/${course.slug}`}
-          />
-        </div>
-      ) : null}
     </article>
   );
 }
 
 type CourseGridProps = {
   courses: Course[];
-  isLoggedIn: boolean;
-  interestedActivityIds: string[];
 };
 
-export function CourseGrid({
-  courses,
-  isLoggedIn,
-  interestedActivityIds,
-}: CourseGridProps) {
-  const interestedSet = new Set(interestedActivityIds);
-
+export function CourseGrid({ courses }: CourseGridProps) {
   return (
     <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
       {courses.map((course) => (
-        <CourseCard
-          key={course.id}
-          course={course}
-          isLoggedIn={isLoggedIn}
-          isInterested={interestedSet.has(course.id)}
-        />
+        <CourseCard key={course.id} course={course} />
       ))}
     </div>
   );

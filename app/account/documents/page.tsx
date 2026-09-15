@@ -3,10 +3,6 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { DocumentSigningForm } from "@/components/legal/document-signing-form";
-import {
-  MarketingPageContainer,
-  MarketingPageHeader,
-} from "@/components/marketing";
 import { createClient } from "@/lib/supabase/server";
 import { getUserLegalCompliance } from "@/lib/legal/status";
 
@@ -35,20 +31,21 @@ async function DocumentsContent({
 
   if (status.complete) {
     return (
-      <MarketingPageContainer className="pb-24">
-        <MarketingPageHeader title="Documents signés">
-          <p>
-            Votre règlement intérieur et votre décharge sont à jour. Vous pouvez
-            réserver.
-          </p>
-        </MarketingPageHeader>
+      <div>
+        <h1 className="text-[28px] font-bold tracking-[-0.02em] md:text-[34px]">
+          Documents signés
+        </h1>
+        <p className="mt-3 text-base text-black/70 md:text-lg">
+          Votre règlement intérieur et votre décharge sont à jour. Vous pouvez
+          réserver.
+        </p>
         <Link
           href={returnTo}
-          className="mt-6 inline-flex text-[#4a56dd] underline underline-offset-2"
+          className="mt-6 inline-flex rounded-[12px] bg-[#4a56dd] px-5 py-3 text-base font-semibold text-white"
         >
           Continuer
         </Link>
-      </MarketingPageContainer>
+      </div>
     );
   }
 
@@ -60,23 +57,22 @@ async function DocumentsContent({
     .join(" ");
 
   return (
-    <MarketingPageContainer className="pb-24">
-      <div className="mb-6">
-        <Link
-          href="/account"
-          className="text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
-        >
-          ← retour au compte
-        </Link>
-      </div>
-      <MarketingPageHeader title="Documents à signer">
-        <p>
-          Avant votre première réservation, merci de signer le règlement
-          intérieur et la décharge de responsabilité, et d’indiquer votre choix
-          pour le droit à l’image.
-        </p>
-      </MarketingPageHeader>
-      <div className="mt-8 rounded-[19px] border border-black/10 bg-[#fff8f0] p-6">
+    <div>
+      <Link
+        href="/account"
+        className="text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
+      >
+        ← retour au compte
+      </Link>
+      <h1 className="mt-4 text-[28px] font-bold tracking-[-0.02em] md:text-[34px]">
+        Documents à signer
+      </h1>
+      <p className="mt-3 text-base text-black/70 md:text-lg">
+        Avant votre première réservation, merci de signer le règlement
+        intérieur et la décharge de responsabilité, et d’indiquer votre choix
+        pour le droit à l’image.
+      </p>
+      <div className="mt-6 rounded-[16px] border border-black/10 bg-white p-5 shadow-sm ring-1 ring-black/5 md:p-6">
         <DocumentSigningForm
           documents={status.documents}
           profile={status.profile}
@@ -85,7 +81,7 @@ async function DocumentsContent({
           returnTo={returnTo}
         />
       </div>
-    </MarketingPageContainer>
+    </div>
   );
 }
 
@@ -95,10 +91,8 @@ export default function AccountDocumentsPage({
   searchParams: Promise<Search>;
 }) {
   return (
-    <main className="min-h-screen bg-white text-black">
-      <Suspense fallback={<div className="p-8 text-center">Chargement…</div>}>
-        <DocumentsContent searchParams={searchParams} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<div className="py-10 text-center text-black/60">Chargement…</div>}>
+      <DocumentsContent searchParams={searchParams} />
+    </Suspense>
   );
 }

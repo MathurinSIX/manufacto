@@ -16,6 +16,8 @@ type ActivityRow = {
   nb_credits: number | null;
   price: number | null;
   square_product_id: string | null;
+  image_url: string | null;
+  image_urls: string[] | null;
 };
 
 type SessionRow = {
@@ -55,6 +57,10 @@ function groupSessionsByParisDay(rows: SessionRow[]): CourseSessionsByDate {
     const dateKey = dayKeyFormatter.format(new Date(session.start_ts));
     const activityName = act.name ?? "Cours";
     const discipline = inferPracticeDiscipline(activityName, act.discipline);
+    const imageUrl =
+      (act.image_urls ?? []).map((u) => u?.trim()).find(Boolean) ||
+      act.image_url?.trim() ||
+      null;
     const item: CalendarSessionItem = {
       id: session.id,
       activityId: session.activity_id,
@@ -65,6 +71,7 @@ function groupSessionsByParisDay(rows: SessionRow[]): CourseSessionsByDate {
       nbCredits: act.nb_credits ?? null,
       price: act.price ?? null,
       squareProductId: act.square_product_id ?? null,
+      imageUrl,
     };
 
     if (!sessionsByDate[dateKey]) {
@@ -105,7 +112,9 @@ async function fetchAllCourseSessionRows(
           discipline,
           nb_credits,
           price,
-          square_product_id
+          square_product_id,
+          image_url,
+          image_urls
         )
       `,
       )

@@ -1,8 +1,11 @@
 import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
+import {
+  DiscoveryPackModalTrigger,
+  type DiscoveryPackOption,
+} from "@/components/discovery-pack-modal";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
-import { isUnitCreditPack } from "@/lib/square/products";
 import { createClient } from "@/lib/supabase/server";
 
 const DISCOVERY_PACKS = [
@@ -24,6 +27,9 @@ const DISCOVERY_PACKS = [
 
 const discoveryCheckoutButtonClassName =
   "mt-3 inline-flex w-full shrink-0 justify-center rounded-[12px] bg-[#4a56dd] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#3d47c4] disabled:cursor-not-allowed disabled:opacity-60";
+
+const discoveryCheckoutButtonCompactClassName =
+  "mt-2 inline-flex w-full shrink-0 justify-center rounded-[10px] bg-[#4a56dd] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[#3d47c4] disabled:cursor-not-allowed disabled:opacity-60";
 
 const ATELIER_SUBSCRIPTION_PLANS = [
   {
@@ -58,7 +64,61 @@ type TarifsPurchaseProps = {
   returnPath?: string;
 };
 
-export async function AtelierDiscoveryPackGrid() {
+export async function DiscoveryPackPremiereVisiteButton({
+  className = "",
+}: {
+  className?: string;
+} = {}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: activities } = await supabase
+    .from("activity")
+    .select("id, discipline, square_product_id")
+    .eq("type", "pack_decouverte")
+    .in(
+      "discipline",
+      DISCOVERY_PACKS.map((pack) => pack.discipline),
+    )
+    .is("deleted_at", null);
+
+  const activityIdByDiscipline = new Map(
+    (activities ?? []).map((activity) => [activity.discipline, activity]),
+  );
+
+  const packs: DiscoveryPackOption[] = DISCOVERY_PACKS.flatMap((pack) => {
+    const activity = activityIdByDiscipline.get(pack.discipline);
+    const squareProductId = activity?.square_product_id ?? null;
+    if (!activity || !squareProductId) return [];
+    return [
+      {
+        discipline: pack.discipline,
+        title: pack.title,
+        price: pack.price,
+        line1: pack.line1,
+        line2: pack.line2,
+        activityId: activity.id,
+        squareProductId,
+      },
+    ];
+  });
+
+  return (
+    <DiscoveryPackModalTrigger
+      packs={packs}
+      isLoggedIn={!!user}
+      className={className}
+    />
+  );
+}
+
+export async function AtelierDiscoveryPackGrid({
+  compact = false,
+}: {
+  compact?: boolean;
+} = {}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -79,7 +139,7 @@ export async function AtelierDiscoveryPackGrid() {
   );
 
   return (
-    <div className="grid gap-2 md:grid-cols-2">
+    <div className={`grid gap-2 md:grid-cols-2 ${compact ? "max-w-xl" : ""}`}>
       {DISCOVERY_PACKS.map((pack) => {
         const activity = activityIdByDiscipline.get(pack.discipline);
         const squareProductId = activity?.square_product_id ?? null;
@@ -87,11 +147,27 @@ export async function AtelierDiscoveryPackGrid() {
         return (
           <div
             key={pack.discipline}
-            className="flex min-h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#4a56dd]/70 bg-[#fff8f0] p-3 text-center"
+            className={
+              compact
+                ? "flex min-h-0 flex-col items-center justify-center rounded-[12px] border border-[#4a56dd]/60 bg-white px-3 py-3 text-center"
+                : "flex min-h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#4a56dd]/70 bg-[#fff8f0] p-3 text-center"
+            }
           >
-            <p className="text-[34px] leading-none">{pack.price}</p>
-            <p className="text-lg font-semibold leading-none">{pack.line1}</p>
-            <p className="text-lg leading-none">{pack.line2}</p>
+            <p className={compact ? "text-[26px] leading-none" : "text-[34px] leading-none"}>
+              {pack.price}
+            </p>
+            <p
+              className={
+                compact
+                  ? "mt-1 text-sm font-semibold leading-tight"
+                  : "text-lg font-semibold leading-none"
+              }
+            >
+              {pack.line1}
+            </p>
+            <p className={compact ? "text-sm leading-tight text-black/75" : "text-lg leading-none"}>
+              {pack.line2}
+            </p>
             {activity && squareProductId ? (
               <DiscoveryPackReservationButton
                 activityId={activity.id}
@@ -99,10 +175,14 @@ export async function AtelierDiscoveryPackGrid() {
                 squareProductId={squareProductId}
                 isLoggedIn={!!user}
                 label="Acheter"
-                className={discoveryCheckoutButtonClassName}
+                className={
+                  compact
+                    ? discoveryCheckoutButtonCompactClassName
+                    : discoveryCheckoutButtonClassName
+                }
               />
             ) : (
-              <p className="mt-3 text-xs leading-snug text-black/50">
+              <p className="mt-2 text-xs leading-snug text-black/50">
                 {activity ? "Produit Square manquant" : "Créneaux indisponibles"}
               </p>
             )}
@@ -136,7 +216,6 @@ export async function AtelierCreditPackGrid({
           catalogObjectId={pack.catalogObjectId}
           isLoggedIn={!!user}
           returnPath={returnPath}
-          allowQuantity={isUnitCreditPack(pack)}
           buttonClassName={checkoutButtonClassName}
         />
       ))}

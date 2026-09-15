@@ -38,6 +38,35 @@ export type DbCourse = {
 
 export const DEFAULT_COURSE_IMAGE = "/assets/homepage/Vector.jpg";
 
+/** Strip markdown markers for card blurbs (keep readable plain text). */
+export function stripMarkdownToPlainText(markdown: string): string {
+  return markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/^[\t ]*[-*+]\s+/gm, "")
+    .replace(/^[\t ]*\d+\.\s+/gm, "")
+    .replace(/[~>]{1,}/g, " ")
+    .replace(/[*_#`]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function blurbFromCourseDescription(
+  description: string,
+  maxLength = 110,
+): string | null {
+  const cleaned = stripMarkdownToPlainText(description);
+  if (!cleaned) return null;
+  if (cleaned.length <= maxLength) return cleaned;
+  return `${cleaned.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 export function resolveActivityImages(
   imageUrl: string | null | undefined,
   imageUrls: string[] | null | undefined,

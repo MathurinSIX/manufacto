@@ -1,41 +1,9 @@
-import { LandingPage } from "@/components/landing-page";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import { LandingPageV1 } from "@/components/archive/landing-page-v1";
 
-interface HomeProps {
-  searchParams: Promise<{ code?: string; token_hash?: string; type?: string; next?: string }>;
-}
-
-async function HandleSearchParams({ searchParams }: HomeProps) {
-  const params = await searchParams;
-  if (params?.code) {
-    const confirmParams = new URLSearchParams({ code: params.code });
-    confirmParams.set("next", params.next ?? "/auth/update-password");
-    redirect(`/auth/confirm?${confirmParams.toString()}`);
-  }
-
-  if (params?.token_hash && params?.type) {
-    const confirmParams = new URLSearchParams({
-      token_hash: params.token_hash,
-      type: params.type,
-    });
-
-    if (params.next) {
-      confirmParams.set("next", params.next);
-    }
-
-    redirect(`/auth/confirm?${confirmParams.toString()}`);
-  }
-  return null;
-}
-
-export default async function Home({ searchParams }: HomeProps) {
-  return (
-    <>
-      <Suspense fallback={null}>
-        <HandleSearchParams searchParams={searchParams} />
-      </Suspense>
-      <LandingPage />
-    </>
-  );
+/**
+ * Former homepage (pre Chemin + cours). Kept for copy reference.
+ * Main site is now `/` → HomePage (mix design).
+ */
+export default function HomeArchivePage() {
+  return <LandingPageV1 />;
 }

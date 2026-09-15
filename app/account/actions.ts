@@ -27,7 +27,7 @@ const UUID_RE =
 /** Allow booking up to 15 minutes after a session/hour has started. */
 const BOOKING_GRACE_MS = 15 * 60 * 1000;
 
-type PaymentType = "credits" | "stripe";
+type PaymentType = "credits" | "stripe" | "gift_card";
 
 type RegistrationStatusRow = {
   registration_id: string;
@@ -39,6 +39,7 @@ type ActivityRow = {
   id: string;
   name?: string | null;
   nb_credits: number | string | null;
+  price?: number | string | null;
   type: string | null;
 };
 
@@ -126,6 +127,7 @@ export async function registerForSession(
   reservation?: { start: string; end: string },
   participantCountInput = 1,
   companionFirstNamesInput: string[] = [],
+  giftCardCode?: string,
 ) {
   const participantCount = clampParticipantCount(participantCountInput);
   const companionFirstNames =
@@ -165,7 +167,7 @@ export async function registerForSession(
   const { data: session, error: sessionError } = await supabase
     .from("session")
     .select(
-      "id, start_ts, end_ts, max_registrations, activity:activity_id(id, name, nb_credits, type)",
+      "id, start_ts, end_ts, max_registrations, activity:activity_id(id, name, nb_credits, price, type)",
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -320,15 +322,44 @@ export async function registerForSession(
     }
   }
 
-  if (paymentType === "credits") {
-    const durationHours =
-      isPracticeActivity && reservationStart && reservationEnd
-        ? (reservationEnd.getTime() - reservationStart.getTime()) /
-          (60 * 60 * 1000)
-        : 1;
-    const requiredCredits =
-      toNumber(activity?.nb_credits) * durationHours * participantCount;
+  const durationHours =
+    isPracticeActivity && reservationStart && reservationEnd
+      ? (reservationEnd.getTime() - reservationStart.getTime()) / (60 * 60 * 1000)
+      : 1;
+  const requiredCredits =
+    toNumber(activity?.nb_credits) * durationHours * participantCount;
 
+  let validatedGiftCard: Awaited<
+    ReturnType<
+      typeof import("@/lib/gift-cards/redeem").validateGiftCardForBooking
+    >
+  > | null = null;
+
+  if (paymentType === "gift_card") {
+    if (!giftCardCode?.trim()) {
+      return { error: "Code carte cadeau requis.", registrationId: null };
+    }
+
+    const { validateGiftCardForBooking } = await import("@/lib/gift-cards/redeem");
+    const validation = await validateGiftCardForBooking(giftCardCode, {
+      activityId: activity?.id,
+      sessionId,
+      requiredCredits,
+      requiredAmountCents:
+        activity?.price !== null && activity?.price !== undefined
+          ? Math.round(toNumber(activity.price) * 100)
+          : undefined,
+      participantCount,
+    });
+
+    if (validation.ok === false) {
+      return { error: validation.error, registrationId: null };
+    }
+
+    validatedGiftCard = validation;
+  }
+
+  if (paymentType === "credits") {
     if (requiredCredits > 0) {
       const { data: credits, error: creditsError } = await supabase
         .from("credit")
@@ -352,12 +383,19 @@ export async function registerForSession(
     }
   }
 
+  const resolvedPaymentType =
+    paymentType === "gift_card" && validatedGiftCard?.ok
+      ? (await import("@/lib/gift-cards/redeem")).giftCardPaymentType(
+          validatedGiftCard.giftCard.id,
+        )
+      : paymentType;
+
   const { data, error } = await supabase
     .from("registration")
     .insert({
       session_id: sessionId,
       user_id: user.id,
-      payment_type: paymentType,
+      payment_type: resolvedPaymentType,
       participant_count: participantCount,
       companion_first_names: companionFirstNames,
       reserved_start_ts: isPracticeActivity ? reservationStart!.toISOString() : null,
@@ -369,6 +407,26 @@ export async function registerForSession(
   if (error) {
     console.error("Error creating registration:", error);
     return { error: "Votre inscription n'a pas pu être enregistrée.", registrationId: null };
+  }
+
+  if (paymentType === "gift_card" && validatedGiftCard?.ok) {
+    const { redeemGiftCardForRegistration } = await import("@/lib/gift-cards/redeem");
+    const redeemResult = await redeemGiftCardForRegistration({
+      giftCard: validatedGiftCard.giftCard,
+      userId: user.id,
+      registrationId: data.id,
+      creditsUsed:
+        validatedGiftCard.giftCard.kind === "credits" ? requiredCredits : 0,
+      amountCentsUsed:
+        validatedGiftCard.giftCard.kind === "course"
+          ? Math.round(toNumber(activity?.price) * 100) * participantCount
+          : 0,
+    });
+
+    if (redeemResult.ok === false) {
+      await getAdminClient().from("registration").delete().eq("id", data.id);
+      return { error: redeemResult.error, registrationId: null };
+    }
   }
 
   revalidatePath("/account");
@@ -428,6 +486,7 @@ export async function registerForPracticeReservation(
   paymentType: PaymentType,
   participantCountInput = 1,
   companionFirstNamesInput: string[] = [],
+  giftCardCode?: string,
 ) {
   const participantCount = clampParticipantCount(participantCountInput);
   const companionFirstNames =
@@ -665,9 +724,36 @@ export async function registerForPracticeReservation(
     }
   }
 
+  const requiredCredits =
+    toNumber(firstActivity.nb_credits) * totalDurationHours * participantCount;
+
+  let validatedGiftCard: Awaited<
+    ReturnType<
+      typeof import("@/lib/gift-cards/redeem").validateGiftCardForBooking
+    >
+  > | null = null;
+
+  if (paymentType === "gift_card") {
+    if (!giftCardCode?.trim()) {
+      return { error: "Code carte cadeau requis.", registrationIds: [] };
+    }
+
+    const { validateGiftCardForBooking } = await import("@/lib/gift-cards/redeem");
+    const validation = await validateGiftCardForBooking(giftCardCode, {
+      activityId: firstActivity.id,
+      sessionId: sortedBlocks[0]?.sessionId,
+      requiredCredits,
+      participantCount,
+    });
+
+    if (validation.ok === false) {
+      return { error: validation.error, registrationIds: [] };
+    }
+
+    validatedGiftCard = validation;
+  }
+
   if (paymentType === "credits") {
-    const requiredCredits =
-      toNumber(firstActivity.nb_credits) * totalDurationHours * participantCount;
     if (requiredCredits > 0) {
       const { data: credits, error: creditsError } = await supabase
         .from("credit")
@@ -694,13 +780,20 @@ export async function registerForPracticeReservation(
     }
   }
 
+  const resolvedPaymentType =
+    paymentType === "gift_card" && validatedGiftCard?.ok
+      ? (await import("@/lib/gift-cards/redeem")).giftCardPaymentType(
+          validatedGiftCard.giftCard.id,
+        )
+      : paymentType;
+
   const { data: inserted, error: insertError } = await supabase
     .from("registration")
     .insert(
       sortedBlocks.map((block) => ({
         session_id: block.sessionId,
         user_id: user.id,
-        payment_type: paymentType,
+        payment_type: resolvedPaymentType,
         participant_count: participantCount,
         companion_first_names: companionFirstNames,
         reserved_start_ts: block.start.toISOString(),
@@ -715,6 +808,28 @@ export async function registerForPracticeReservation(
       error: "Votre inscription n'a pas pu être enregistrée.",
       registrationIds: [],
     };
+  }
+
+  if (paymentType === "gift_card" && validatedGiftCard?.ok && inserted[0]) {
+    const { redeemGiftCardForRegistration } = await import("@/lib/gift-cards/redeem");
+    const redeemResult = await redeemGiftCardForRegistration({
+      giftCard: validatedGiftCard.giftCard,
+      userId: user.id,
+      registrationId: inserted[0].id,
+      creditsUsed: requiredCredits,
+      amountCentsUsed: 0,
+    });
+
+    if (redeemResult.ok === false) {
+      await getAdminClient()
+        .from("registration")
+        .delete()
+        .in(
+          "id",
+          inserted.map((row) => row.id),
+        );
+      return { error: redeemResult.error, registrationIds: [] };
+    }
   }
 
   revalidatePath("/account");

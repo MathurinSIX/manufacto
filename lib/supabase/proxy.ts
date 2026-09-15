@@ -9,9 +9,19 @@ type UserClaimsWithAppMetadata = {
 };
 
 export async function updateSession(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: {
+      headers: requestHeaders,
+    },
   });
+
+  // Design mockups are static previews — never wait on Supabase auth.
+  if (request.nextUrl.pathname.startsWith("/mockups")) {
+    return supabaseResponse;
+  }
 
   // If the env vars are not set, skip proxy check. You can remove this
   // once you setup the project.
@@ -34,7 +44,9 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({
-            request,
+            request: {
+              headers: requestHeaders,
+            },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
@@ -60,7 +72,10 @@ export async function updateSession(request: NextRequest) {
   ) {
     // no user trying to access account page, redirect to login
     const url = request.nextUrl.clone();
+    const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     url.pathname = "/auth/login";
+    url.search = "";
+    url.searchParams.set("next", nextPath);
     return NextResponse.redirect(url);
   }
 
@@ -69,7 +84,10 @@ export async function updateSession(request: NextRequest) {
     if (!user) {
       // no user trying to access admin page, redirect to login
       const url = request.nextUrl.clone();
+      const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
       url.pathname = "/auth/login";
+      url.search = "";
+      url.searchParams.set("next", nextPath);
       return NextResponse.redirect(url);
     }
     // Check if user is admin (app_metadata.role === 'admin')
@@ -79,6 +97,7 @@ export async function updateSession(request: NextRequest) {
       // not an admin, redirect to account page
       const url = request.nextUrl.clone();
       url.pathname = "/account";
+      url.search = "";
       return NextResponse.redirect(url);
     }
   }

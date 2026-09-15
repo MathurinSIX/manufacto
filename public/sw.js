@@ -1,4 +1,4 @@
-const CACHE_NAME = "manufacto-static-v3";
+const CACHE_NAME = "manufacto-account-v1";
 const STATIC_ASSETS = [
   "/account",
   "/manifest.webmanifest",
@@ -8,6 +8,10 @@ const STATIC_ASSETS = [
   "/icons/apple-touch-icon.png",
   "/assets/figma-landing/logo-mark.png",
 ];
+
+function isAccountPath(pathname) {
+  return pathname === "/account" || pathname.startsWith("/account/");
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -25,7 +29,11 @@ self.addEventListener("activate", (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .filter(
+              (cacheName) =>
+                cacheName.startsWith("manufacto-account-") &&
+                cacheName !== CACHE_NAME,
+            )
             .map((cacheName) => caches.delete(cacheName)),
         ),
       )
@@ -42,6 +50,11 @@ self.addEventListener("fetch", (event) => {
 
   const requestUrl = new URL(request.url);
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  // PWA is account-only — never intercept the marketing site.
+  if (!isAccountPath(requestUrl.pathname)) {
     return;
   }
 

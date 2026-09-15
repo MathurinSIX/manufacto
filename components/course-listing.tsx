@@ -26,8 +26,6 @@ type AvailabilityFilter =
 
 type CourseListingProps = {
   courses: Course[];
-  isLoggedIn: boolean;
-  interestedActivityIds: string[];
 };
 
 function CourseFilterField({
@@ -82,11 +80,7 @@ function matchesAvailabilityFilter(
   return true;
 }
 
-export function CourseListing({
-  courses,
-  isLoggedIn,
-  interestedActivityIds,
-}: CourseListingProps) {
+export function CourseListing({ courses }: CourseListingProps) {
   const [discipline, setDiscipline] = useState(ALL);
   const [price, setPrice] = useState(ALL);
   const [duration, setDuration] = useState(ALL);
@@ -326,11 +320,7 @@ export function CourseListing({
 
       {filteredCourses.length > 0 ? (
         <>
-          <CourseGrid
-            courses={paginatedCourses}
-            isLoggedIn={isLoggedIn}
-            interestedActivityIds={interestedActivityIds}
-          />
+          <CourseGrid courses={paginatedCourses} />
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}

@@ -10,6 +10,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+import { BookingPoliciesNotice } from "@/components/booking-policies-notice";
+import { GiftCardPaymentOption } from "@/components/gift-card-payment-option";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import {
   ParticipantCountSelector,
@@ -650,6 +652,59 @@ export function ActivitySessionPicker({
     router.refresh();
   };
 
+  const handleGiftCardRegister = async (giftCardCode: string) => {
+    if (!userId) {
+      handleAuthRequired();
+      throw new Error("Connexion requise");
+    }
+
+    if (!selectedSessionId) {
+      throw new Error("Sélectionnez une session.");
+    }
+
+    if (userRegistrations[selectedSessionId]) {
+      throw new Error("Vous êtes déjà inscrit à cette session.");
+    }
+
+    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+      throw new Error("Indiquez le prénom de chaque personne supplémentaire.");
+    }
+
+    setIsRegistering(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const result = await registerForSession(
+      selectedSessionId,
+      "gift_card",
+      undefined,
+      participantCount,
+      companionFirstNames,
+      giftCardCode,
+    );
+    setIsRegistering(false);
+
+    if (result.error) {
+      if (redirectToLegalDocsIfRequired(result.error, window.location.pathname)) {
+        throw new Error(result.error);
+      }
+      throw new Error(legalDocsUserMessage(result.error));
+    }
+
+    if (result.registrationId) {
+      setUserRegistrations((prev) => ({
+        ...prev,
+        [selectedSessionId]: {
+          id: result.registrationId!,
+          participantCount,
+        },
+      }));
+    }
+
+    setSuccessMessage("Inscription confirmée ! Nous vous attendons à l'atelier.");
+    router.refresh();
+  };
+
   const handleCancel = async () => {
     if (!selectedSessionId) return;
     const registration = userRegistrations[selectedSessionId];
@@ -942,6 +997,7 @@ export function ActivitySessionPicker({
                 )
               ) : (
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
+                  <BookingPoliciesNotice context="booking" className="w-full" />
                   {isSquareOnlyActivity && squareCatalogProductId && (
                     <SquareCheckoutButton
                       productId={squareCatalogProductId}
@@ -1012,6 +1068,29 @@ export function ActivitySessionPicker({
                         ? `Réserver pour ${totalPrice!.toFixed(2)}€ (${participantCount} personnes)`
                         : `Réserver pour ${totalPrice!.toFixed(2)}€`}
                     </SquareCheckoutButton>
+                  )}
+                  {(normalizedCredits !== null || squareCatalogProductId) && (
+                    <GiftCardPaymentOption
+                      activityId={activityId}
+                      sessionId={selectedSessionId ?? undefined}
+                      requiredCredits={normalizedCredits ? totalCredits : undefined}
+                      requiredAmountCents={
+                        normalizedPrice !== null
+                          ? Math.round(normalizedPrice * 100)
+                          : undefined
+                      }
+                      participantCount={participantCount}
+                      disabled={
+                        isRegistering ||
+                        maxParticipantsForSelection < 1 ||
+                        !companionNamesAreValid(
+                          participantCount,
+                          companionFirstNames,
+                        )
+                      }
+                      onRedeem={handleGiftCardRegister}
+                      className="w-full sm:w-auto"
+                    />
                   )}
                 </div>
               )}

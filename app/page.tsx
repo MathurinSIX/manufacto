@@ -1,4 +1,4 @@
-import { LandingPage } from "@/components/landing-page";
+import { HomePage } from "@/components/home-page";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -11,11 +11,7 @@ async function HandleSearchParams({ searchParams }: RootPageProps) {
 
   if (params?.code) {
     const confirmParams = new URLSearchParams({ code: params.code });
-
-    // Password recovery/invite emails often land on Site URL with only ?code=.
-    // Prefer the password setup page unless an explicit next was provided.
     confirmParams.set("next", params.next ?? "/auth/update-password");
-
     redirect(`/auth/confirm?${confirmParams.toString()}`);
   }
 
@@ -24,11 +20,9 @@ async function HandleSearchParams({ searchParams }: RootPageProps) {
       token_hash: params.token_hash,
       type: params.type,
     });
-
     if (params.next) {
       confirmParams.set("next", params.next);
     }
-
     redirect(`/auth/confirm?${confirmParams.toString()}`);
   }
 
@@ -41,7 +35,7 @@ export default function RootPage({ searchParams }: RootPageProps) {
       <Suspense fallback={null}>
         <HandleSearchParams searchParams={searchParams} />
       </Suspense>
-      <LandingPage />
+      <HomePage scope="site" />
     </>
   );
 }

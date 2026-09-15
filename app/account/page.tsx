@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -17,10 +16,13 @@ import { CreditHistoryList } from "@/components/credit-history-list";
 import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
-import { isUnitCreditPack } from "@/lib/square/products";
 import { getSquareEnvironment } from "@/lib/square/environment";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
-import { WeeklyActivitiesCalendar } from "@/components/weekly-activities-calendar";
+import { CoursePageTabs } from "@/components/course-page-tabs";
+import { MockupPointsCalendar } from "@/components/mockups/mockup-points-calendar";
+import { AccountMainTabs } from "@/components/account-main-tabs";
+import { AccountPratiquePanel } from "@/components/account-pratique-panel";
+import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
@@ -142,17 +144,6 @@ function getSession(
   return session ?? null;
 }
 
-function splitActivityTitle(name: string | null) {
-  if (!name) return "Atelier";
-  const parts = name.split("/");
-  if (parts.length <= 1) return name.trim();
-  return parts.slice(1).join("/").trim() || name.trim();
-}
-
-function getPracticeReservationHref(activityId: string) {
-  return `/reserver?${new URLSearchParams({ activity: activityId }).toString()}`;
-}
-
 async function AccountContent() {
   unstable_noStore();
   const supabase = await createClient();
@@ -170,6 +161,8 @@ async function AccountContent() {
     .filter((product) => product.kind === "credit_pack")
     .sort((a, b) => a.amountCents - b.amountCents);
   const isSquareSandbox = getSquareEnvironment() === "sandbox";
+
+  const courses = await fetchCoursesForListing();
 
   const now = new Date().toISOString();
 
@@ -446,35 +439,30 @@ async function AccountContent() {
   const legalStatus = await getUserLegalCompliance(supabase, user.id);
 
   return (
-    <div className="flex-1 w-full bg-[#fff8f0] text-black">
-      <div className="mx-auto w-full max-w-[1274px] px-5 pb-20 pt-16 md:pb-[140px] md:pt-[86px]">
-        <div className="mb-10 grid gap-6 md:mb-14 md:grid-cols-[1fr_auto] md:items-end">
-          <div className="max-w-[860px]">
-            <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
-              mon compte
-            </h1>
-            <p className="mt-5 text-xl leading-normal text-black/75 md:text-[22px]">
-              Gérez vos réservations, suivez vos crédits et retrouvez votre
-              historique d&apos;atelier.
-            </p>
-            <div className="mt-6">
-              <LogoutButton />
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
-            <div className="rounded-[19px] bg-white px-8 py-5 shadow-sm ring-1 ring-black/10">
-              <span className="block text-sm font-medium uppercase tracking-[0.14em] text-black/55">
-                Crédits
-              </span>
-              <span className="mt-2 block text-[38px] font-bold leading-none text-[#4a56dd]">
-                {Math.round(totalCredits)}
-              </span>
-            </div>
+    <div className="w-full text-black">
+      <div className="mb-8 grid gap-5 md:mb-10 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="max-w-[860px]">
+          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em] md:text-[36px]">
+            Bonjour
+          </h1>
+          <p className="mt-2 text-base leading-normal text-black/65 md:text-lg">
+            Réservations, crédits et historique — tout au même endroit.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
+          <div className="rounded-[16px] border border-[#4a56dd]/25 bg-white px-6 py-4 shadow-sm ring-1 ring-black/5">
+            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-black/50">
+              Crédits
+            </span>
+            <span className="mt-1 block text-[34px] font-bold leading-none text-[#4a56dd]">
+              {Math.round(totalCredits)}
+            </span>
           </div>
         </div>
+      </div>
 
         {!legalStatus.complete ? (
-          <div className="mb-8 rounded-[19px] border border-[#f56800]/40 bg-white p-5 shadow-sm ring-1 ring-black/5">
+          <div className="mb-8 rounded-[16px] border border-[#f56800]/40 bg-white p-5 shadow-sm ring-1 ring-black/5">
             <p className="text-lg font-semibold text-black/80">
               Documents à signer avant votre première réservation
             </p>
@@ -491,353 +479,289 @@ async function AccountContent() {
           </div>
         ) : null}
 
-        <div className="space-y-8 md:space-y-10">
-          {/* Reservations with Tabs */}
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                mes réservations
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Gérez vos réservations à venir, passées et annulées
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <Tabs defaultValue="upcoming" className="w-full">
-                <TabsList className="grid h-auto w-full grid-cols-3 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60">
-                  <TabsTrigger
-                    value="upcoming"
-                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
-                  >
-                    À venir
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="past"
-                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
-                  >
-                    Passées
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="cancelled"
-                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
-                  >
-                    Annulées
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="upcoming" className="mt-6">
-                  <UpcomingReservationsList
-                    registrations={upcomingRegistrations}
-                    sessionsMap={sessionsMap}
-                    registrationStatusMap={registrationStatusMap}
-                    error={registrationsError?.message}
-                  />
-                </TabsContent>
-                <TabsContent value="past" className="mt-6">
-                  <PastReservationsList
-                    registrations={pastRegistrations}
-                    sessionsMap={sessionsMap}
-                    error={registrationsError?.message}
-                  />
-                </TabsContent>
-                <TabsContent value="cancelled" className="mt-6">
-                  <CancelledReservationsList
-                    registrations={cancelledRegistrations}
-                    sessionsMap={sessionsMap}
-                    registrationStatusMap={registrationStatusMap}
-                    error={registrationsError?.message}
-                  />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                réservation rapide
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Choisissez un cours ou un créneau de pratique libre disponible
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <Tabs defaultValue="cours" className="w-full">
-                <TabsList className="grid h-auto w-full grid-cols-2 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60">
-                  <TabsTrigger
-                    value="cours"
-                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
-                  >
-                    Cours
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="pratique"
-                    className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#f56800] data-[state=active]:shadow-sm"
-                  >
-                    Pratique libre
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="cours" className="mt-6">
-                  <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="text-sm leading-normal text-black/60">
-                        Consultez les prochaines semaines.
-                      </p>
-                      <Link
-                        href="/cours"
-                        className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
-                      >
-                        tout voir
-                      </Link>
-                    </div>
-                    <div className="mt-5 rounded-[14px] border border-black/10 bg-white p-3 md:p-4">
-                      <Suspense
-                        fallback={
-                          <div
-                            className="min-h-[200px] rounded-[14px] bg-[#f2f2f2] md:min-h-[280px]"
-                            aria-hidden
-                          />
-                        }
-                      >
-                        <WeeklyActivitiesCalendar />
-                      </Suspense>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="pratique" className="mt-6">
-                  <div className="rounded-[14px] border border-black/10 bg-[#fff8f0] p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="text-sm leading-normal text-black/60">
-                        Choisissez ensuite l&apos;heure d&apos;arrivée et la durée.
-                      </p>
-                      <Link
-                        href="/pratique-libre"
-                        className="shrink-0 text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
-                      >
-                        tout voir
-                      </Link>
-                    </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      {quickPracticeItems.length ? (
-                        quickPracticeItems.map((activity) => (
-                          <Link
-                            key={activity.id}
-                            href={getPracticeReservationHref(activity.id)}
-                            scroll={false}
-                            className="block rounded-[12px] border border-black/10 bg-white p-4 transition hover:border-[#f56800]/60 hover:bg-[#f56800]/5"
-                          >
-                            <span className="block font-semibold text-black">
-                              {splitActivityTitle(activity.name)}
-                            </span>
-                            <span className="mt-1 block text-sm text-black/60">
-                              {activity.nb_credits ?? 0} crédit
-                              {activity.nb_credits === 1 ? "" : "s"} / heure
-                            </span>
-                          </Link>
-                        ))
-                      ) : (
-                        <p className="text-sm text-black/60">
-                          Aucun créneau de pratique libre n&apos;est disponible
-                          pour le moment.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                mes formules
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Souscriptions liées à votre compte
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              {!subscriptionPurchases?.length ? (
-                <p className="text-base leading-normal text-black/60">
-                  Aucune formule Square enregistrée pour le moment. Les achats
-                  réalisés depuis cette page apparaîtront ici après paiement.
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-[14px] border border-black/10">
-                  <table className="w-full min-w-[520px] text-left text-sm">
-                    <thead className="border-b border-black/10 bg-[#f2f2f2] text-black/70">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Formule</th>
-                        <th className="px-4 py-3 font-semibold">Crédits</th>
-                        <th className="px-4 py-3 font-semibold">Statut</th>
-                        <th className="px-4 py-3 font-semibold">Date</th>
-                        <th className="px-4 py-3 font-semibold">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-black/10 bg-white">
-                      {subscriptionPurchases.map((row) => {
-                        const product = squareProductsById.get(row.product_id);
-                        const name =
-                          product?.name ?? row.product_id ?? "Formule inconnue";
-                        const status = subscriptionStatusLabel(row.status);
-                        const when = row.fulfilled_at ?? row.created_at;
-                        const whenDate = when ? new Date(when) : null;
-                        return (
-                          <tr key={row.id}>
-                            <td className="px-4 py-3 font-medium text-black">
-                              {name}
-                            </td>
-                            <td className="px-4 py-3 text-black/80">
-                              {Number(row.credits)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}
-                              >
-                                {status.label}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-black/70">
-                              {whenDate
-                                ? dateFormatter.format(whenDate)
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-3">
-                              {row.status === "completed" ? (
-                                <CancelSubscriptionButton purchaseId={row.id} />
-                              ) : (
-                                <span className="text-xs text-black/45">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                mon abonnement
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Retrouvez les formules mensuelles et les démarches pour gérer
-                votre abonnement
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <div className="grid gap-3 md:grid-cols-3">
-                {subscriptionPlans.map((plan) => (
-                  <div
-                    key={plan.label}
-                    className="flex h-full flex-col rounded-[14px] border border-[#f56800]/60 bg-[#fff8f0] p-5"
-                  >
-                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#c97a25]">
-                      {plan.label}
-                    </p>
-                    <p className="mt-3 text-[34px] font-semibold leading-none text-black">
-                      {plan.price}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
-                      {plan.credits}
-                    </p>
-                    <p className="mt-4 flex-1 text-sm leading-snug text-black/65">
-                      {plan.description}
-                    </p>
-                    <SquareCheckoutButton
-                      productId={plan.id}
-                      className="mt-5 inline-flex w-full shrink-0 justify-center rounded-[14px] bg-[#f56800] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+        <AccountMainTabs
+          reservations={
+            <Card className={panelClassName}>
+              <CardHeader className="border-b border-black/10 p-5 md:p-7">
+                <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                  Mes réservations
+                </CardTitle>
+                <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
+                  Gérez vos réservations à venir, passées et annulées
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-5 md:p-7">
+                <Tabs defaultValue="upcoming" className="w-full">
+                  <TabsList className="grid h-auto w-full grid-cols-3 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60">
+                    <TabsTrigger
+                      value="upcoming"
+                      className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
                     >
-                      Souscrire
-                    </SquareCheckoutButton>
+                      À venir
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="past"
+                      className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+                    >
+                      Passées
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="cancelled"
+                      className="rounded-[11px] py-2 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#4a56dd] data-[state=active]:shadow-sm"
+                    >
+                      Annulées
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="upcoming" className="mt-6">
+                    <UpcomingReservationsList
+                      registrations={upcomingRegistrations}
+                      sessionsMap={sessionsMap}
+                      registrationStatusMap={registrationStatusMap}
+                      error={registrationsError?.message}
+                    />
+                  </TabsContent>
+                  <TabsContent value="past" className="mt-6">
+                    <PastReservationsList
+                      registrations={pastRegistrations}
+                      sessionsMap={sessionsMap}
+                      error={registrationsError?.message}
+                    />
+                  </TabsContent>
+                  <TabsContent value="cancelled" className="mt-6">
+                    <CancelledReservationsList
+                      registrations={cancelledRegistrations}
+                      sessionsMap={sessionsMap}
+                      registrationStatusMap={registrationStatusMap}
+                      error={registrationsError?.message}
+                    />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          }
+          cours={
+            <Card className={panelClassName}>
+              <CardHeader className="border-b border-black/10 p-5 md:p-7">
+                <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                  Cours
+                </CardTitle>
+                <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
+                  Calendrier et catalogue — comme sur le site
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-5 md:p-7">
+                <CoursePageTabs
+                  embedded
+                  courses={courses}
+                  calendarPanel={
+                    <Suspense
+                      fallback={
+                        <div
+                          className="min-h-[280px] rounded-[19px] border border-black/10 bg-[#f2f2f2] md:min-h-[420px]"
+                          aria-hidden
+                        />
+                      }
+                    >
+                      <div className="rounded-[19px] border border-black/10 bg-white p-3 shadow-sm ring-1 ring-black/5 md:p-6">
+                        <MockupPointsCalendar />
+                      </div>
+                    </Suspense>
+                  }
+                />
+              </CardContent>
+            </Card>
+          }
+          pratique={
+            <AccountPratiquePanel activities={quickPracticeItems} />
+          }
+          credits={
+            <>
+              <Card className={panelClassName}>
+                <CardHeader className="border-b border-black/10 p-5 md:p-7">
+                  <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                    Mes formules
+                  </CardTitle>
+                  <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
+                    Souscriptions liées à votre compte
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 md:p-8">
+                  {!subscriptionPurchases?.length ? (
+                    <p className="text-base leading-normal text-black/60">
+                      Aucune formule Square enregistrée pour le moment. Les achats
+                      réalisés depuis cette page apparaîtront ici après paiement.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-[14px] border border-black/10">
+                      <table className="w-full min-w-[520px] text-left text-sm">
+                        <thead className="border-b border-black/10 bg-[#f2f2f2] text-black/70">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold">Formule</th>
+                            <th className="px-4 py-3 font-semibold">Crédits</th>
+                            <th className="px-4 py-3 font-semibold">Statut</th>
+                            <th className="px-4 py-3 font-semibold">Date</th>
+                            <th className="px-4 py-3 font-semibold">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-black/10 bg-white">
+                          {subscriptionPurchases.map((row) => {
+                            const product = squareProductsById.get(row.product_id);
+                            const name =
+                              product?.name ?? row.product_id ?? "Formule inconnue";
+                            const status = subscriptionStatusLabel(row.status);
+                            const when = row.fulfilled_at ?? row.created_at;
+                            const whenDate = when ? new Date(when) : null;
+                            return (
+                              <tr key={row.id}>
+                                <td className="px-4 py-3 font-medium text-black">
+                                  {name}
+                                </td>
+                                <td className="px-4 py-3 text-black/80">
+                                  {Number(row.credits)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}
+                                  >
+                                    {status.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-black/70">
+                                  {whenDate
+                                    ? dateFormatter.format(whenDate)
+                                    : "—"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {row.status === "completed" ? (
+                                    <CancelSubscriptionButton purchaseId={row.id} />
+                                  ) : (
+                                    <span className="text-xs text-black/45">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className={panelClassName}>
+                <CardHeader className="border-b border-black/10 p-6 md:p-8">
+                  <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                    Mon abonnement
+                  </CardTitle>
+                  <CardDescription className="mt-3 text-base leading-normal text-black/65">
+                    Retrouvez les formules mensuelles et les démarches pour gérer
+                    votre abonnement
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 md:p-8">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {subscriptionPlans.map((plan) => (
+                      <div
+                        key={plan.label}
+                        className="flex h-full flex-col rounded-[14px] border border-[#f56800]/60 bg-[#fff8f0] p-5"
+                      >
+                        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#c97a25]">
+                          {plan.label}
+                        </p>
+                        <p className="mt-3 text-[34px] font-semibold leading-none text-black">
+                          {plan.price}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
+                          {plan.credits}
+                        </p>
+                        <p className="mt-4 flex-1 text-sm leading-snug text-black/65">
+                          {plan.description}
+                        </p>
+                        <SquareCheckoutButton
+                          productId={plan.id}
+                          className="mt-5 inline-flex w-full shrink-0 justify-center rounded-[14px] bg-[#f56800] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Souscrire
+                        </SquareCheckoutButton>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p className="mt-5 text-sm leading-normal text-black/60">
-                Les abonnements ont une durée d&apos;engagement de 3 mois, puis
-                peuvent être résiliés chaque mois. Les crédits non utilisés
-                restent disponibles et se cumulent.
-              </p>
-            </CardContent>
-          </Card>
+                  <p className="mt-5 text-sm leading-normal text-black/60">
+                    Les abonnements ont une durée d&apos;engagement de 3 mois, puis
+                    peuvent être résiliés chaque mois. Les crédits non utilisés
+                    restent disponibles et se cumulent.
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                acheter des crédits
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Rechargez votre compte pour réserver vos prochains créneaux
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
-                Packs de crédits
-              </p>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                {creditPackProducts.map((pack) => (
-                  <CreditPackPurchaseCard
-                    key={pack.id}
-                    productId={pack.id}
-                    amountCents={pack.amountCents}
-                    credits={pack.credits}
-                    catalogObjectId={pack.catalogObjectId}
-                    allowQuantity={isUnitCreditPack(pack)}
-                    className="min-h-[180px] p-4"
-                    buttonClassName="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+              <Card className={panelClassName}>
+                <CardHeader className="border-b border-black/10 p-6 md:p-8">
+                  <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                    Acheter des crédits
+                  </CardTitle>
+                  <CardDescription className="mt-3 text-base leading-normal text-black/65">
+                    Rechargez votre compte pour réserver vos prochains créneaux
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 md:p-8">
+                  <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
+                    Packs de crédits
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                    {creditPackProducts.map((pack) => (
+                      <CreditPackPurchaseCard
+                        key={pack.id}
+                        productId={pack.id}
+                        amountCents={pack.amountCents}
+                        credits={pack.credits}
+                        catalogObjectId={pack.catalogObjectId}
+                        className="min-h-[180px] p-4"
+                        buttonClassName="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-5 text-sm leading-normal text-black/60">
+                    Les crédits sont valables un an à partir de leur date
+                    d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur votre
+                    compte.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className={panelClassName}>
+                <CardHeader className="border-b border-black/10 p-6 md:p-8">
+                  <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                    Historique des crédits
+                  </CardTitle>
+                  <CardDescription className="mt-3 text-base leading-normal text-black/65">
+                    Détail de vos crédits ajoutés
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 md:p-8">
+                  <CreditHistoryList
+                    creditHistory={creditHistory || []}
+                    creditSessionMap={creditSessionMap}
                   />
-                ))}
-              </div>
-              <p className="mt-5 text-sm leading-normal text-black/60">
-                Les crédits sont valables un an à partir de leur date
-                d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur votre
-                compte.
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Credit History */}
-          <Card className={panelClassName}>
-            <CardHeader className="border-b border-black/10 p-6 md:p-8">
-              <CardTitle className="text-[30px] font-semibold leading-tight text-black/80">
-                historique des crédits
-              </CardTitle>
-              <CardDescription className="mt-3 text-base leading-normal text-black/65">
-                Détail de vos crédits ajoutés
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <CreditHistoryList
-                creditHistory={creditHistory || []}
-                creditSessionMap={creditSessionMap}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </CardContent>
+              </Card>
+            </>
+          }
+        />
     </div>
   );
 }
 
 export default function AccountPage() {
   return (
-    <main className="min-h-screen bg-[#fff8f0] text-black">
-      <Suspense
-        fallback={
-          <div className="flex min-h-[60vh] w-full items-center justify-center px-5 text-xl text-black/75">
-            Chargement...
-          </div>
-        }
-      >
-        <AccountContent />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] w-full items-center justify-center text-base text-black/60">
+          Chargement…
+        </div>
+      }
+    >
+      <AccountContent />
+    </Suspense>
   );
 }
 

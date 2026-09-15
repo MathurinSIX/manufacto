@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
-import { Suspense } from "react";
-import { Footer } from "@/components/footer";
-import { Navigation } from "@/components/navigation";
+import {
+  ConditionalSiteChrome,
+  ConditionalSiteFooter,
+} from "@/components/conditional-site-chrome";
 import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
 import { PwaRegistration } from "@/components/pwa-registration";
 import "./globals.css";
@@ -19,13 +20,7 @@ export const metadata: Metadata = {
   title: "Manufacto Marseille",
   description:
     "Atelier partagé et multidisciplinaire au coeur de Marseille, ouvert à toutes celles et ceux qui veulent faire de leurs mains.",
-  manifest: "/manifest.webmanifest",
   applicationName: "Manufacto",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "Manufacto",
-  },
   formatDetection: {
     telephone: false,
   },
@@ -68,14 +63,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Suspense fallback={null}>
-            <Navigation />
-          </Suspense>
+          <ConditionalSiteChrome />
           <div className="flex-1 flex flex-col">
             {children}
             {modal}
           </div>
-          <Footer />
+          <ConditionalSiteFooter />
           <PwaRegistration />
           <AuthRecoveryRedirect />
         </ThemeProvider>

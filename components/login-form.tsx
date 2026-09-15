@@ -38,9 +38,9 @@ export function LoginForm({
   const emailId = useId();
   const passwordId = useId();
   const linkClass =
-    "font-semibold text-[#4a56dd] underline underline-offset-2 transition hover:text-[#2f3bcc]";
+    "font-semibold text-[#4a56dd] underline underline-offset-2 transition hover:text-[#3540bf]";
   const inputClass =
-    "h-12 rounded-[14px] border-black/20 bg-white px-4 text-base text-black shadow-none placeholder:text-black/35 focus-visible:ring-[#4a56dd]";
+    "h-12 rounded-[12px] border-black/15 bg-[#fff8f0] px-4 text-base text-black shadow-none placeholder:text-black/35 focus-visible:border-[#4a56dd]/40 focus-visible:ring-[#4a56dd]/30";
   const labelClass = "text-base font-semibold leading-none text-black/80";
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -83,7 +83,11 @@ export function LoginForm({
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm${
+            redirectTo
+              ? `?next=${encodeURIComponent(redirectTo)}`
+              : ""
+          }`,
         },
       });
       if (error) throw error;
@@ -147,35 +151,35 @@ export function LoginForm({
                 />
               </div>
               {error && (
-                <p className="rounded-[14px] bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                <p className="rounded-[12px] border border-[#d73459]/25 bg-[#d73459]/8 px-4 py-3 text-sm font-medium text-[#a01f3d]">
                   {error}
                 </p>
               )}
               {magicLinkSent && (
-                <p className="rounded-[14px] bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+                <p className="rounded-[12px] border border-[#20b75a]/25 bg-[#20b75a]/10 px-4 py-3 text-sm font-medium text-[#157a3c]">
                   Un lien de connexion a été envoyé à votre adresse e-mail. Vérifiez votre boîte de réception.
                 </p>
               )}
               <Button
                 type="submit"
-                className="h-12 w-full rounded-[14px] bg-[#4a56dd] text-base font-semibold text-white shadow-none hover:bg-[#2f3bcc]"
+                className="h-12 w-full rounded-[12px] bg-[#f56800] text-base font-semibold text-white shadow-none transition hover:bg-[#d95700]"
                 disabled={isLoading}
               >
                 {isLoading ? "Connexion..." : "Se connecter"}
               </Button>
-              <div className="flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-black/45">
-                <span className="h-px flex-1 bg-black/20" />
+              <div className="flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.18em] text-black/40">
+                <span className="h-px flex-1 bg-black/15" />
                 <span>Ou</span>
-                <span className="h-px flex-1 bg-black/20" />
+                <span className="h-px flex-1 bg-black/15" />
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-full rounded-[14px] border-black/25 bg-white text-base font-semibold text-black/80 shadow-none hover:bg-black/[0.04] hover:text-black"
+                className="h-12 w-full rounded-[12px] border-2 border-[#4a56dd] bg-white text-base font-semibold text-[#4a56dd] shadow-none transition hover:bg-[#f0f1ff] hover:text-[#3540bf]"
                 disabled={isMagicLinkLoading || !email}
                 onClick={handleMagicLink}
               >
-                {isMagicLinkLoading ? "Envoi..." : "Se connecter avec un lien magique"}
+                {isMagicLinkLoading ? "Envoi..." : "Lien magique par e-mail"}
               </Button>
             </div>
             <div className="mt-6 text-center text-base text-black/70">

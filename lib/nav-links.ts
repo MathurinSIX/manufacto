@@ -28,6 +28,7 @@ export const NAV_LINKS: NavLink[] = [
       { href: "/pratique-libre#ceramique", label: "céramique" },
     ],
   },
+  { href: "/offrir", label: "offrir" },
   { href: "/contact", label: "contact" },
 ];
 
