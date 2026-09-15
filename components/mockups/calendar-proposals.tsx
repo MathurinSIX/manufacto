@@ -285,20 +285,17 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
             {meta ? (
               <p className="mt-1 text-sm text-black/55">{meta}</p>
             ) : null}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Link
-                href={detailHref}
-                className="inline-flex items-center justify-center rounded-[10px] border border-black/15 bg-white px-3 py-1.5 text-sm font-semibold text-black/75 transition hover:border-black/30 hover:bg-black/[0.02]"
-              >
-                Voir le détail
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold underline underline-offset-2">
+              <Link href={detailHref} style={{ color: palette.fg }}>
+                Voir le détail →
               </Link>
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex items-center justify-center rounded-[10px] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-                style={{ backgroundColor: palette.fg }}
+                className="underline underline-offset-2"
+                style={{ color: palette.fg }}
               >
-                S&apos;inscrire
+                S&apos;inscrire →
               </button>
             </div>
           </div>
