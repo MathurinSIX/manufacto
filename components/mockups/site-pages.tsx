@@ -46,22 +46,22 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
   const h = (path: string) => scopeHref(scope, path);
   const universes = [
     {
-      label: "menuiserie",
+      label: "Menuiserie",
       image: "/assets/picto/menuiserie/menuiserie.png",
-      width: 180,
-      height: 140,
+      tint: "#fff3e8",
+      accent: "#f56800",
     },
     {
-      label: "couture",
+      label: "Couture",
       image: "/assets/picto/couture/couture.png",
-      width: 180,
-      height: 140,
+      tint: "#f0f1ff",
+      accent: "#4a56dd",
     },
     {
-      label: "céramique",
+      label: "Céramique",
       image: "/assets/picto/ceramique/ceramique.png",
-      width: 180,
-      height: 140,
+      tint: "#fff0f3",
+      accent: "#d73459",
     },
   ] as const;
 
@@ -79,14 +79,11 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
         <WordStrip />
       </section>
 
-      <section
-        id="concept"
-        className="mx-auto max-w-[990px] scroll-mt-28 px-5 py-14 text-center"
-      >
-        <h2 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#f56800] md:text-[40px]">
+      <section id="concept" className="scroll-mt-28 mx-auto max-w-[1274px] px-5 py-14">
+        <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">
           Qu&apos;est-ce que Manufacto&nbsp;?
         </h2>
-        <div className="mx-auto mt-8 max-w-[640px] space-y-8 text-xl leading-normal text-black/75">
+        <div className="mt-5 max-w-3xl space-y-5 text-xl leading-normal text-black/75">
           <p>
             Manufacto est né d&apos;une envie&nbsp;: proposer un{" "}
             <strong>lieu accessible</strong> à des{" "}
@@ -100,31 +97,44 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
             céramique.
           </p>
         </div>
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          <ImageTile src={P.pl28} alt="Menuiserie" className="h-56" />
+          <ImageTile src={P.handsCouture} alt="Couture" className="h-56" />
+          <ImageTile src={P.heroCeramique} alt="Céramique" className="h-56" />
+        </div>
       </section>
 
-      <section className="mx-auto max-w-[1274px] px-5 pb-16">
-        <h2 className="text-center text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#f56800] md:text-[40px]">
-          Un atelier, trois univers
-        </h2>
-        <div className="mt-8 grid grid-cols-3 gap-4 md:mt-10 md:gap-10">
-          {universes.map((universe) => (
-            <div key={universe.label} className="text-center">
-              <div className="flex h-[100px] items-center justify-center p-2 md:h-[156px] md:p-4">
+      <section className="border-t border-black/10">
+        <div className="mx-auto max-w-[1274px] px-5 py-14">
+          <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">
+            Un atelier, trois univers
+          </h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            {universes.map((universe) => (
+              <div
+                key={universe.label}
+                className="flex flex-col items-center rounded-[19px] border border-black/8 px-4 py-8 text-center"
+                style={{ backgroundColor: universe.tint }}
+              >
                 <Image
                   src={universe.image}
-                  alt={universe.label}
-                  width={universe.width}
-                  height={universe.height}
-                  className="max-h-full w-auto object-contain"
+                  alt=""
+                  width={140}
+                  height={110}
+                  className="h-20 w-auto object-contain md:h-28"
                 />
+                <p
+                  className="mt-4 text-lg font-semibold"
+                  style={{ color: universe.accent }}
+                >
+                  {universe.label}
+                </p>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div className="mt-12 grid gap-10 md:grid-cols-[1fr_minmax(0,430px)] md:items-start md:gap-14">
-          <div>
-            <div className="max-w-[720px] space-y-6 text-xl leading-normal text-black/75">
+          <div className="mt-12 grid gap-10 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:items-start md:gap-14">
+            <div className="max-w-2xl space-y-5 text-xl leading-normal text-black/75">
               <p>
                 Manufacto est organisé autour de trois univers techniques et
                 créatifs distincts. Chacun d&apos;entre eux a son espace, ses
@@ -150,27 +160,19 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
                   quel que soit votre niveau, vos besoins et vos envies.
                 </strong>
               </p>
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
+                <SecondaryCta href={h("/pratique-libre")}>
+                  Découvrir la pratique libre
+                </SecondaryCta>
+                <SecondaryCta href="/cours">Découvrir nos cours</SecondaryCta>
+              </div>
             </div>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-10 sm:gap-y-3">
-              <Link
-                href={h("/pratique-libre")}
-                className="text-xl font-semibold text-[#4a56dd] underline underline-offset-2 md:text-2xl"
-              >
-                Découvrez la pratique libre
-              </Link>
-              <Link
-                href="/cours"
-                className="text-xl font-semibold text-[#20b75a] underline underline-offset-2 md:text-2xl"
-              >
-                Découvrez nos cours
-              </Link>
-            </div>
+            <ImageTile
+              src={P.atelierVector}
+              alt="Chaise en bois en cours de fabrication"
+              className="h-[320px] md:h-[420px]"
+            />
           </div>
-          <ImageTile
-            src={P.atelierVector}
-            alt="Chaise en bois en cours de fabrication"
-            className="h-[320px] md:h-[380px]"
-          />
         </div>
       </section>
 
