@@ -1,6 +1,7 @@
 "use client";
 
 import { loadCalendarMonthSessions } from "@/app/calendar/actions";
+import { slugify } from "@/app/cours/course-data";
 import { ActivitySessionPicker } from "@/components/activity-session-picker";
 import type { CalendarSessionItem } from "@/components/monthly-calendar";
 import { P } from "@/components/mockups/shared";
@@ -248,16 +249,18 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
   ]
     .filter(Boolean)
     .join(" · ");
+  const detailHref = `/cours/${slugify(title)}`;
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
+      <article
         className="flex w-full flex-col overflow-hidden rounded-[14px] border border-black/8 bg-white text-left transition hover:border-black/20 hover:shadow-sm sm:flex-row sm:gap-0"
         style={{ borderLeftWidth: 4, borderLeftColor: palette.fg }}
       >
-        <div className="relative h-36 w-full shrink-0 sm:h-auto sm:aspect-[4/5] sm:w-[120px] md:w-[140px]">
+        <Link
+          href={detailHref}
+          className="relative block h-36 w-full shrink-0 sm:h-auto sm:aspect-[4/5] sm:w-[120px] md:w-[140px]"
+        >
           <Image
             src={img}
             alt=""
@@ -265,7 +268,7 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
             className="object-cover"
             sizes="(max-width: 640px) 100vw, 140px"
           />
-        </div>
+        </Link>
         <div className="flex min-w-0 flex-1 flex-col gap-2 px-3.5 py-3 sm:flex-row sm:gap-4 sm:px-0 sm:py-4 sm:pr-4 sm:pl-4">
           <div className="flex shrink-0 items-baseline gap-2 text-sm font-semibold text-black/80 sm:w-[88px] sm:flex-col sm:items-start sm:gap-0">
             <p>{start}</p>
@@ -274,24 +277,33 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
           </div>
           <div className="min-w-0 flex-1">
             <DisciplineChip discipline={session.discipline} />
-            <p className="mt-1.5 text-base font-semibold leading-snug text-black/90 sm:text-lg">
-              {title}
-            </p>
+            <Link href={detailHref} className="block">
+              <p className="mt-1.5 text-base font-semibold leading-snug text-black/90 sm:text-lg">
+                {title}
+              </p>
+            </Link>
             {meta ? (
               <p className="mt-1 text-sm text-black/55">{meta}</p>
             ) : null}
-            <p
-              className="mt-2 text-sm font-semibold underline underline-offset-2"
-              style={{ color: palette.fg }}
-            >
-              <span className="sm:hidden">S&apos;inscrire →</span>
-              <span className="hidden sm:inline">
-                Voir le détail / s&apos;inscrire →
-              </span>
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Link
+                href={detailHref}
+                className="inline-flex items-center justify-center rounded-[10px] border border-black/15 bg-white px-3 py-1.5 text-sm font-semibold text-black/75 transition hover:border-black/30 hover:bg-black/[0.02]"
+              >
+                Voir le détail
+              </Link>
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex items-center justify-center rounded-[10px] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: palette.fg }}
+              >
+                S&apos;inscrire
+              </button>
+            </div>
           </div>
         </div>
-      </button>
+      </article>
       {open ? (
         <ActivitySessionPicker
           activityId={session.activityId}

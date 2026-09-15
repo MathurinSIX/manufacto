@@ -90,7 +90,7 @@ const DEFAULT_COURSE_DESCRIPTION =
   "Les informations détaillées de ce cours seront bientôt disponibles.";
 const DEFAULT_COURSE_DISCIPLINE = "Menuiserie";
 
-function slugify(value: string) {
+export function slugify(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
