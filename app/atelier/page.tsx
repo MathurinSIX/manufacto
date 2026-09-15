@@ -56,9 +56,9 @@ export default function AtelierPage() {
       <MockupAtelierPage scope="site" />
       <section
         id="tarifs"
-        className="scroll-mt-28 border-t border-black/10 bg-white px-5 py-14"
+        className="scroll-mt-28 border-t border-black/10 bg-white"
       >
-        <div className="mx-auto max-w-[1030px]">
+        <div className="mx-auto max-w-[1274px] px-5 py-14">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
             <div>
               <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">

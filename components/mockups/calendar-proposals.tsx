@@ -254,15 +254,22 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full gap-3 overflow-hidden rounded-[14px] border border-black/8 bg-white text-left transition hover:border-black/20 hover:shadow-sm sm:gap-4"
+        className="flex w-full flex-col overflow-hidden rounded-[14px] border border-black/8 bg-white text-left transition hover:border-black/20 hover:shadow-sm sm:flex-row sm:gap-0"
         style={{ borderLeftWidth: 4, borderLeftColor: palette.fg }}
       >
-        <div className="relative aspect-[4/5] w-[96px] shrink-0 sm:w-[120px] md:w-[140px]">
-          <Image src={img} alt="" fill className="object-cover" sizes="140px" />
+        <div className="relative h-36 w-full shrink-0 sm:h-auto sm:aspect-[4/5] sm:w-[120px] md:w-[140px]">
+          <Image
+            src={img}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, 140px"
+          />
         </div>
-        <div className="flex min-w-0 flex-1 gap-3 py-3 pr-3 sm:gap-4 sm:py-4 sm:pr-4">
-          <div className="w-[72px] shrink-0 text-sm font-semibold text-black/80 sm:w-[88px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 px-3.5 py-3 sm:flex-row sm:gap-4 sm:px-0 sm:py-4 sm:pr-4 sm:pl-4">
+          <div className="flex shrink-0 items-baseline gap-2 text-sm font-semibold text-black/80 sm:w-[88px] sm:flex-col sm:items-start sm:gap-0">
             <p>{start}</p>
+            <span className="font-normal text-black/35 sm:hidden">–</span>
             <p className="font-normal text-black/45">{end}</p>
           </div>
           <div className="min-w-0 flex-1">
@@ -277,7 +284,10 @@ function SessionRow({ session }: { session: CalendarSessionItem }) {
               className="mt-2 text-sm font-semibold underline underline-offset-2"
               style={{ color: palette.fg }}
             >
-              Voir le détail / s&apos;inscrire →
+              <span className="sm:hidden">S&apos;inscrire →</span>
+              <span className="hidden sm:inline">
+                Voir le détail / s&apos;inscrire →
+              </span>
             </p>
           </div>
         </div>
