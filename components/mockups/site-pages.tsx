@@ -167,6 +167,10 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
               className="h-[320px] md:h-[420px]"
             />
           </div>
+
+          <div className="mt-14">
+            <PhotoRibbon images={[...RIBBON_LIEU]} />
+          </div>
         </div>
       </section>
 
@@ -235,10 +239,6 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-[1274px] px-5 py-14">
-        <PhotoRibbon images={[...RIBBON_LIEU]} />
       </section>
     </main>
   );
