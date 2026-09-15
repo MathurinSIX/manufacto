@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { Suspense } from "react";
 import { ThemeProvider } from "next-themes";
 import {
   ConditionalSiteChrome,
@@ -63,13 +64,19 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ConditionalSiteChrome />
+          <Suspense fallback={null}>
+            <ConditionalSiteChrome />
+          </Suspense>
           <div className="flex-1 flex flex-col">
             {children}
             {modal}
           </div>
-          <ConditionalSiteFooter />
-          <PwaRegistration />
+          <Suspense fallback={null}>
+            <ConditionalSiteFooter />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PwaRegistration />
+          </Suspense>
           <AuthRecoveryRedirect />
         </ThemeProvider>
       </body>
