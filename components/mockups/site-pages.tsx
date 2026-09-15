@@ -44,6 +44,27 @@ export { PageHero };
 
 export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}) {
   const h = (path: string) => scopeHref(scope, path);
+  const universes = [
+    {
+      label: "menuiserie",
+      image: "/assets/picto/menuiserie/menuiserie.png",
+      width: 180,
+      height: 140,
+    },
+    {
+      label: "couture",
+      image: "/assets/picto/couture/couture.png",
+      width: 180,
+      height: 140,
+    },
+    {
+      label: "céramique",
+      image: "/assets/picto/ceramique/ceramique.png",
+      width: 180,
+      height: 140,
+    },
+  ] as const;
+
   return (
     <main>
       <PageHero
@@ -58,17 +79,98 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
         <WordStrip />
       </section>
 
-      <section className="mx-auto max-w-[1274px] px-5 py-14">
-        <h2 className="text-[30px] font-semibold text-black/80">Le concept</h2>
-        <p className="mt-5 max-w-3xl text-xl leading-normal text-black/75">
-          Manufacto mutualise un espace et des outils de qualité pour que le plus
-          grand nombre puisse fabriquer, réparer et créer — sans poussière dans le
-          salon, et avec un coup de main si besoin.
-        </p>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          <ImageTile src={P.pl28} alt="Menuiserie" className="h-56" />
-          <ImageTile src={P.handsCouture} alt="Couture" className="h-56" />
-          <ImageTile src={P.machines8} alt="Machines" className="h-56" />
+      <section
+        id="concept"
+        className="mx-auto max-w-[990px] scroll-mt-28 px-5 py-14 text-center"
+      >
+        <h2 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#f56800] md:text-[40px]">
+          Qu&apos;est-ce que Manufacto&nbsp;?
+        </h2>
+        <div className="mx-auto mt-8 max-w-[640px] space-y-8 text-xl leading-normal text-black/75">
+          <p>
+            Manufacto est né d&apos;une envie&nbsp;: proposer un{" "}
+            <strong>lieu accessible</strong> à des{" "}
+            <strong>particuliers et amateurs, amatrices</strong> qui voudraient
+            travailler le bois, le textile ou la terre dans un espace adapté et
+            avec des machines de qualité.
+          </p>
+          <p>
+            Situé au cœur du 5ème arrondissement, l&apos;atelier rassemble
+            plusieurs espaces de pratique&nbsp;: menuiserie, couture et
+            céramique.
+          </p>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-[1274px] px-5 pb-16">
+        <h2 className="text-center text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#f56800] md:text-[40px]">
+          Un atelier, trois univers
+        </h2>
+        <div className="mt-8 grid grid-cols-3 gap-4 md:mt-10 md:gap-10">
+          {universes.map((universe) => (
+            <div key={universe.label} className="text-center">
+              <div className="flex h-[100px] items-center justify-center p-2 md:h-[156px] md:p-4">
+                <Image
+                  src={universe.image}
+                  alt={universe.label}
+                  width={universe.width}
+                  height={universe.height}
+                  className="max-h-full w-auto object-contain"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12 grid gap-10 md:grid-cols-[1fr_minmax(0,430px)] md:items-start md:gap-14">
+          <div>
+            <div className="max-w-[720px] space-y-6 text-xl leading-normal text-black/75">
+              <p>
+                Manufacto est organisé autour de trois univers techniques et
+                créatifs distincts. Chacun d&apos;entre eux a son espace, ses
+                outils, ses machines.
+              </p>
+              <p>
+                Chaque espace est organisé autour de{" "}
+                <strong>plusieurs postes de travail distincts</strong>, que
+                chacun peut réserver pour la durée et l&apos;usage de son choix,
+                pour <strong>réaliser ses propres projets</strong>, en autonomie
+                ou en autonomie encadrée.
+              </p>
+              <p>
+                En complément de ces temps de <strong>pratique libre</strong>,
+                nous vous proposons également des{" "}
+                <strong>cours ponctuels</strong> pour débloquer de nouvelles
+                compétences.
+              </p>
+              <p>
+                L&apos;objectif&nbsp;: se faire plaisir en donnant vie à ses
+                projets,{" "}
+                <strong>
+                  quel que soit votre niveau, vos besoins et vos envies.
+                </strong>
+              </p>
+            </div>
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-10 sm:gap-y-3">
+              <Link
+                href={h("/pratique-libre")}
+                className="text-xl font-semibold text-[#4a56dd] underline underline-offset-2 md:text-2xl"
+              >
+                Découvrez la pratique libre
+              </Link>
+              <Link
+                href="/cours"
+                className="text-xl font-semibold text-[#20b75a] underline underline-offset-2 md:text-2xl"
+              >
+                Découvrez nos cours
+              </Link>
+            </div>
+          </div>
+          <ImageTile
+            src={P.atelierVector}
+            alt="Chaise en bois en cours de fabrication"
+            className="h-[320px] md:h-[380px]"
+          />
         </div>
       </section>
 
@@ -137,22 +239,6 @@ export function MockupAtelierPage({ scope = "site" }: { scope?: SiteScope } = {}
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-[1071px] px-5 py-16 text-center">
-        <h2 className="mb-5 text-[30px] font-semibold text-[#4a56dd]">
-          Pourquoi Manufacto ?
-        </h2>
-        <p className="text-xl leading-normal text-black/75">
-          Parce que nous sommes nombreux·ses à aimer fabriquer, réparer et créer —
-          et qu&apos;en ville, avoir l&apos;espace, les outils et un coup de main
-          n&apos;a rien d&apos;évident.
-        </p>
-        <p className="mt-5 text-xl leading-normal text-black/75">
-          Manufacto mutualise un atelier et des outils de qualité pour le plus
-          grand nombre : cours ponctuels pour apprendre, et pratique libre pour
-          vos projets.
-        </p>
       </section>
 
       <section className="mx-auto max-w-[1274px] px-5 py-14">
