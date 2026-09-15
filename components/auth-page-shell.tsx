@@ -39,7 +39,7 @@ export function AuthPageShell({
         aria-hidden
       />
 
-      <div className="relative mx-auto flex min-h-screen max-w-[1274px] flex-col lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <div className="relative flex min-h-screen flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <aside className="relative flex min-h-[220px] flex-col justify-between overflow-hidden lg:min-h-screen">
           <Image
             src={P.atelierPeople}
@@ -73,8 +73,8 @@ export function AuthPageShell({
             </Link>
           </div>
 
-          <div className="relative z-10 hidden max-w-md p-8 text-white lg:block lg:pb-14">
-            <p className="text-2xl font-semibold leading-snug tracking-[-0.02em]">
+          <div className="relative z-10 hidden max-w-md p-8 text-white lg:block lg:pb-14 lg:pl-10 xl:pl-14">
+            <p className="text-2xl font-semibold leading-snug tracking-[-0.02em] xl:text-[28px]">
               L&apos;atelier, vos crédits, vos réservations.
             </p>
             <p className="mt-3 text-base text-white/75">
@@ -83,7 +83,7 @@ export function AuthPageShell({
           </div>
         </aside>
 
-        <section className="relative flex flex-1 flex-col justify-center px-5 py-10 md:px-10 md:py-16 lg:px-14">
+        <section className="relative flex flex-1 flex-col justify-center px-5 py-10 md:px-10 md:py-16 lg:px-12 xl:px-16">
           <div className="relative mx-auto w-full max-w-[440px]">
             <Image
               src={star}
