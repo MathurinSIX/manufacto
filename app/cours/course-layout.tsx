@@ -26,6 +26,7 @@ const DISCIPLINE_WORDS: Record<
   couture: { word: P.wordCouture, wordW: 400, wordH: 90 },
   ceramique: { word: P.wordCeramique, wordW: 420, wordH: 90 },
   electronique: { word: P.wordElectronique, wordW: 480, wordH: 90 },
+  autre: { word: P.wordMenuiserie, wordW: 496, wordH: 90 },
 };
 
 function toDisciplineKey(label: string): CourseDiscipline {

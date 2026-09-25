@@ -9,6 +9,7 @@ const DISCIPLINE_LABEL: Record<CourseDiscipline, string> = {
   couture: "Couture",
   electronique: "Électronique",
   ceramique: "Céramique",
+  autre: "Autre",
 };
 
 export function DisciplineLegend({

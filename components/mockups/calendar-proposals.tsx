@@ -25,6 +25,7 @@ const FALLBACK_BY_DISCIPLINE: Record<CourseDiscipline, string> = {
   couture: P.heroCoutureNew,
   electronique: P.heroElecNew,
   ceramique: P.heroCeramique,
+  autre: P.heroMenuiserie,
 };
 
 const monthFormatter = new Intl.DateTimeFormat("fr-FR", {
@@ -59,6 +60,7 @@ const DISCIPLINE_LABEL: Record<CourseDiscipline, string> = {
   couture: "Couture",
   electronique: "Électronique",
   ceramique: "Céramique",
+  autre: "Autre",
 };
 
 export type SessionsByDate = Record<string, CalendarSessionItem[]>;
