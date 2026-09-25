@@ -15,6 +15,7 @@ import {
   getAllActivitiesWithSessions,
   addUserToSession,
   removeUserFromSession,
+  moveRegistrationToSession,
   getAllUsers,
   updateSession,
   deleteSession,
@@ -453,6 +454,12 @@ export function AdminActivitiesTab({
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  const [movingRegistrationId, setMovingRegistrationId] = useState<string | null>(null);
+  const [moveTargetSessionId, setMoveTargetSessionId] = useState<string>("");
+  const [moving, setMoving] = useState(false);
+  const [addParticipantCount, setAddParticipantCount] = useState(1);
+  const [addCompanionName, setAddCompanionName] = useState("");
+  const [moveCompanionName, setMoveCompanionName] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState<string>("");
@@ -601,13 +608,15 @@ export function AdminActivitiesTab({
       return 0;
     }
 
-    return getEnrollmentRequiredCredits(
-      selectedActivity.nb_credits,
-      selectedSession.start_ts,
-      selectedSession.end_ts,
-      PRACTICE_ACTIVITY_TYPES.has(selectedActivity.type ?? ""),
+    return (
+      getEnrollmentRequiredCredits(
+        selectedActivity.nb_credits,
+        selectedSession.start_ts,
+        selectedSession.end_ts,
+        PRACTICE_ACTIVITY_TYPES.has(selectedActivity.type ?? ""),
+      ) * Math.max(1, addParticipantCount)
     );
-  }, [selectedActivity, selectedSession]);
+  }, [addParticipantCount, selectedActivity, selectedSession]);
 
   const availableUsersForSession = useMemo(() => {
     if (!selectedSession) {
@@ -923,16 +932,30 @@ export function AdminActivitiesTab({
     setCreditDeductionDialogOpen(false);
     setSelectedUserId("");
     setUserSearchQuery("");
+    setAddParticipantCount(1);
+    setAddCompanionName("");
   };
 
   const handleAddUser = async (deductCredits: boolean) => {
     if (!selectedSession || !selectedUserId) return;
+    if (addParticipantCount > 1 && !addCompanionName.trim()) {
+      setError("Indiquez le nom de la seconde personne.");
+      return;
+    }
 
     setAdding(true);
     setError(null);
 
     try {
-      const result = await addUserToSession(selectedSession.id, selectedUserId, deductCredits);
+      const result = await addUserToSession(
+        selectedSession.id,
+        selectedUserId,
+        deductCredits,
+        {
+          participantCount: addParticipantCount,
+          companionName: addCompanionName,
+        },
+      );
       if (result.error) {
         setError(result.error);
       } else {
@@ -1100,6 +1123,47 @@ export function AdminActivitiesTab({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    }
+  };
+
+  const moveTargetSessions = useMemo(() => {
+    if (!selectedSession || !movingRegistrationId) return [];
+    const activity = activities.find((entry) => entry.id === selectedSession.activity_id);
+    if (!activity) return [];
+    return activity.sessionsByDate
+      .flatMap((day) => day.sessions)
+      .filter((session) => session.id !== selectedSession.id)
+      .filter((session) => {
+        const end = new Date(session.end_ts).getTime();
+        return end > Date.now() - 15 * 60 * 1000 || isSameParisDay(session.start_ts);
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime(),
+      );
+  }, [activities, movingRegistrationId, selectedSession]);
+
+  const handleMoveUser = async () => {
+    if (!movingRegistrationId || !moveTargetSessionId) return;
+    setMoving(true);
+    setError(null);
+    try {
+      const result = await moveRegistrationToSession(
+        movingRegistrationId,
+        moveTargetSessionId,
+        { companionName: moveCompanionName },
+      );
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setMovingRegistrationId(null);
+      setMoveTargetSessionId("");
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur s'est produite");
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -1769,6 +1833,8 @@ export function AdminActivitiesTab({
                 onClick={() => {
                   setSelectedUserId("");
                   setUserSearchQuery("");
+                  setAddParticipantCount(1);
+                  setAddCompanionName("");
                   setAddUserDialogOpen(true);
                 }}
                 disabled={
@@ -1831,14 +1897,28 @@ export function AdminActivitiesTab({
                       </p>
                     ) : null}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleRemoveUser(user.registrationId)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setMovingRegistrationId(user.registrationId);
+                          setMoveTargetSessionId("");
+                          setMoveCompanionName(user.companionFirstNames?.[0] ?? "");
+                        }}
+                        title="Déplacer vers une autre session"
+                      >
+                        Déplacer
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleRemoveUser(user.registrationId)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1962,9 +2042,44 @@ export function AdminActivitiesTab({
             </div>
             {requiredCredits > 0 ? (
               <p className="text-sm text-muted-foreground">
-                Cette session coûte {requiredCredits} crédit{requiredCredits !== 1 ? "s" : ""}.
+                Cette session coûte {requiredCredits} crédit{requiredCredits !== 1 ? "s" : ""}
+                {addParticipantCount > 1 ? ` pour ${addParticipantCount} personnes` : ""}.
                 Vous pourrez choisir de les déduire ou non à l&apos;étape suivante.
               </p>
+            ) : null}
+            {!isPracticeView ? (
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="add-participant-count">Nombre de personnes</Label>
+                  <Select
+                    value={String(addParticipantCount)}
+                    onValueChange={(value) => {
+                      const next = Number(value);
+                      setAddParticipantCount(next);
+                      if (next < 2) setAddCompanionName("");
+                    }}
+                  >
+                    <SelectTrigger id="add-participant-count">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 personne</SelectItem>
+                      <SelectItem value="2">2 personnes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {addParticipantCount > 1 ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="add-companion-name">Seconde personne</Label>
+                    <Input
+                      id="add-companion-name"
+                      value={addCompanionName}
+                      onChange={(event) => setAddCompanionName(event.target.value)}
+                      placeholder="Prénom et nom"
+                    />
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
           {error && !creditDeductionDialogOpen ? (
@@ -1978,7 +2093,14 @@ export function AdminActivitiesTab({
               >
               Annuler
             </Button>
-            <Button onClick={handlePrepareAddUser} disabled={adding || !selectedUserId}>
+            <Button
+              onClick={handlePrepareAddUser}
+              disabled={
+                adding ||
+                !selectedUserId ||
+                (addParticipantCount > 1 && !addCompanionName.trim())
+              }
+            >
               {adding ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2069,6 +2191,91 @@ export function AdminActivitiesTab({
               className="w-full"
             >
               Retour
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(movingRegistrationId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMovingRegistrationId(null);
+            setMoveTargetSessionId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Déplacer l&apos;inscription</DialogTitle>
+            <DialogDescription>
+              Déplace vers une autre date du même cours, et conserve ou ajoute la
+              seconde personne.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="move-companion-name">Seconde personne</Label>
+              <Input
+                id="move-companion-name"
+                value={moveCompanionName}
+                onChange={(event) => setMoveCompanionName(event.target.value)}
+                placeholder="Prénom et nom — laisser vide pour une seule personne"
+              />
+            </div>
+            {moveTargetSessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucune autre session disponible pour cette activité.
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                <Label htmlFor="move-target-session">Session cible</Label>
+                <Select
+                  value={moveTargetSessionId || undefined}
+                  onValueChange={setMoveTargetSessionId}
+                >
+                  <SelectTrigger id="move-target-session">
+                    <SelectValue placeholder="Choisir une session" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moveTargetSessions.map((session) => (
+                      <SelectItem key={session.id} value={session.id}>
+                        {formatDate(formatParisDate(new Date(session.start_ts)))}{" "}
+                        · {formatTime(session.start_ts)} -{" "}
+                        {formatTime(session.end_ts)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setMovingRegistrationId(null);
+                setMoveTargetSessionId("");
+              }}
+              disabled={moving}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleMoveUser()}
+              disabled={moving || !moveTargetSessionId}
+            >
+              {moving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Déplacement...
+                </>
+              ) : (
+                "Déplacer"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

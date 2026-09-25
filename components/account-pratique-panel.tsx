@@ -47,7 +47,7 @@ const DISCIPLINE_META: Record<
     wordH: 90,
     wordClassName: "h-8 w-auto object-contain object-left sm:h-10",
     intro:
-      "Machines stationnaires et outillage à main. Chaussures fermées obligatoires.",
+      "Établis, outillage à main, outillage portatifs, machines stationnaires. Des matières et consommables de réemploi sont à votre disposition, sans garantie de stock spécifique. Venez avec des chaussures fermées et la matière dont vous avez besoin. Les consommables de base (papier à poncer, vis…) sont vendus sur place si besoin.",
   },
   couture: {
     label: "Couture",
@@ -58,7 +58,7 @@ const DISCIPLINE_META: Record<
     wordH: 63,
     wordClassName: "h-8 w-auto object-contain object-left sm:h-10",
     intro:
-      "Tables, piqueuses industrielles, machines familiales et surjeteuse.",
+      "Tables de travail et de coupe, machines familiales et industrielles. Apportez votre tissu et ce dont vous aurez besoin. Des matières et consommables de réemploi sont à votre disposition, sans garantie de stock spécifique.",
   },
   ceramique: {
     label: "Céramique",
@@ -67,9 +67,9 @@ const DISCIPLINE_META: Record<
     word: P.wordCeramique,
     wordW: 428,
     wordH: 130,
-    wordClassName: "h-10 w-auto object-contain object-left sm:h-12",
+    wordClassName: "h-8 w-auto object-contain object-left sm:h-10",
     intro:
-      "Tables et tours. Cuisson incluse pour les pièces réalisées à l’atelier.",
+      "Modelage et tour. La terre, les émaux et les cuissons sont incluses pour les pièces réalisées à l'atelier.",
   },
 };
 
@@ -82,22 +82,22 @@ const TYPE_ORDER = [
 
 const TYPE_COPY: Record<string, { title: string; summary: string }> = {
   accompagnement: {
-    title: "Aide à la conception",
+    title: "Accompagnement au projet",
     summary:
-      "Une heure avec un professionnel pour peaufiner plans, assemblages et fiches de débit.",
+      "Un entretien d'une heure avec un professionnel pour peaufiner plans, assemblages et fiches de débit avant de passer à la réalisation.",
   },
   autonomie: {
     title: "Autonomie complète",
     summary:
-      "Pour la réalisation, quand vous vous sentez autonome — sans encadrant technique dédié.",
+      "À vous de juger si vous êtes suffisamment compétent par rapport à votre objectif. Vous pouvez alterner autonomie complète et encadrée selon les étapes de votre projet.",
   },
   autonomie_encadree: {
     title: "Autonomie encadrée",
     summary:
-      "Un encadrant est présent pour vous conseiller, sans faire le projet à votre place.",
+      "Une personne encadrante est présente. Vous pouvez la solliciter pour des conseils liés à votre projet, mais elle ne fera pas le projet à votre place.",
   },
   cuisson: {
-    title: "Cuisson hors atelier",
+    title: "Cuissons",
     summary:
       "Cuisez des pièces réalisées hors de Manufacto (grès uniquement, four complet).",
   },
@@ -175,8 +175,9 @@ export function AccountPratiquePanel({
           Pratique libre
         </CardTitle>
         <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
-          Menuiserie, couture ou céramique — autonomie ou encadrée. Les créneaux
-          sont débités en crédits sur votre compte.
+          Menuiserie, couture ou céramique — réservez un espace de travail, en
+          autonomie complète ou encadrée. Les créneaux encadrés ne remplacent pas
+          un cours.
         </CardDescription>
       </CardHeader>
 

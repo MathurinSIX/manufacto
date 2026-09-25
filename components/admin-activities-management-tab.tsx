@@ -40,6 +40,7 @@ import {
   COURSE_DISCIPLINE_OPTIONS,
   formatCourseDiscipline,
   isCourseDiscipline,
+  normalizeActivityDisciplines,
 } from "@/lib/course-disciplines";
 import { SquareVariationPicker } from "@/components/square-variation-picker";
 import type { SquareCatalogVariationOption } from "@/lib/square/catalog-api";
@@ -47,6 +48,7 @@ import {
   formatParisTime,
   parseParisDateTime,
 } from "@/lib/paris-time";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type DraftSessionSlot = {
   key: string;
@@ -61,6 +63,7 @@ type ExistingSession = {
   start_ts: string;
   end_ts: string;
   max_registrations: number | null;
+  session_group_id?: string | null;
 };
 
 function createEmptySlot(): DraftSessionSlot {
@@ -107,6 +110,7 @@ type Activity = {
   level: string | null;
   audience: string | null;
   discipline: string | null;
+  disciplines?: string[] | null;
 };
 
 function ActivityImageCarousel({ activity }: { activity: Activity }) {
@@ -146,7 +150,9 @@ export function AdminActivitiesManagementTab({
   const [uploadingImage, setUploadingImage] = useState(false);
   
   const [activityName, setActivityName] = useState("");
-  const [activityDiscipline, setActivityDiscipline] = useState<string>("menuiserie");
+  const [activityDisciplines, setActivityDisciplines] = useState<string[]>([
+    "menuiserie",
+  ]);
   const [activityCredits, setActivityCredits] = useState<string>("");
   const [activityDescription, setActivityDescription] = useState("");
   const [activityImageUrls, setActivityImageUrls] = useState<string[]>([]);
@@ -155,15 +161,21 @@ export function AdminActivitiesManagementTab({
   const [activityLevel, setActivityLevel] = useState("");
   const [activityAudience, setActivityAudience] = useState("");
   const [draftSlots, setDraftSlots] = useState<DraftSessionSlot[]>([]);
+  const [groupDraftSlotsAsMultiDay, setGroupDraftSlotsAsMultiDay] = useState(false);
   const [existingSessions, setExistingSessions] = useState<ExistingSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
-  // Group activities by discipline
+  // Group activities by primary discipline
   const activitiesByDiscipline = useMemo(() => {
     const grouped: Record<string, Activity[]> = {};
     activities.forEach((activity) => {
-      const label = formatCourseDiscipline(activity.discipline) ?? "Sans discipline";
+      const keys = normalizeActivityDisciplines(
+        activity.discipline,
+        activity.disciplines,
+      );
+      const label =
+        formatCourseDiscipline(keys[0] ?? activity.discipline) ?? "Sans discipline";
       if (!grouped[label]) {
         grouped[label] = [];
       }
@@ -219,18 +231,19 @@ export function AdminActivitiesManagementTab({
   }, [loadActivities]);
 
   const handleOpenDialog = async (activity?: Activity) => {
-    setDraftSlots([]);
+    setDraftSlots([createEmptySlot()]);
     setExistingSessions([]);
     setDeletingSessionId(null);
+    setGroupDraftSlotsAsMultiDay(false);
 
     if (activity) {
       setEditingActivity(activity);
       setActivityName(activity.name);
-      setActivityDiscipline(
-        activity.discipline && isCourseDiscipline(activity.discipline)
-          ? activity.discipline
-          : "menuiserie",
+      const keys = normalizeActivityDisciplines(
+        activity.discipline,
+        activity.disciplines,
       );
+      setActivityDisciplines(keys.length > 0 ? keys : ["menuiserie"]);
       setActivityCredits(activity.nb_credits?.toString() || "");
       setActivityDescription(activity.description || "");
       setActivityImageUrls(
@@ -259,14 +272,13 @@ export function AdminActivitiesManagementTab({
     } else {
       setEditingActivity(null);
       setActivityName("");
-      setActivityDiscipline("menuiserie");
+      setActivityDisciplines(["menuiserie"]);
       setActivityCredits("");
       setActivityDescription("");
       setActivityImageUrls([]);
       setActivitySquareProductId("");
       setActivityLevel("");
       setActivityAudience("");
-      setDraftSlots([createEmptySlot()]);
       setDialogOpen(true);
       setError(null);
     }
@@ -276,17 +288,28 @@ export function AdminActivitiesManagementTab({
     setDialogOpen(false);
     setEditingActivity(null);
     setActivityName("");
-    setActivityDiscipline("menuiserie");
+    setActivityDisciplines(["menuiserie"]);
     setActivityCredits("");
     setActivityDescription("");
     setActivityImageUrls([]);
     setActivitySquareProductId("");
     setActivityLevel("");
     setActivityAudience("");
-    setDraftSlots([]);
+    setDraftSlots([createEmptySlot()]);
+    setGroupDraftSlotsAsMultiDay(false);
     setExistingSessions([]);
     setDeletingSessionId(null);
     setError(null);
+  };
+
+  const toggleDiscipline = (value: string) => {
+    setActivityDisciplines((current) => {
+      if (current.includes(value)) {
+        if (current.length === 1) return current;
+        return current.filter((entry) => entry !== value);
+      }
+      return [...current, value];
+    });
   };
 
   const updateDraftSlot = (
@@ -389,16 +412,15 @@ export function AdminActivitiesManagementTab({
       }
 
       const type = activityTypes?.[0] ?? "cours";
-      const discipline = isCourseDiscipline(activityDiscipline)
-        ? activityDiscipline
-        : null;
+      const disciplines = activityDisciplines.filter(isCourseDiscipline);
 
-      if (!discipline) {
-        setError("La discipline est requise");
+      if (disciplines.length === 0) {
+        setError("Au moins une discipline est requise");
         setSaving(false);
         return;
       }
 
+      const discipline = disciplines[0];
       const description = activityDescription.trim() === "" ? null : activityDescription.trim();
       const squareProductId = activitySquareProductId.trim() === "" ? null : activitySquareProductId.trim();
       const level = activityLevel.trim() === "" ? null : activityLevel.trim();
@@ -420,7 +442,8 @@ export function AdminActivitiesManagementTab({
           squareProductId,
           level,
           audience,
-          discipline
+          discipline,
+          disciplines,
         );
       } else {
         result = await createActivity(
@@ -433,7 +456,8 @@ export function AdminActivitiesManagementTab({
           squareProductId,
           level,
           audience,
-          discipline
+          discipline,
+          disciplines,
         );
       }
 
@@ -459,6 +483,10 @@ export function AdminActivitiesManagementTab({
         const sessionsResult = await createSessionsForActivity(
           activityId,
           slotsToCreate,
+          {
+            groupAsMultiDay:
+              groupDraftSlotsAsMultiDay && slotsToCreate.length > 1,
+          },
         );
         if (sessionsResult.error && sessionsResult.created === 0) {
           setError(sessionsResult.error);
@@ -574,23 +602,27 @@ export function AdminActivitiesManagementTab({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="discipline">Discipline *</Label>
-                  <Select
-                    value={activityDiscipline}
-                    onValueChange={setActivityDiscipline}
-                    required
-                  >
-                    <SelectTrigger id="discipline">
-                      <SelectValue placeholder="Sélectionner une discipline" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COURSE_DISCIPLINE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
+                  <Label>Disciplines / univers *</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {COURSE_DISCIPLINE_OPTIONS.map((option) => {
+                      const checked = activityDisciplines.includes(option.value);
+                      return (
+                        <label
+                          key={option.value}
+                          className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleDiscipline(option.value)}
+                          />
                           {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Sélectionnez un ou plusieurs univers pour ce cours.
+                  </p>
                 </div>
                 <SquareVariationPicker
                   id="square-product-id"
@@ -696,9 +728,27 @@ export function AdminActivitiesManagementTab({
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Ajoutez une ou plusieurs dates avec des horaires différents.
-                    Elles apparaîtront sous « Prochaines dates disponibles » sur la page du cours.
+                    Chaque ligne est une date réservable, avec son propre
+                    horaire. Laissez la case décochée pour que les dates restent
+                    indépendantes sur le même cours.
                   </p>
+
+                  {draftSlots.filter((slot) => slot.date).length > 1 ||
+                  draftSlots.length > 1 ? (
+                    <label className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={groupDraftSlotsAsMultiDay}
+                        onCheckedChange={(value) =>
+                          setGroupDraftSlotsAsMultiDay(value === true)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Regrouper ces dates en une seule session multi-jours
+                        (Session 01, etc.)
+                      </span>
+                    </label>
+                  ) : null}
 
                   {editingActivity && (
                     <div className="space-y-2 rounded-md border p-3">
@@ -1026,7 +1076,12 @@ export function AdminActivitiesManagementTab({
                           <ActivityImageCarousel activity={activity} />
                         </td>
                         <td className="p-4">
-                          {formatCourseDiscipline(activity.discipline) ?? (
+                          {formatCourseDiscipline(
+                            normalizeActivityDisciplines(
+                              activity.discipline,
+                              activity.disciplines,
+                            )[0] ?? activity.discipline,
+                          ) ?? (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </td>

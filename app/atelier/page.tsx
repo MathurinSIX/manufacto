@@ -1,169 +1,36 @@
-import Link from "next/link";
-import { MockupAtelierPage } from "@/components/mockups/site-pages";
+import { Suspense } from "react";
 
-const RATE_GROUPS = [
-  {
-    title: "Menuiserie",
-    color: "#f56800",
-    rows: [
-      { label: "Autonomie complète", value: "2 crédits / h" },
-      { label: "Autonomie encadrée", value: "3 crédits / h" },
-      { label: "Aide à la conception", value: "4 crédits / h" },
-    ],
-  },
-  {
-    title: "Couture",
-    color: "#4a56dd",
-    rows: [
-      { label: "Autonomie complète", value: "1 crédit / h" },
-      { label: "Autonomie encadrée", value: "2 crédits / h" },
-    ],
-  },
-  {
-    title: "Céramique",
-    color: "#d73459",
-    rows: [
-      { label: "Autonomie complète", value: "2 crédits / h" },
-      { label: "Autonomie encadrée", value: "3 crédits / h" },
-      { label: "Cuisson (four entier)", value: "60 €" },
-    ],
-  },
-  {
-    title: "Cours",
-    color: "#c9a227",
-    rows: [
-      { label: "Catégorie 01", value: "50 € / 10 crédits" },
-      { label: "Catégorie 02", value: "72 € / 15 crédits" },
-      { label: "Catégorie 03", value: "100 € / 20 crédits" },
-    ],
-  },
-] as const;
+import AtelierPageControl from "@/components/experiments/control/atelier-page";
+import { AtelierPageTest } from "@/components/atelier-page-test";
+import { EXPERIMENTS } from "@/lib/posthog/experiments";
+import { getExperimentVariant } from "@/lib/posthog/variant";
 
-const SUBSCRIPTIONS = [
-  { label: "Abonnement 01", price: "90 €", credits: "20 crédits / mois" },
-  { label: "Abonnement 02", price: "170 €", credits: "40 crédits / mois" },
-  { label: "Abonnement 03", price: "240 €", credits: "60 crédits / mois" },
-] as const;
+async function AtelierExperiment({
+  searchParams,
+}: {
+  searchParams: Promise<{ ph_exp?: string }>;
+}) {
+  const params = await searchParams;
+  const [variant, heroLead] = await Promise.all([
+    getExperimentVariant(EXPERIMENTS.atelier, params),
+    getExperimentVariant(EXPERIMENTS.atelierHero, params, { fallback: "test" }),
+  ]);
+  // control = yesterday UI-v2 atelier, test = today's retours
+  return variant === "control" ? (
+    <AtelierPageControl heroLead={heroLead} />
+  ) : (
+    <AtelierPageTest heroLead={heroLead} />
+  );
+}
 
-const DISCOVERY = [
-  { label: "Couture", price: "15 €", detail: "2h autonomie encadrée" },
-  { label: "Menuiserie", price: "30 €", detail: "2h autonomie encadrée" },
-] as const;
-
-export default function AtelierPage() {
+export default function AtelierPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ph_exp?: string }>;
+}) {
   return (
-    <>
-      <MockupAtelierPage scope="site" />
-      <section
-        id="tarifs"
-        className="scroll-mt-28 border-t border-black/10 bg-white"
-      >
-        <div className="mx-auto max-w-[1274px] px-5 py-14">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-            <div>
-              <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">
-                Tarifs
-              </h2>
-              <p className="mt-4 max-w-xl text-lg leading-normal text-black/65">
-                Système de crédits (valables un an). Achats et recharges dans{" "}
-                <Link
-                  href="/account?tab=credits"
-                  className="font-semibold text-[#4a56dd] underline"
-                >
-                  mon compte
-                </Link>
-                .
-              </p>
-            </div>
-            <p className="text-base leading-normal text-black/60 sm:max-w-xs sm:text-right">
-              <strong>15&nbsp;%</strong> étudiants / chômage / RSA — uniquement
-              sur place.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {RATE_GROUPS.map((group) => (
-              <div
-                key={group.title}
-                className="rounded-[14px] border border-black/8 bg-[#fff8f0]/70 px-4 py-3"
-              >
-                <h3
-                  className="border-b border-black/10 pb-1.5 text-sm font-bold uppercase tracking-wide"
-                  style={{ color: group.color }}
-                >
-                  {group.title}
-                </h3>
-                <ul className="mt-2 space-y-1.5 text-sm text-black/75">
-                  {group.rows.map((row) => (
-                    <li
-                      key={row.label}
-                      className="flex items-baseline justify-between gap-3"
-                    >
-                      <span className="min-w-0 leading-snug">{row.label}</span>
-                      <span className="shrink-0 font-semibold tabular-nums text-black/85">
-                        {row.value}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-[14px] border border-black/8 px-4 py-3">
-              <h3 className="text-sm font-bold text-[#f56800]">Pack découverte</h3>
-              <p className="mt-0.5 text-xs text-black/50">
-                Première venue — un achat par personne
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-black/75">
-                {DISCOVERY.map((pack) => (
-                  <li
-                    key={pack.label}
-                    className="flex items-baseline justify-between gap-3"
-                  >
-                    <span>
-                      {pack.label}
-                      <span className="text-black/50"> — {pack.detail}</span>
-                    </span>
-                    <span className="font-semibold tabular-nums">{pack.price}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-[14px] border border-black/8 px-4 py-3">
-              <h3 className="text-sm font-bold text-[#f56800]">Abonnements</h3>
-              <p className="mt-0.5 text-xs text-black/50">
-                Engagement 3 mois, puis résiliation mensuelle
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-black/75">
-                {SUBSCRIPTIONS.map((plan) => (
-                  <li
-                    key={plan.label}
-                    className="flex items-baseline justify-between gap-3"
-                  >
-                    <span>
-                      {plan.label}
-                      <span className="text-black/50"> — {plan.credits}</span>
-                    </span>
-                    <span className="font-semibold tabular-nums">{plan.price}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <p className="mt-6 text-base leading-normal text-black/60">
-            Packs de crédits : recharges dégressives, cumulables avec le solde
-            restant, valables un an — à acheter depuis{" "}
-            <Link href="/account?tab=credits" className="font-semibold text-[#4a56dd] underline">
-              mon compte
-            </Link>
-            .
-          </p>
-        </div>
-      </section>
-    </>
+    <Suspense fallback={<AtelierPageTest />}>
+      <AtelierExperiment searchParams={searchParams} />
+    </Suspense>
   );
 }

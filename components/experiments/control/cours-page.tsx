@@ -1,21 +1,18 @@
+import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
-import CoursPageControl from "@/components/experiments/control/cours-page";
-import { CourseCalendarPanel } from "@/components/course-calendar-panel";
 import { CoursePageTabs } from "@/components/course-page-tabs";
+import { CourseCalendarPanel } from "@/components/course-calendar-panel";
 import { P, PrimaryCta } from "@/components/mockups/shared";
 import { PageHero } from "@/components/mockups/site-pages";
 import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
-import { EXPERIMENTS } from "@/lib/posthog/experiments";
-import { getExperimentVariant } from "@/lib/posthog/variant";
-import { unstable_noStore } from "next/cache";
 
-async function CoursPageTest() {
+async function CoursContent() {
   unstable_noStore();
   const courses = await fetchCoursesForListing();
 
   return (
-    <main className="flex min-h-screen flex-col bg-white text-black">
+    <>
       <PageHero
         title="Nos cours"
         lead="Des ateliers ponctuels de montée en compétences, à choisir selon vos envies et besoins. Adultes ou enfants, apprenez à utiliser une machine, fabriquer un objet, initiez vous ou perfectionnez-vous."
@@ -30,28 +27,16 @@ async function CoursPageTest() {
           calendarPanel={<CourseCalendarPanel />}
         />
       </div>
-    </main>
+    </>
   );
 }
 
-async function CoursExperiment({
-  searchParams,
-}: {
-  searchParams: Promise<{ ph_exp?: string }>;
-}) {
-  const params = await searchParams;
-  const variant = await getExperimentVariant(EXPERIMENTS.cours, params);
-  return variant === "control" ? <CoursPageControl /> : <CoursPageTest />;
-}
-
-export default function CoursPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ ph_exp?: string }>;
-}) {
+export default function CoursPageControl() {
   return (
-    <Suspense fallback={null}>
-      <CoursExperiment searchParams={searchParams} />
-    </Suspense>
+    <main className="flex min-h-screen flex-col bg-white text-black">
+      <Suspense fallback={null}>
+        <CoursContent />
+      </Suspense>
+    </main>
   );
 }

@@ -19,6 +19,7 @@ import { AdminUserCreditsHeader } from "@/components/admin-user-credits-header";
 import { AdminUserLegalSection } from "@/components/admin-user-legal-section";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { getUserLegalCompliance } from "@/lib/legal/status";
+import { loadAccountShare } from "@/lib/account-share";
 import { getAdminClient as getSquareAdminClient } from "@/lib/square/server";
 
 type Activity = {
@@ -370,7 +371,19 @@ async function UserAccountContent({
     ? `${targetUser.user_metadata.first_name} ${targetUser.user_metadata.last_name}`
     : targetUser.user_metadata?.first_name || targetUser.user_metadata?.last_name || targetUser.email;
 
-  const legalStatus = await getUserLegalCompliance(supabase, userId);
+  const share = await loadAccountShare(adminClient, userId);
+  const legalStatus = await getUserLegalCompliance(adminClient, userId, {
+    alsoUserIds: [share.accountUserId, share.partner?.userId ?? ""].filter(
+      (id) => id && id !== userId,
+    ),
+  });
+  let ownerEmail = targetUser.email ?? "";
+  if (!share.isOwner) {
+    const { data: ownerUser } = await adminClient.auth.admin.getUserById(
+      share.accountUserId,
+    );
+    ownerEmail = ownerUser.user?.email ?? ownerEmail;
+  }
   const squareAdmin = getSquareAdminClient();
   const { data: habilitations } = await squareAdmin
     .from("user_habilitation")
@@ -411,13 +424,26 @@ async function UserAccountContent({
             </CardHeader>
             <CardContent>
               <AdminUserLegalSection
-                userId={userId}
-                documents={legalStatus.documents}
-                acceptances={legalStatus.acceptances}
+                userId={share.accountUserId}
+                firstName={
+                  typeof targetUser.user_metadata?.first_name === "string"
+                    ? targetUser.user_metadata.first_name
+                    : null
+                }
+                lastName={
+                  typeof targetUser.user_metadata?.last_name === "string"
+                    ? targetUser.user_metadata.last_name
+                    : null
+                }
+                email={targetUser.email}
                 profile={legalStatus.profile}
                 habilitations={habilitations ?? []}
                 complete={legalStatus.complete}
                 imageRights={legalStatus.imageRights}
+                signedDocuments={legalStatus.signedDocuments}
+                ownerEmail={share.isOwner ? targetUser.email : ownerEmail}
+                partner={share.isOwner ? share.partner : null}
+                canInvite={share.isOwner}
               />
             </CardContent>
           </Card>

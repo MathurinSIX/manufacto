@@ -70,14 +70,6 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     credits: 1,
   },
   {
-    id: "credits-2",
-    kind: "credit_pack",
-    name: "2 crédits",
-    description: "Pack de 2 crédits.",
-    amountCents: 1500,
-    credits: 2,
-  },
-  {
     id: "credits-6",
     kind: "credit_pack",
     name: "Pack de crédit 01",
@@ -86,12 +78,28 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     credits: 6,
   },
   {
+    id: "credits-10",
+    kind: "credit_pack",
+    name: "Pack de 10 crédits",
+    description: "Pack de 10 crédits (50€).",
+    amountCents: 5000,
+    credits: 10,
+  },
+  {
     id: "credits-12",
     kind: "credit_pack",
     name: "Pack de crédit 02",
     description: "Pack de 12 crédits.",
     amountCents: 6600,
     credits: 12,
+  },
+  {
+    id: "credits-15",
+    kind: "credit_pack",
+    name: "Pack de 15 crédits",
+    description: "Pack de 15 crédits (72€).",
+    amountCents: 7200,
+    credits: 15,
   },
   {
     id: "credits-20",
@@ -116,7 +124,7 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     kind: "discovery",
     name: "Pack découverte menuiserie",
     description:
-      "2h de menuiserie en autonomie encadrée, si vous voulez venir une première fois pour tester et découvrir l'atelier, sans vous engager.",
+      "2h de menuiserie / de céramique en autonomie encadrée, si vous voulez venir une première fois pour tester et découvrir l'atelier, sans vous engager.",
     amountCents: 3000,
     credits: 6,
     discoveryHours: 2,

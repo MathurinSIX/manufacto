@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ExpertEquipmentDetails } from "@/components/expert-equipment-details";
 import { PracticeAvailabilityCalendarButton } from "@/components/practice-availability-calendar-modal";
-import { PrivatisationBanner } from "@/components/privatisation-banner";
 import {
   ImageTile,
   P,
@@ -12,7 +11,7 @@ import {
   RIBBON_PORTRAITS,
   SecondaryCta,
   WordStrip,
-} from "@/components/mockups/shared";
+} from "@/components/experiments/control/shared";
 import { type SiteScope, scopeHref } from "@/components/mockups/paths";
 import type { ExperimentVariant } from "@/lib/posthog/experiments";
 
@@ -163,19 +162,24 @@ export function MockupAtelierPage({
                 machines.
               </p>
               <p>
-                Chaque espace est organisé autour de plusieurs postes de
-                travail, que chacun peut réserver pour la durée et l&apos;usage
-                de son choix, pour réaliser ses propres projets, en autonomie ou
-                en autonomie encadrée.
+                Chaque espace est organisé autour de{" "}
+                <strong>plusieurs postes de travail distincts</strong>, que
+                chacun peut réserver pour la durée et l&apos;usage de son choix,
+                pour <strong>réaliser ses propres projets</strong>, en autonomie
+                ou en autonomie encadrée.
               </p>
               <p>
-                En complément de ces temps de pratique libre, nous vous
-                proposons également des cours ponctuels pour débloquer de
-                nouvelles compétences.
+                En complément de ces temps de <strong>pratique libre</strong>,
+                nous vous proposons également des{" "}
+                <strong>cours ponctuels</strong> pour débloquer de nouvelles
+                compétences.
               </p>
               <p>
                 L&apos;objectif&nbsp;: se faire plaisir en donnant vie à ses
-                projets, quel que soit votre niveau, vos besoins et vos envies.
+                projets,{" "}
+                <strong>
+                  quel que soit votre niveau, vos besoins et vos envies.
+                </strong>
               </p>
             </div>
             <ImageTile
@@ -360,21 +364,19 @@ export function MockupPratiquePage({
   afterHero?: React.ReactNode;
   /** Replaces the default “Première visite” secondary CTA (e.g. pack découverte modal). */
   heroSecondary?: React.ReactNode;
-  offers?: PracticeOfferByDiscipline;
 } = {}) {
   const h = (path: string) => scopeHref(scope, path);
 
   const disciplines = [
     {
-      id: "menuiserie" as const,
+      id: "menuiserie",
       label: "Menuiserie",
       color: "#f56800",
       tint: "#fff3e8",
       word: P.wordMenuiserie,
       wordW: 496,
       wordH: 90,
-      wordClassName: "h-9 w-auto object-contain object-left sm:h-11",
-      image: P.pl28,
+      wordClassName: "h-9 w-auto object-contain object-left sm:h-11 md:h-14",
       expertKind: "menuiserie" as const,
       intro:
         "Établis, outillage à main, outillage portatifs, machines stationnaires. Des matières et consommables de réemploi sont à votre disposition, sans garantie de stock spécifique. Venez avec des chaussures fermées et la matière dont vous avez besoin. Les consommables de base (papier à poncer, vis…) sont vendus sur place si besoin.",
@@ -386,16 +388,14 @@ export function MockupPratiquePage({
             "Un entretien d'une heure avec un professionnel pour peaufiner plans, assemblages et fiches de débit avant de passer à la réalisation.",
           detail:
             "Si vous débutez, une ou plusieurs séances de préparation aident à réussir le projet dès les premières étapes. Réservation sur demande : contact@manufacto-marseille.fr",
-          type: "accompagnement",
         },
         {
           title: "Autonomie complète",
           rate: "2 crédits / h",
           summary:
-            "Pour la phase de réalisation, quand vous vous sentez autonome. Pas d'encadrant technique dédié sur place.",
+            "Pour la phase de réalisation, quand vous vous sentez autonome. Pas d’encadrant technique dédié sur place.",
           detail:
             "À vous de juger si vous êtes suffisamment compétent par rapport à votre objectif. Vous pouvez alterner autonomie complète et encadrée selon les étapes de votre projet. Chaussures fermées obligatoires.",
-          type: "autonomie",
         },
         {
           title: "Autonomie encadrée",
@@ -403,21 +403,19 @@ export function MockupPratiquePage({
           summary:
             "Un encadrant technique est présent et peut vous conseiller, sans faire le projet à votre place, ni vous former aux machines.",
           detail:
-            "Ces créneaux ne remplacent pas un cours : on vous oriente, on ne vous forme pas à l'utilisation des machines. Si vous avez besoin de vous former, commencez par un cours du catalogue. Chaussures fermées obligatoires.",
-          type: "autonomie_encadree",
+            "Ces créneaux ne remplacent pas un cours : on vous oriente, on ne vous forme pas à l’utilisation des machines. Si vous avez besoin de vous former, commencez par un cours du catalogue. Chaussures fermées obligatoires.",
         },
       ],
     },
     {
-      id: "couture" as const,
+      id: "couture",
       label: "Couture",
       color: "#4a56dd",
       tint: "#f0f1ff",
       word: P.wordCouture,
       wordW: 279,
       wordH: 63,
-      wordClassName: "h-9 w-auto object-contain object-left sm:h-11",
-      image: P.handsCouture,
+      wordClassName: "h-9 w-auto object-contain object-left sm:h-11 md:h-14",
       expertKind: "couture" as const,
       intro:
         "Tables de travail et de coupe, machines familiales et industrielles. Apportez votre tissu et ce dont vous aurez besoin. Des matières et consommables de réemploi sont à votre disposition, sans garantie de stock spécifique.",
@@ -426,9 +424,8 @@ export function MockupPratiquePage({
           title: "Autonomie complète",
           rate: "1 crédit / h",
           summary:
-            "Réalisez vos projets dès que vous vous sentez autonome. Aucun encadrant n'est présent.",
+            "Réalisez vos projets dès que vous vous sentez autonome. Aucun encadrant n’est présent.",
           detail: null,
-          type: "autonomie",
         },
         {
           title: "Autonomie encadrée",
@@ -436,23 +433,21 @@ export function MockupPratiquePage({
           summary:
             "Une personne encadrante est présente. Vous pouvez la solliciter, pour des conseils liés à votre projet, mais elle ne fera pas le projet à votre place.",
           detail: null,
-          type: "autonomie_encadree",
         },
       ],
     },
     {
-      id: "ceramique" as const,
+      id: "ceramique",
       label: "Céramique",
       color: "#d73459",
       tint: "#fff0f3",
       word: P.wordCeramique,
       wordW: 428,
       wordH: 130,
-      wordClassName: "h-10 w-auto object-contain object-left sm:h-12",
-      image: P.heroCeramique,
+      wordClassName: "h-12 w-auto object-contain object-left sm:h-14 md:h-[4.25rem]",
       expertKind: "ceramique" as const,
       intro:
-        "Modelage et tour. La terre, les émaux et les cuissons sont incluses pour les pièces réalisées à l'atelier.",
+        "Modelage et tour. La terre, les émaux et les cuissons sont incluses pour les pièces réalisées à l’atelier.",
       offers: [
         {
           title: "Autonomie complète",
@@ -460,7 +455,6 @@ export function MockupPratiquePage({
           summary:
             "Travaillez en autonomie sur vos pièces, sans encadrante technique. À vous de juger si vous êtes suffisamment compétent par rapport à votre objectif. Vous pouvez alterner autonomie complète et encadrée selon les étapes de votre projet.",
           detail: null,
-          type: "autonomie",
         },
         {
           title: "Autonomie encadrée",
@@ -468,16 +462,14 @@ export function MockupPratiquePage({
           summary:
             "Une personne encadrante est présente. Vous pouvez la solliciter, pour des conseils liés à votre projet, mais elle ne fera pas le projet à votre place.",
           detail: null,
-          type: "autonomie_encadree",
         },
         {
-          title: "Cuissons",
+          title: "Cuisson hors atelier",
           rate: "60€ / four",
           summary:
             "Cuisez des pièces réalisées hors de Manufacto (grès uniquement, four complet).",
           detail: null,
           expertCuisson: true,
-          type: "cuisson",
         },
       ],
     },
@@ -504,7 +496,7 @@ export function MockupPratiquePage({
       >
         <PrimaryCta href="/account?tab=credits">Acheter des crédits</PrimaryCta>
         {heroSecondary ?? (
-          <SecondaryCta href={h("/contact")}>Pack découvertes</SecondaryCta>
+          <SecondaryCta href={h("/contact")}>Première visite</SecondaryCta>
         )}
         {scope === "site" ? <PracticeAvailabilityCalendarButton /> : null}
       </PageHero>
@@ -530,62 +522,57 @@ export function MockupPratiquePage({
 
           {disciplines.map((d) => (
             <div key={d.id} id={d.id} className="scroll-mt-28">
-              <div className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] md:items-start">
-                <div className="max-w-3xl">
-                  <Image
-                    src={d.word}
-                    alt={d.label}
-                    width={d.wordW}
-                    height={d.wordH}
-                    className={d.wordClassName}
-                  />
-                  <p className="mt-5 text-lg leading-relaxed text-black/75">
-                    {d.intro}
-                  </p>
-                  <ExpertEquipmentDetails kind={d.expertKind} accent={d.color} />
-                </div>
-                <ImageTile src={d.image} alt={d.label} className="h-48 md:h-64" />
+              <div className="max-w-3xl">
+                <Image
+                  src={d.word}
+                  alt={d.label}
+                  width={d.wordW}
+                  height={d.wordH}
+                  className={d.wordClassName}
+                />
+                <p className="mt-5 text-lg leading-relaxed text-black/75">
+                  {d.intro}
+                </p>
+                <ExpertEquipmentDetails kind={d.expertKind} accent={d.color} />
               </div>
 
               <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {d.offers.map((offer) => {
-                  return (
-                    <article
-                      key={offer.title}
-                      className="flex flex-col rounded-[19px] border border-black/8 p-6"
-                      style={{ backgroundColor: d.tint }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h4 className="text-xl font-bold text-black/90">{offer.title}</h4>
-                        <span
-                          className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
-                          style={{ color: d.color, backgroundColor: "white" }}
+                {d.offers.map((offer) => (
+                  <article
+                    key={offer.title}
+                    className="flex flex-col rounded-[19px] border border-black/8 p-6"
+                    style={{ backgroundColor: d.tint }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="text-xl font-bold text-black/90">{offer.title}</h4>
+                      <span
+                        className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+                        style={{ color: d.color, backgroundColor: "white" }}
+                      >
+                        {offer.rate}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-base leading-snug text-black/70">
+                      {offer.summary}
+                    </p>
+                    {"expertCuisson" in offer && offer.expertCuisson ? (
+                      <ExpertEquipmentDetails kind="cuisson" accent={d.color} />
+                    ) : offer.detail ? (
+                      <details className="group mt-4">
+                        <summary
+                          className="cursor-pointer list-none text-sm font-semibold underline underline-offset-2"
+                          style={{ color: d.color }}
                         >
-                          {offer.rate}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-base leading-snug text-black/70">
-                        {offer.summary}
-                      </p>
-                      {"expertCuisson" in offer && offer.expertCuisson ? (
-                        <ExpertEquipmentDetails kind="cuisson" accent={d.color} />
-                      ) : offer.detail ? (
-                        <details className="group mt-4">
-                          <summary
-                            className="cursor-pointer list-none text-sm font-semibold underline underline-offset-2"
-                            style={{ color: d.color }}
-                          >
-                            <span className="group-open:hidden">En savoir plus</span>
-                            <span className="hidden group-open:inline">Réduire</span>
-                          </summary>
-                          <p className="mt-3 text-sm leading-relaxed text-black/65">
-                            {offer.detail}
-                          </p>
-                        </details>
-                      ) : null}
-                    </article>
-                  );
-                })}
+                          <span className="group-open:hidden">En savoir plus</span>
+                          <span className="hidden group-open:inline">Réduire</span>
+                        </summary>
+                        <p className="mt-3 text-sm leading-relaxed text-black/65">
+                          {offer.detail}
+                        </p>
+                      </details>
+                    ) : null}
+                  </article>
+                ))}
               </div>
             </div>
           ))}
@@ -598,17 +585,6 @@ export function MockupPratiquePage({
     </main>
   );
 }
-
-export type PracticeOfferActivity = {
-  id: string;
-  type: string | null;
-};
-
-export type PracticeOfferByDiscipline = {
-  menuiserie?: PracticeOfferActivity[];
-  couture?: PracticeOfferActivity[];
-  ceramique?: PracticeOfferActivity[];
-};
 
 export function MockupOffrirPage({ scope = "site" }: { scope?: SiteScope } = {}) {
   const h = (path: string) => scopeHref(scope, path);
@@ -669,8 +645,7 @@ export function MockupOffrirPage({ scope = "site" }: { scope?: SiteScope } = {})
   );
 }
 
-export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {}) {
-  void _scope;
+export function MockupContactPage({ scope = "site" }: { scope?: SiteScope } = {}) {
   return (
     <main>
       <PageHero
@@ -710,8 +685,6 @@ export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {})
           </div>
         </div>
       </section>
-
-      <PrivatisationBanner />
     </main>
   );
 }

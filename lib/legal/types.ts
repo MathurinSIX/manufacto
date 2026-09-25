@@ -28,6 +28,10 @@ export type UserProfileRow = {
   insurance_policy_number: string | null;
   image_rights: boolean | null;
   admin_notes: string | null;
+  /** Adult household members (incl. account holder), display names. */
+  member_names?: string[] | null;
+  /** Children linked to the household. */
+  child_names?: string[] | null;
 };
 
 export type UserLegalAcceptanceRow = {

@@ -294,20 +294,11 @@ export function PrimaryCta({
   children: React.ReactNode;
   className?: string;
 }) {
-  const classNames = `inline-flex items-center justify-center rounded-[12px] bg-[#f56800] px-6 py-3.5 text-lg font-semibold text-white transition hover:bg-[#d95700] ${className}`;
-  const isExternal =
-    /^(mailto:|tel:|https?:\/\/)/i.test(href) || href.startsWith("//");
-
-  if (isExternal) {
-    return (
-      <a href={href} className={classNames}>
-        {children}
-      </a>
-    );
-  }
-
   return (
-    <Link href={href} className={classNames}>
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center rounded-[12px] bg-[#f56800] px-6 py-3.5 text-lg font-semibold text-white transition hover:bg-[#d95700] ${className}`}
+    >
       {children}
     </Link>
   );
@@ -322,20 +313,11 @@ export function SecondaryCta({
   children: React.ReactNode;
   className?: string;
 }) {
-  const classNames = `inline-flex items-center justify-center rounded-[12px] border-2 border-[#4a56dd] bg-white/90 px-6 py-3 text-lg font-semibold text-[#4a56dd] transition hover:bg-[#f0f1ff] ${className}`;
-  const isExternal =
-    /^(mailto:|tel:|https?:\/\/)/i.test(href) || href.startsWith("//");
-
-  if (isExternal) {
-    return (
-      <a href={href} className={classNames}>
-        {children}
-      </a>
-    );
-  }
-
   return (
-    <Link href={href} className={classNames}>
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center rounded-[12px] border-2 border-[#4a56dd] bg-white/90 px-6 py-3 text-lg font-semibold text-[#4a56dd] transition hover:bg-[#f0f1ff] ${className}`}
+    >
       {children}
     </Link>
   );
@@ -451,7 +433,7 @@ export function CourseCarousel({
                 alt=""
                 width={course.wordW}
                 height={course.wordH}
-                className="h-6 w-auto max-h-6 object-contain object-left sm:h-7 sm:max-h-7"
+                className="h-7 w-auto object-contain object-left"
               />
               <h3 className="mt-4 text-lg font-bold leading-snug text-black/90 sm:text-xl">
                 {course.title}
@@ -520,6 +502,29 @@ export function VisitBanner({
   );
 }
 
+export function NewsletterBanner({ className = "" }: { className?: string } = {}) {
+  return (
+    <section className={`bg-white px-5 py-4 md:py-5 ${className}`}>
+      <div className="mx-auto flex max-w-[1274px] flex-col gap-3 rounded-[14px] border border-black/10 bg-[#fff8f0] px-4 py-3.5 md:flex-row md:items-center md:justify-between md:gap-5 md:px-5 md:py-4">
+        <div className="min-w-0 max-w-2xl">
+          <h2 className="text-lg font-bold leading-tight tracking-[-0.3px] text-[#f56800] md:text-xl">
+            Newsletter
+          </h2>
+          <p className="mt-1 text-sm leading-snug text-black/65 md:text-base">
+            Une fois par mois — les nouvelles de l&apos;atelier, sans spam.
+          </p>
+        </div>
+        <PrimaryCta
+          href="/newsletter"
+          className="shrink-0 self-start px-4 py-2 text-sm md:self-auto md:text-base"
+        >
+          S&apos;inscrire
+        </PrimaryCta>
+      </div>
+    </section>
+  );
+}
+
 /** Gift / carte cadeau — courses or credit packs as presents */
 export function GiftOfferBanner({
   courseHref = "/offrir",
@@ -539,41 +544,17 @@ export function GiftOfferBanner({
             Carte cadeau
           </p>
           <h2 className="mt-2 text-[28px] font-bold leading-tight text-black/90 md:text-[32px]">
-            Offrir le plaisir de faire de ses mains
+            Je veux offrir Manufacto
           </h2>
           <p className="mt-4 text-lg leading-normal text-black/75 md:text-xl">
             Offrez un cours de montée en compétence, ou un pack de crédits pour
-            passer du temps à l&apos;atelier. Les crédits sont valables un an et
-            sur tous nos espaces.
+            la pratique libre. Les crédits sont valables un an — une très bonne
+            idée pour faire découvrir l&apos;atelier.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <PrimaryCta href={courseHref}>Offrir Manufacto</PrimaryCta>
+            <PrimaryCta href={courseHref}>Offrir un cours</PrimaryCta>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-/** Newsletter signup — same visual language as VisitBanner */
-export function NewsletterBanner({ className = "" }: { className?: string } = {}) {
-  return (
-    <section className={`bg-white px-5 py-4 md:py-5 ${className}`}>
-      <div className="mx-auto flex max-w-[1274px] flex-col gap-3 rounded-[14px] border border-black/10 bg-[#fff8f0] px-4 py-3.5 md:flex-row md:items-center md:justify-between md:gap-5 md:px-5 md:py-4">
-        <div className="min-w-0 max-w-2xl">
-          <h2 className="text-lg font-bold leading-tight tracking-[-0.3px] text-[#f56800] md:text-xl">
-            Newsletter
-          </h2>
-          <p className="mt-1 text-sm leading-snug text-black/65 md:text-base">
-            Une fois par mois — les nouvelles de l&apos;atelier, sans spam.
-          </p>
-        </div>
-        <PrimaryCta
-          href="/newsletter"
-          className="shrink-0 self-start px-4 py-2 text-sm md:self-auto md:text-base"
-        >
-          S&apos;inscrire
-        </PrimaryCta>
       </div>
     </section>
   );

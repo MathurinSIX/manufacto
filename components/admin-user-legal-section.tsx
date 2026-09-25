@@ -12,32 +12,43 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { SignedLegalDocument } from "@/lib/legal/status";
 import {
   DEFAULT_HABILITATIONS,
-  type LegalDocumentRow,
   type UserHabilitationRow,
-  type UserLegalAcceptanceRow,
   type UserProfileRow,
 } from "@/lib/legal/types";
+import { HouseholdMembersEditor } from "@/components/household-members-editor";
+import type { AccountPartnerSummary } from "@/lib/account-share";
 
 type AdminUserLegalSectionProps = {
   userId: string;
-  documents: LegalDocumentRow[];
-  acceptances: UserLegalAcceptanceRow[];
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
   profile: UserProfileRow | null;
   habilitations: UserHabilitationRow[];
   complete: boolean;
   imageRights: boolean | null;
+  signedDocuments: SignedLegalDocument[];
+  ownerEmail?: string | null;
+  partner?: AccountPartnerSummary | null;
+  canInvite?: boolean;
 };
 
 export function AdminUserLegalSection({
   userId,
-  documents,
-  acceptances,
+  firstName,
+  lastName,
+  email,
   profile,
   habilitations,
   complete,
   imageRights,
+  signedDocuments,
+  ownerEmail,
+  partner = null,
+  canInvite = true,
 }: AdminUserLegalSectionProps) {
   const [notes, setNotes] = useState(profile?.admin_notes ?? "");
   const [selectedKeys, setSelectedKeys] = useState<string[]>(
@@ -46,14 +57,6 @@ export function AdminUserLegalSection({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const acceptanceByDocId = useMemo(() => {
-    const map = new Map<string, UserLegalAcceptanceRow>();
-    for (const row of acceptances) {
-      map.set(row.legal_document_id, row);
-    }
-    return map;
-  }, [acceptances]);
 
   const labelsByKey = useMemo(() => {
     const map: Record<string, string> = {};
@@ -113,6 +116,49 @@ export function AdminUserLegalSection({
   return (
     <div className="space-y-8">
       <section className="space-y-3">
+        <h3 className="text-lg font-semibold">Mes infos</h3>
+        <dl className="grid gap-2 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Prénom</dt>
+            <dd className="font-medium">{firstName?.trim() || "Non renseigné"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Nom</dt>
+            <dd className="font-medium">{lastName?.trim() || "Non renseigné"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">E-mail</dt>
+            <dd className="font-medium">{email?.trim() || "Non renseigné"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Téléphone</dt>
+            <dd className="font-medium">{profile?.phone?.trim() || "Non renseigné"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Adresse</dt>
+            <dd className="font-medium">{profile?.address?.trim() || "Non renseigné"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Date de naissance</dt>
+            <dd className="font-medium">
+              {profile?.birth_date
+                ? profile.birth_date.slice(0, 10).split("-").reverse().join("/")
+                : "Non renseigné"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Personne à prévenir</dt>
+            <dd className="font-medium">
+              {profile?.emergency_contact_name?.trim() || "Non renseigné"}
+              {profile?.emergency_contact_phone
+                ? ` · ${profile.emergency_contact_phone}`
+                : ""}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold">Documents légaux</h3>
@@ -130,56 +176,56 @@ export function AdminUserLegalSection({
         </div>
 
         <div className="rounded-lg border divide-y">
-          {documents.map((doc) => {
-            const acceptance = acceptanceByDocId.get(doc.id);
-            return (
-              <div
-                key={doc.id}
-                className="flex flex-wrap items-center justify-between gap-3 p-3"
-              >
-                <div>
-                  <p className="font-medium">
-                    {doc.title}{" "}
-                    <span className="text-xs text-muted-foreground">
-                      v{doc.version}
-                    </span>
+          {signedDocuments.map((doc) => (
+            <div
+              key={doc.docKey}
+              className="flex flex-wrap items-center justify-between gap-3 p-3"
+            >
+              <div>
+                <p className="font-medium">
+                  {doc.title}{" "}
+                  <span className="text-xs text-muted-foreground">
+                    v{doc.version}
+                  </span>
+                </p>
+                {doc.signed ? (
+                  <p className="text-sm text-muted-foreground">
+                    Signé le{" "}
+                    {doc.acceptedAt
+                      ? new Date(doc.acceptedAt).toLocaleString("fr-FR")
+                      : "—"}{" "}
+                    ·{" "}
+                    {doc.channel === "on_site"
+                      ? "sur place"
+                      : doc.channel === "paper"
+                        ? "papier"
+                        : "en ligne"}{" "}
+                    · {doc.typedName}
                   </p>
-                  {acceptance ? (
-                    <p className="text-sm text-muted-foreground">
-                      Signé le{" "}
-                      {new Date(acceptance.accepted_at).toLocaleString("fr-FR")} ·{" "}
-                      {acceptance.channel === "on_site"
-                        ? "sur place"
-                        : acceptance.channel === "paper"
-                          ? "papier"
-                          : "en ligne"}{" "}
-                      · {acceptance.typed_name}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-amber-700">Non signé</p>
-                  )}
-                </div>
-                {acceptance?.signature_path ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openSignature(acceptance.signature_path)}
-                  >
-                    Voir la signature
-                  </Button>
-                ) : null}
+                ) : (
+                  <p className="text-sm text-amber-700">Non signé</p>
+                )}
               </div>
-            );
-          })}
+              {doc.signaturePath ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openSignature(doc.signaturePath)}
+                >
+                  Voir la signature
+                </Button>
+              ) : null}
+            </div>
+          ))}
           <div className="p-3">
-            <p className="font-medium">Droit à l’image</p>
+            <p className="font-medium">Autorisation à l’image</p>
             <p className="text-sm text-muted-foreground">
               {imageRights === true
-                ? "Oui"
+                ? "Signé · oui"
                 : imageRights === false
-                  ? "Non"
-                  : "Non renseigné"}
+                  ? "Signé · non"
+                  : "Non signé"}
             </p>
           </div>
           {profile?.emergency_contact_name ? (
@@ -194,6 +240,18 @@ export function AdminUserLegalSection({
             </div>
           ) : null}
         </div>
+      </section>
+
+      <section className="rounded-lg border p-4">
+        <HouseholdMembersEditor
+          userId={userId}
+          memberNames={profile?.member_names}
+          childNames={profile?.child_names}
+          ownerEmail={ownerEmail}
+          partner={partner}
+          canInvite={canInvite}
+          asAdmin
+        />
       </section>
 
       <section className="space-y-3">

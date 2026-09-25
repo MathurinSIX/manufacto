@@ -16,10 +16,9 @@ import {
   RIBBON_SITE,
   VisitBanner,
   WordStrip,
-} from "@/components/mockups/shared";
+} from "@/components/experiments/control/shared";
 import { scopeHref, type SiteScope } from "@/components/mockups/paths";
 import { getFeaturedCoursesWithImages } from "@/lib/featured-courses";
-import type { ExperimentVariant } from "@/lib/posthog/experiments";
 
 async function HomeCourseCarousel() {
   const courses = await getFeaturedCoursesWithImages();
@@ -35,85 +34,8 @@ function CourseCarouselFallback() {
   );
 }
 
-function HomeHeroHeadline({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <h1 className="max-w-4xl text-[34px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[48px]">
-        <span className="text-[#f56800]">Faire soi-même</span>,{" "}
-        <span className="text-[#4a56dd]">réparer</span>,{" "}
-        <span className="text-[#d73459]">réemployer</span>,{" "}
-        <span className="text-[#20b75a]">créer</span>.
-      </h1>
-    );
-  }
-
-  return (
-    <h1 className="max-w-3xl text-[34px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[48px]">
-      Un atelier pour{" "}
-      <span className="text-[#f56800]">faire</span>,{" "}
-      <span className="text-[#4a56dd]">apprendre</span>
-      {" "}ou{" "}
-      <span className="text-[#d73459]">offrir</span>
-    </h1>
-  );
-}
-
-function PratiqueTileCopy({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <span className="flex flex-col items-center gap-2">
-        <span className="rounded-md bg-[#f56800] px-3 py-1.5 text-sm font-bold uppercase tracking-wide md:text-base">
-          Je veux faire
-        </span>
-        <span className="text-base font-medium">
-          pratique libre, autonome ou encadrée →
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="flex flex-col items-center gap-2">
-      <span className="rounded-md bg-[#f56800] px-3 py-1.5 text-sm font-bold uppercase tracking-wide md:text-base">
-        Je veux pratiquer
-      </span>
-      <span className="text-base font-medium">pratique libre →</span>
-    </span>
-  );
-}
-
-function HomeHeroSubtext({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <p className="max-w-2xl text-lg text-black/70 md:text-xl">
-        Manufacto rassemble un atelier bois, un atelier couture, un atelier
-        céramique et un repair café. C&apos;est un lieu ouvert à toutes et
-        tous, qui donne accès à l&apos;espace, aux machines, outils et
-        compétences pour faire soi-même.
-      </p>
-    );
-  }
-
-  return (
-    <p className="max-w-xl text-lg text-black/70 md:text-xl">
-      Menuiserie, couture, céramique, électronique — l&apos;espace, les
-      machines et un coup de main, à Marseille.
-    </p>
-  );
-}
-
 /** Chemin + cours homepage — production (`site`) or mockup scope */
-export function HomePage({
-  scope = "site",
-  headline = "control",
-  subtext = "control",
-  pratiqueTile = "control",
-}: {
-  scope?: SiteScope;
-  headline?: ExperimentVariant;
-  subtext?: ExperimentVariant;
-  pratiqueTile?: ExperimentVariant;
-} = {}) {
+export function HomePageControl({ scope = "site" }: { scope?: SiteScope } = {}) {
   const h = (path: string) => scopeHref(scope, path);
 
   return (
@@ -122,8 +44,17 @@ export function HomePage({
         <div className="mx-auto max-w-[1274px] px-5 pb-10 pt-10 md:pb-12 md:pt-14">
           <div className="flex flex-col items-start gap-4 md:items-center md:text-center">
             <BrandLockup />
-            <HomeHeroHeadline variant={headline} />
-            <HomeHeroSubtext variant={subtext} />
+            <h1 className="max-w-3xl text-[34px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[48px]">
+              Un atelier pour{" "}
+              <span className="text-[#f56800]">faire</span>,{" "}
+              <span className="text-[#4a56dd]">apprendre</span>
+              {" "}ou{" "}
+              <span className="text-[#d73459]">offrir</span>
+            </h1>
+            <p className="max-w-xl text-lg text-black/70 md:text-xl">
+              Menuiserie, couture, céramique, électronique — l&apos;espace, les
+              machines et un coup de main, à Marseille.
+            </p>
           </div>
 
           <div className="mt-10 grid gap-5 md:grid-cols-3 md:gap-6">
@@ -142,7 +73,12 @@ export function HomePage({
                 className="h-[260px] md:h-[340px]"
                 priority
               >
-                <PratiqueTileCopy variant={pratiqueTile} />
+                <span className="flex flex-col items-center gap-2">
+                  <span className="rounded-md bg-[#f56800] px-3 py-1.5 text-sm font-bold uppercase tracking-wide md:text-base">
+                    Je veux pratiquer
+                  </span>
+                  <span className="text-base font-medium">pratique libre →</span>
+                </span>
               </ImageTile>
             </Link>
 
@@ -236,8 +172,8 @@ export function HomePage({
           <p>Retrouvez notre proposition de cours pour ce mois-ci.</p>
           <p>
             Certains reviennent régulièrement, d&apos;autres sont plus ponctuels.
-            Cliquez un jour pour le détail — durée, crédits, prix et inscription.
-            Le catalogue complet est{" "}
+            Cliquez une discipline pour filtrer, un jour pour le détail — durée,
+            crédits, prix et inscription. Le catalogue complet est{" "}
             <Link href={h("/cours")} className="font-semibold text-[#4a56dd] underline">
               ici
             </Link>
@@ -251,28 +187,25 @@ export function HomePage({
         <div className="mx-auto grid max-w-[1274px] gap-8 px-5 py-14 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="text-[30px] font-semibold text-black/80">
-              Venez en pratique libre
+              Ou venez en pratique libre
             </h2>
             <p className="mt-4 text-xl text-black/70">
-              Menuiserie, couture ou céramique — réservez un espace de travail en
-              autonomie complète ou encadrée. Créez un compte, chargez des crédits
-              (valables un an), réservez vos créneaux, et c&apos;est parti.
+              Menuiserie, couture ou céramique — en autonomie ou encadré·e.
+              Créez un compte, chargez des crédits (valables un an), passez
+              une visite, puis réservez vos créneaux.
             </p>
             <p className="mt-3 text-lg text-black/60">
-              Tarifs selon la discipline&nbsp;: de 1 à 4 crédits / heure.
-            </p>
-            <p className="mt-2 text-lg text-black/60">
-              Le détail des offres est sur la page pratique libre.
+              Tarifs selon la discipline : de 1 à 4 crédits / heure. Le détail
+              des offres est sur la page pratique libre.
             </p>
             <PrimaryCta href={h("/pratique-libre")} className="mt-8">
               Découvrir la pratique libre
             </PrimaryCta>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <ImageTile src={P.heroMenuiserie} alt="Menuiserie" className="h-40 md:h-48" />
-            <ImageTile src={P.heroCoutureNew} alt="Couture" className="h-40 md:h-48" />
-            <ImageTile src={P.heroCeramique} alt="Céramique" className="h-40 md:h-48" />
-            <ImageTile src={P.heroElecNew} alt="Électronique" className="h-40 md:h-48" />
+            <ImageTile src={P.pl22} alt="Établi en pratique libre" className="h-40 md:h-52" />
+            <ImageTile src={P.portrait13} alt="Travail en atelier" className="h-40 md:h-52" />
+            <ImageTile src={P.pl33} alt="Espace atelier" className="col-span-2 h-40 md:h-48" />
           </div>
         </div>
       </section>

@@ -553,7 +553,7 @@ export async function updateUser(
   await checkAdmin();
   const adminClient = getAdminClient();
 
-  const email = data.email.trim();
+  const email = data.email.trim().toLowerCase();
   if (!email) {
     return { error: "L'email est requis", user: null };
   }
@@ -574,16 +574,29 @@ export async function updateUser(
     last_name: data.last_name?.trim() || undefined,
   };
 
+  const emailChanged =
+    email !== (existing.user.email ?? "").trim().toLowerCase();
+
   const { data: updated, error } = await adminClient.auth.admin.updateUserById(
     userId,
-    {
-      email,
-      user_metadata,
-    },
+    emailChanged
+      ? {
+          email,
+          email_confirm: true,
+          user_metadata,
+        }
+      : { user_metadata },
   );
 
   if (error) {
     console.error("Error updating user:", error);
+    const message = error.message.toLowerCase();
+    if (message.includes("already") || message.includes("registered") || message.includes("exists")) {
+      return {
+        error: "Cette adresse e-mail est déjà utilisée par un autre compte.",
+        user: null,
+      };
+    }
     return { error: error.message, user: null };
   }
 
@@ -865,6 +878,7 @@ export async function getAllActivitiesWithSessions() {
     reserved_end_ts: string | null;
     participant_count?: number | null;
     companion_first_names?: string[] | null;
+    participant_names?: string[] | null;
   };
 
   const {
@@ -873,7 +887,7 @@ export async function getAllActivitiesWithSessions() {
   } = await fetchAllSupabaseRows<RegistrationRow>(async ({ from, to }) => {
     const { data, error } = await supabase
       .from("registration")
-      .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count, companion_first_names")
+      .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count, companion_first_names, participant_names")
       .range(from, to);
 
     return { data, error };
@@ -993,10 +1007,11 @@ export async function getAllActivitiesWithSessions() {
         );
         const registeredUsers = sessionRegistrations.map(reg => {
           const user = usersMap.get(reg.user_id);
-          const participantCount = Math.max(1, Number(reg.participant_count) || 1);
-          const companionFirstNames = Array.isArray(reg.companion_first_names)
-            ? (reg.companion_first_names as string[]).filter(Boolean)
-            : [];
+          const companionFirstNames = companionNamesFromRegistration(reg);
+          const participantCount = Math.max(
+            companionFirstNames.length + 1,
+            Math.max(1, Number(reg.participant_count) || 1),
+          );
           return {
             registrationId: reg.id,
             userId: reg.user_id,
@@ -1353,14 +1368,44 @@ function getAdminEnrollmentRequiredCredits(
   return nbCredits * durationHours;
 }
 
+function companionNamesFromRegistration(reg: {
+  companion_first_names?: string[] | null;
+  participant_names?: string[] | null;
+}) {
+  const companions = Array.isArray(reg.companion_first_names)
+    ? reg.companion_first_names.filter((name) => name.trim())
+    : [];
+  if (companions.length > 0) return companions;
+  const names = Array.isArray(reg.participant_names)
+    ? reg.participant_names.filter((name) => name.trim())
+    : [];
+  return names.length > 1 ? names.slice(1) : [];
+}
+
 // Add user to activity session
 export async function addUserToSession(
   sessionId: string,
   userId: string,
   deductCredits: boolean,
+  options?: {
+    participantCount?: number;
+    companionName?: string;
+  },
 ) {
   await checkAdmin();
   const supabase = await createClient();
+
+  const companionName = options?.companionName?.trim() ?? "";
+  const participantCount = companionName
+    ? Math.min(5, Math.max(2, options?.participantCount ?? 2))
+    : Math.min(5, Math.max(1, options?.participantCount ?? 1));
+
+  if (participantCount > 1 && !companionName) {
+    return {
+      error: "Indiquez le nom de la seconde personne.",
+      registration: null,
+    };
+  }
 
   const { data: session, error: sessionError } = await supabase
     .from("session")
@@ -1388,12 +1433,13 @@ export async function addUserToSession(
     ? session.activity[0]
     : session.activity;
   const isPracticeActivity = PRACTICE_ACTIVITY_TYPES.has(activity?.type ?? "");
-  const requiredCredits = getAdminEnrollmentRequiredCredits(
-    toCreditAmount(activity?.nb_credits),
-    session.start_ts,
-    session.end_ts,
-    isPracticeActivity,
-  );
+  const requiredCredits =
+    getAdminEnrollmentRequiredCredits(
+      toCreditAmount(activity?.nb_credits),
+      session.start_ts,
+      session.end_ts,
+      isPracticeActivity,
+    ) * participantCount;
   const paymentType = deductCredits && requiredCredits > 0 ? "credits" : "admin";
 
   if (deductCredits && requiredCredits > 0) {
@@ -1435,6 +1481,9 @@ export async function addUserToSession(
       session_id: sessionId,
       user_id: userId,
       payment_type: paymentType,
+      participant_count: participantCount,
+      companion_first_names: companionName ? [companionName] : [],
+      participant_names: companionName ? [companionName] : [],
       reserved_start_ts: isPracticeActivity ? session.start_ts : null,
       reserved_end_ts: isPracticeActivity ? session.end_ts : null,
     })
@@ -1483,6 +1532,151 @@ export async function removeUserFromSession(registrationId: string) {
   return { error: null };
 }
 
+/**
+ * Move an active registration to another session of the same activity,
+ * preserving participant_count and companion_first_names (duo / 2nd person).
+ */
+export async function moveRegistrationToSession(
+  registrationId: string,
+  targetSessionId: string,
+  options?: {
+    companionName?: string;
+  },
+) {
+  await checkAdmin();
+  const supabase = await createClient();
+
+  if (!UUID_RE.test(registrationId) || !UUID_RE.test(targetSessionId)) {
+    return { error: "Identifiants invalides" };
+  }
+
+  const { data: registration, error: registrationError } = await supabase
+    .from("registration")
+    .select(
+      "id, user_id, session_id, participant_count, companion_first_names, participant_names, reserved_start_ts, reserved_end_ts, payment_type, session:session_id(id, activity_id, start_ts, end_ts)",
+    )
+    .eq("id", registrationId)
+    .maybeSingle();
+
+  if (registrationError || !registration) {
+    return { error: registrationError?.message ?? "Inscription introuvable" };
+  }
+
+  const { data: latestStatus } = await supabase
+    .from("registration_status")
+    .select("status")
+    .eq("registration_id", registrationId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestStatus?.status === "CANCELLED") {
+    return { error: "Cette inscription est déjà annulée" };
+  }
+
+  const sourceSession = Array.isArray(registration.session)
+    ? registration.session[0]
+    : registration.session;
+
+  if (!sourceSession) {
+    return { error: "Session d'origine introuvable" };
+  }
+
+  if (sourceSession.id === targetSessionId) {
+    return { error: "L'inscription est déjà sur cette session" };
+  }
+
+  const { data: targetSession, error: targetError } = await supabase
+    .from("session")
+    .select("id, activity_id, start_ts, end_ts, activity:activity_id(type)")
+    .eq("id", targetSessionId)
+    .maybeSingle();
+
+  if (targetError || !targetSession) {
+    return { error: targetError?.message ?? "Session cible introuvable" };
+  }
+
+  if (targetSession.activity_id !== sourceSession.activity_id) {
+    return {
+      error: "La session cible doit appartenir à la même activité",
+    };
+  }
+
+  const now = Date.now();
+  const targetEnd = new Date(targetSession.end_ts);
+  if (targetEnd.getTime() <= now && !isSameParisDay(targetSession.start_ts)) {
+    return {
+      error:
+        "Cette session est terminée. Le déplacement n'est possible que le jour même.",
+    };
+  }
+
+  const { data: existingOnTarget } = await supabase
+    .from("registration")
+    .select("id")
+    .eq("session_id", targetSessionId)
+    .eq("user_id", registration.user_id)
+    .neq("id", registrationId)
+    .maybeSingle();
+
+  if (existingOnTarget) {
+    const { data: existingStatus } = await supabase
+      .from("registration_status")
+      .select("status")
+      .eq("registration_id", existingOnTarget.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingStatus?.status !== "CANCELLED") {
+      return {
+        error: "Cet utilisateur est déjà inscrit à la session cible",
+      };
+    }
+  }
+
+  const activity = Array.isArray(targetSession.activity)
+    ? targetSession.activity[0]
+    : targetSession.activity;
+  const isPracticeActivity = PRACTICE_ACTIVITY_TYPES.has(activity?.type ?? "");
+
+  const companionName = options?.companionName?.trim() ?? "";
+  const existingCompanions = companionNamesFromRegistration(registration);
+  const nextCompanions = options
+    ? companionName
+      ? [companionName]
+      : []
+    : existingCompanions;
+  const participantCount = options
+    ? nextCompanions.length + 1
+    : Math.max(
+        nextCompanions.length + 1,
+        Math.max(1, Number(registration.participant_count) || 1),
+      );
+
+  const { error: updateError } = await supabase
+    .from("registration")
+    .update({
+      session_id: targetSessionId,
+      reserved_start_ts: isPracticeActivity ? targetSession.start_ts : null,
+      reserved_end_ts: isPracticeActivity ? targetSession.end_ts : null,
+      participant_count: participantCount,
+      companion_first_names: nextCompanions,
+      participant_names: nextCompanions,
+    })
+    .eq("id", registrationId);
+
+  if (updateError) {
+    console.error("Error moving registration:", updateError);
+    return { error: updateError.message };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/account");
+  revalidatePath(`/admin/users/${registration.user_id}`);
+  return { error: null };
+}
+
 // Get sessions from a given week for batch creation
 export async function getWeekSessions(activityId: string, weekOffset: number = -1) {
   await checkAdmin();
@@ -1521,7 +1715,8 @@ export async function createSession(
   activityId: string,
   start_ts: string,
   end_ts: string,
-  max_registrations: number | null
+  max_registrations: number | null,
+  sessionGroupId: string | null = null,
 ) {
   await checkAdmin();
   const supabase = await createClient();
@@ -1552,6 +1747,7 @@ export async function createSession(
       activity_id: activityId,
       start_ts,
       end_ts,
+      session_group_id: sessionGroupId,
       max_registrations,
     })
     .select()
@@ -1579,7 +1775,7 @@ export async function getUpcomingSessionsForActivity(activityId: string) {
 
   const { data, error } = await supabase
     .from("session")
-    .select("id, start_ts, end_ts, max_registrations")
+    .select("id, start_ts, end_ts, max_registrations, session_group_id")
     .eq("activity_id", activityId)
     .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
     .order("start_ts", { ascending: true })
@@ -1592,6 +1788,7 @@ export async function getUpcomingSessionsForActivity(activityId: string) {
       start_ts: string;
       end_ts: string;
       max_registrations: number | null;
+      session_group_id: string | null;
     }> };
   }
 
@@ -1601,6 +1798,7 @@ export async function getUpcomingSessionsForActivity(activityId: string) {
 export async function createSessionsForActivity(
   activityId: string,
   slots: ActivitySessionSlotInput[],
+  options?: { groupAsMultiDay?: boolean },
 ) {
   await checkAdmin();
 
@@ -1612,6 +1810,9 @@ export async function createSessionsForActivity(
     return { error: null, created: 0 };
   }
 
+  const groupAsMultiDay = Boolean(options?.groupAsMultiDay) && slots.length > 1;
+  const sessionGroupId = groupAsMultiDay ? crypto.randomUUID() : null;
+
   const results = await Promise.all(
     slots.map((slot) =>
       createSession(
@@ -1619,6 +1820,7 @@ export async function createSessionsForActivity(
         slot.start_ts,
         slot.end_ts,
         slot.max_registrations,
+        sessionGroupId,
       ),
     ),
   );
@@ -1812,7 +2014,7 @@ export async function getAllActivities() {
   
   const { data: activities, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline")
+    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline, disciplines")
     .is("deleted_at", null)
     .order("type, name");
   
@@ -1882,7 +2084,8 @@ export async function createActivity(
   squareProductId: string | null = null,
   level: string | null = null,
   audience: string | null = null,
-  discipline: string | null = null
+  discipline: string | null = null,
+  disciplines: string[] | null = null,
 ) {
   await checkAdmin();
   const supabase = await createClient();
@@ -1898,6 +2101,18 @@ export async function createActivity(
   if (normalizedImageUrls.length === 0 && type !== "visite" && type !== "cours") {
     return { error: "Une image est requise", activity: null };
   }
+
+  const normalizedDisciplines = (disciplines ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const primaryDiscipline =
+    normalizedDisciplines[0] ?? (discipline?.trim().toLowerCase() || null);
+  const disciplinesToStore =
+    normalizedDisciplines.length > 0
+      ? normalizedDisciplines
+      : primaryDiscipline
+        ? [primaryDiscipline]
+        : null;
   
   const { data, error } = await supabase
     .from("activity")
@@ -1912,7 +2127,8 @@ export async function createActivity(
       square_product_id: squareProductId || null,
       level: level || null,
       audience: audience || null,
-      discipline: discipline || null,
+      discipline: primaryDiscipline,
+      disciplines: disciplinesToStore,
     })
     .select()
     .maybeSingle();
@@ -1945,7 +2161,8 @@ export async function updateActivity(
   squareProductId: string | null = null,
   level: string | null = null,
   audience: string | null = null,
-  discipline: string | null = null
+  discipline: string | null = null,
+  disciplines: string[] | null = null,
 ) {
   await checkAdmin();
   const supabase = await createClient();
@@ -1957,6 +2174,18 @@ export async function updateActivity(
   const normalizedImageUrls = (imageUrls ?? [])
     .map((url) => url.trim())
     .filter(Boolean);
+
+  const normalizedDisciplines = (disciplines ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const primaryDiscipline =
+    normalizedDisciplines[0] ?? (discipline?.trim().toLowerCase() || null);
+  const disciplinesToStore =
+    normalizedDisciplines.length > 0
+      ? normalizedDisciplines
+      : primaryDiscipline
+        ? [primaryDiscipline]
+        : null;
   
   const { data, error } = await supabase
     .from("activity")
@@ -1971,7 +2200,8 @@ export async function updateActivity(
       square_product_id: squareProductId || null,
       level: level || null,
       audience: audience || null,
-      discipline: discipline || null,
+      discipline: primaryDiscipline,
+      disciplines: disciplinesToStore,
     })
     .eq("id", id)
     .select();

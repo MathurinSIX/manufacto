@@ -16,12 +16,14 @@ import { CreditHistoryList } from "@/components/credit-history-list";
 import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
-import { getSquareEnvironment } from "@/lib/square/environment";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
+import { CourseCalendarPanel } from "@/components/course-calendar-panel";
 import { CoursePageTabs } from "@/components/course-page-tabs";
-import { MockupPointsCalendar } from "@/components/mockups/mockup-points-calendar";
 import { AccountMainTabs } from "@/components/account-main-tabs";
 import { AccountPratiquePanel } from "@/components/account-pratique-panel";
+import { AccountPersonalInfo } from "@/components/account-personal-info";
+import { HouseholdMembersEditor } from "@/components/household-members-editor";
+import { loadAccountShare } from "@/lib/account-share";
 import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
@@ -153,14 +155,29 @@ async function AccountContent() {
     redirect("/auth/login");
   }
 
+  const share = await loadAccountShare(supabase, user.id);
+  const accountUserId = share.accountUserId;
+  let ownerEmail = user.email ?? "";
+  if (!share.isOwner) {
+    const { getAdminClient } = await import("@/lib/square/server");
+    const { data: ownerUser } = await getAdminClient().auth.admin.getUserById(
+      accountUserId,
+    );
+    ownerEmail = ownerUser.user?.email ?? ownerEmail;
+  }
+
   const squareProducts = await loadSquareProducts(supabase);
   const squareProductsById = new Map(
     squareProducts.map((product) => [product.id, product]),
   );
   const creditPackProducts = squareProducts
-    .filter((product) => product.kind === "credit_pack")
+    .filter(
+      (product) =>
+        product.kind === "credit_pack" &&
+        product.id !== "credits-2" &&
+        product.credits !== 2,
+    )
     .sort((a, b) => a.amountCents - b.amountCents);
-  const isSquareSandbox = getSquareEnvironment() === "sandbox";
 
   const courses = await fetchCoursesForListing();
 
@@ -187,7 +204,7 @@ async function AccountContent() {
         )
       )
     `)
-    .eq("user_id", user.id);
+    .eq("user_id", accountUserId);
 
   // Fetch latest registration_status for each registration
   const registrationIds = registrations?.map((reg) => reg.id) || [];
@@ -320,7 +337,7 @@ async function AccountContent() {
   const { data: creditHistory, error: creditError } = await supabase
     .from("credit")
     .select("id, amount, payment_type, created_at")
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .order("created_at", { ascending: false });
 
   // Fetch registration_status linked to these credits
@@ -403,7 +420,7 @@ async function AccountContent() {
     .select(
       "id, product_id, status, credits, fulfilled_at, created_at, amount_cents",
     )
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .eq("product_kind", "subscription")
     .neq("status", "pending")
     .order("created_at", { ascending: false });
@@ -436,7 +453,7 @@ async function AccountContent() {
     }, 0) || 0;
 
   const { getUserLegalCompliance } = await import("@/lib/legal/status");
-  const legalStatus = await getUserLegalCompliance(supabase, user.id);
+  const legalStatus = await getUserLegalCompliance(supabase, accountUserId);
 
   return (
     <div className="w-full text-black">
@@ -478,6 +495,48 @@ async function AccountContent() {
             </Link>
           </div>
         ) : null}
+
+        <Card className={`${panelClassName} mb-8`}>
+          <CardHeader className="border-b border-black/10 p-5 md:p-7">
+            <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+              Mes infos
+            </CardTitle>
+            <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
+              Identité, coordonnées et documents signés
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 md:p-7">
+            <AccountPersonalInfo
+              firstName={
+                typeof user.user_metadata?.first_name === "string"
+                  ? user.user_metadata.first_name
+                  : null
+              }
+              lastName={
+                typeof user.user_metadata?.last_name === "string"
+                  ? user.user_metadata.last_name
+                  : null
+              }
+              email={share.isOwner ? user.email : ownerEmail}
+              profile={legalStatus.profile}
+              signedDocuments={legalStatus.signedDocuments}
+              imageRights={legalStatus.imageRights}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className={`${panelClassName} mb-8`}>
+          <CardContent className="p-5 md:p-7">
+            <HouseholdMembersEditor
+              userId={accountUserId}
+              memberNames={legalStatus.profile?.member_names}
+              childNames={legalStatus.profile?.child_names}
+              ownerEmail={ownerEmail}
+              partner={share.partner}
+              canInvite={share.isOwner}
+            />
+          </CardContent>
+        </Card>
 
         <AccountMainTabs
           reservations={
@@ -553,20 +612,7 @@ async function AccountContent() {
                 <CoursePageTabs
                   embedded
                   courses={courses}
-                  calendarPanel={
-                    <Suspense
-                      fallback={
-                        <div
-                          className="min-h-[280px] rounded-[19px] border border-black/10 bg-[#f2f2f2] md:min-h-[420px]"
-                          aria-hidden
-                        />
-                      }
-                    >
-                      <div className="rounded-[19px] border border-black/10 bg-white p-3 shadow-sm ring-1 ring-black/5 md:p-6">
-                        <MockupPointsCalendar />
-                      </div>
-                    </Suspense>
-                  }
+                  calendarPanel={<CourseCalendarPanel />}
                 />
               </CardContent>
             </Card>

@@ -19,9 +19,11 @@ import {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type GiftCheckoutBody = {
-  kind?: "credits" | "course";
+  kind?: "credits" | "course" | "credits_custom";
   productId?: string;
   quantity?: number;
+  /** Custom gift credits: amount in euros, multiples of 5, min 100. 1 credit = 5€. */
+  customAmountEuros?: number;
   /** Course gift tier: cat-01 | cat-02 | cat-03 */
   courseCategoryId?: string;
   purchaserEmail?: string;
@@ -63,6 +65,60 @@ export async function POST(request: Request) {
     const redirectPath = "/offrir/merci";
     const adminClient = getAdminClient();
 
+    if (kind === "credits_custom") {
+      const euros = Number(body.customAmountEuros);
+      if (!Number.isFinite(euros) || euros < 100 || euros % 5 !== 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Choisissez un montant libre d'au moins 100€, par pallier de 5€.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const totalCredits = Math.round(euros / 5);
+      const totalAmountCents = Math.round(euros * 100);
+      const code = generateGiftCardCode();
+      const expiresAt = giftCardExpiresAt();
+
+      const paymentLink = await createSquareAdHocPaymentLink({
+        name: `Carte cadeau crédits — ${totalCredits} crédits`,
+        amountCents: totalAmountCents,
+        buyer: { userEmail: purchaserEmail },
+        siteUrl,
+        redirectPath,
+        paymentNote: `Manufacto carte cadeau crédits custom (${code})`,
+      });
+
+      const { error: insertError } = await adminClient.from("gift_card").insert({
+        code,
+        kind: "credits",
+        credits: totalCredits,
+        initial_credits: totalCredits,
+        amount_cents: totalAmountCents,
+        product_id: "credits-custom",
+        purchaser_email: purchaserEmail,
+        recipient_email: recipientEmail,
+        personal_message: body.personalMessage?.trim() || null,
+        status: "pending",
+        square_order_id: paymentLink.orderId,
+        square_payment_link_id: paymentLink.paymentLinkId,
+        idempotency_key: paymentLink.idempotencyKey,
+        expires_at: expiresAt,
+      });
+
+      if (insertError) {
+        console.error("Error creating pending custom gift card:", insertError);
+        return NextResponse.json(
+          { error: "Impossible de préparer le paiement." },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({ url: paymentLink.paymentLinkUrl });
+    }
+
     if (kind === "credits") {
       const productId = body.productId?.trim() ?? "";
 
@@ -79,9 +135,9 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!product.catalogObjectId) {
+      if (product.credits === 2 || product.id === "credits-2") {
         return NextResponse.json(
-          { error: "Paiement indisponible pour ce produit." },
+          { error: "Ce pack n'est plus proposé en carte cadeau." },
           { status: 400 },
         );
       }
@@ -94,14 +150,23 @@ export async function POST(request: Request) {
       const code = generateGiftCardCode();
       const expiresAt = giftCardExpiresAt();
 
-      const paymentLink = await createSquareCatalogPaymentLink({
-        catalogObjectId: product.catalogObjectId,
-        buyer: { userEmail: purchaserEmail },
-        siteUrl,
-        redirectPath,
-        quantity,
-        paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
-      });
+      const paymentLink = product.catalogObjectId
+        ? await createSquareCatalogPaymentLink({
+            catalogObjectId: product.catalogObjectId,
+            buyer: { userEmail: purchaserEmail },
+            siteUrl,
+            redirectPath,
+            quantity,
+            paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
+          })
+        : await createSquareAdHocPaymentLink({
+            name: `Carte cadeau crédits — ${totalCredits} crédits`,
+            amountCents: totalAmountCents,
+            buyer: { userEmail: purchaserEmail },
+            siteUrl,
+            redirectPath,
+            paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
+          });
 
       const { error: insertError } = await adminClient.from("gift_card").insert({
         code,

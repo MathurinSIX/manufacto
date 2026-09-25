@@ -10,6 +10,7 @@ import {
   getUserLegalCompliance,
 } from "@/lib/legal/status";
 import { LEGAL_DOC_KEYS, type LegalAcceptanceChannel } from "@/lib/legal/types";
+import { resolveAccountUserId } from "@/lib/account-share";
 
 export type SubmitLegalPackInput = {
   targetUserId?: string;
@@ -54,9 +55,15 @@ export async function getLegalSigningState(targetUserId?: string) {
   }
 
   const isAdmin = user.app_metadata?.role === "admin";
-  const userId = targetUserId && isAdmin ? targetUserId : user.id;
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+  const userId = targetUserId && isAdmin ? targetUserId : accountUserId;
 
-  if (targetUserId && targetUserId !== user.id && !isAdmin) {
+  if (
+    targetUserId &&
+    targetUserId !== user.id &&
+    targetUserId !== accountUserId &&
+    !isAdmin
+  ) {
     return { error: "Non autorisé", status: null };
   }
 
@@ -71,10 +78,16 @@ export async function submitLegalPack(input: SubmitLegalPackInput) {
   }
 
   const isAdmin = user.app_metadata?.role === "admin";
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
   const targetUserId =
-    input.targetUserId && isAdmin ? input.targetUserId : user.id;
+    input.targetUserId && isAdmin ? input.targetUserId : accountUserId;
 
-  if (input.targetUserId && input.targetUserId !== user.id && !isAdmin) {
+  if (
+    input.targetUserId &&
+    input.targetUserId !== user.id &&
+    input.targetUserId !== accountUserId &&
+    !isAdmin
+  ) {
     return { error: "Non autorisé" };
   }
 
@@ -279,15 +292,70 @@ export async function updateAdminNotes(userId: string, notes: string) {
   return { error: null };
 }
 
+export async function updateHouseholdMembers(
+  userId: string,
+  memberNames: string[],
+  childNames: string[],
+) {
+  const { error, user, supabase } = await requireActor();
+  if (error || !user) {
+    return { error: error ?? "Non authentifié" };
+  }
+
+  const isAdmin = user.app_metadata?.role === "admin";
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+  if (!isAdmin && user.id !== userId && accountUserId !== userId) {
+    return { error: "Non autorisé" };
+  }
+
+  const normalizedMembers = memberNames
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  const normalizedChildren = childNames
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  if (normalizedMembers.length === 0) {
+    return { error: "Indiquez au moins un prénom d'adulte" };
+  }
+
+  const adminClient = getAdminClient();
+  const { error: upsertError } = await adminClient.from("user_profile").upsert(
+    {
+      user_id: userId,
+      member_names: normalizedMembers,
+      child_names: normalizedChildren,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (upsertError) {
+    return { error: upsertError.message };
+  }
+
+  revalidatePath("/account");
+  revalidatePath("/account/documents");
+  revalidatePath(`/admin/users/${userId}`);
+  return { error: null };
+}
+
 export async function getSignatureSignedUrl(path: string) {
-  const { error, user } = await requireActor();
+  const { error, user, supabase } = await requireActor();
   if (error || !user) {
     return { error: error ?? "Non authentifié", url: null };
   }
 
   const adminClient = getAdminClient();
   const isAdmin = user.app_metadata?.role === "admin";
-  if (!isAdmin && !path.startsWith(`${user.id}/`)) {
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+  if (
+    !isAdmin &&
+    !path.startsWith(`${user.id}/`) &&
+    !path.startsWith(`${accountUserId}/`)
+  ) {
     return { error: "Non autorisé", url: null };
   }
 

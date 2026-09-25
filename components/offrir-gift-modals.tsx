@@ -50,6 +50,8 @@ export type OffrirCourseCategoryOption = {
   credits: number;
   description: string;
   examples: OffrirCourseExample[];
+  /** When true, hide "X crédits ·" next to course gift tiers. */
+  hideCreditEquivalence?: boolean;
 };
 
 type GiftEmailFields = {
@@ -149,15 +151,21 @@ const secondaryBtn =
 type OffrirGiftModalsProps = {
   creditPacks: OffrirCreditPackOption[];
   courseCategories: OffrirCourseCategoryOption[];
+  showCustomAmount?: boolean;
+  creditsIntro?: string;
 };
 
 export function OffrirGiftModals({
   creditPacks,
   courseCategories,
+  showCustomAmount = true,
+  creditsIntro,
 }: OffrirGiftModalsProps) {
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [courseOpen, setCourseOpen] = useState(false);
   const [selectedPackId, setSelectedPackId] = useState(creditPacks[0]?.id ?? "");
+  const [customAmountEuros, setCustomAmountEuros] = useState(100);
+  const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     courseCategories[0]?.id ?? "",
   );
@@ -188,19 +196,31 @@ export function OffrirGiftModals({
   );
 
   async function payCredits() {
-    if (!selectedPack) return;
+    if (!useCustomAmount && !selectedPack) return;
     setLoading(true);
     setError(null);
     try {
-      await startGiftCheckout({
-        kind: "credits",
-        productId: selectedPack.id,
-        purchaserEmail: creditsEmail.purchaserEmail,
-        recipientEmail: creditsEmail.sameRecipient
-          ? creditsEmail.purchaserEmail
-          : creditsEmail.recipientEmail,
-        personalMessage: creditsEmail.personalMessage,
-      });
+      if (useCustomAmount) {
+        await startGiftCheckout({
+          kind: "credits_custom",
+          customAmountEuros,
+          purchaserEmail: creditsEmail.purchaserEmail,
+          recipientEmail: creditsEmail.sameRecipient
+            ? creditsEmail.purchaserEmail
+            : creditsEmail.recipientEmail,
+          personalMessage: creditsEmail.personalMessage,
+        });
+      } else {
+        await startGiftCheckout({
+          kind: "credits",
+          productId: selectedPack!.id,
+          purchaserEmail: creditsEmail.purchaserEmail,
+          recipientEmail: creditsEmail.sameRecipient
+            ? creditsEmail.purchaserEmail
+            : creditsEmail.recipientEmail,
+          personalMessage: creditsEmail.personalMessage,
+        });
+      }
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error
@@ -263,9 +283,8 @@ export function OffrirGiftModals({
           <article className="flex flex-col rounded-[19px] border border-black/10 bg-[#f0f1ff] p-8">
             <h3 className="text-2xl font-bold text-[#4a56dd]">Un pack de crédits</h3>
             <p className="mt-4 flex-1 text-lg text-black/75">
-              Pour la pratique libre : la personne charge un pass, visite
-              l&apos;atelier, puis réserve ses créneaux. Tarifs dégressifs,
-              crédits valables un an.
+              {creditsIntro ??
+                "Pour la pratique libre : choisissez un nombre de crédits. La personne à qui vous les offrez pourra ensuite réserver ses créneaux de pratique directement depuis son espace en ligne. Tarifs dégressifs, crédits valables un an."}
             </p>
             <button
               type="button"
@@ -305,12 +324,15 @@ export function OffrirGiftModals({
             ) : (
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
                 {creditPacks.map((pack) => {
-                  const selected = pack.id === selectedPackId;
+                  const selected = !useCustomAmount && pack.id === selectedPackId;
                   return (
                     <button
                       key={pack.id}
                       type="button"
-                      onClick={() => setSelectedPackId(pack.id)}
+                      onClick={() => {
+                        setUseCustomAmount(false);
+                        setSelectedPackId(pack.id);
+                      }}
                       className={cn(
                         "rounded-[12px] border px-3 py-3 text-left transition",
                         selected
@@ -327,8 +349,47 @@ export function OffrirGiftModals({
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => setUseCustomAmount(true)}
+                  className={cn(
+                    "rounded-[12px] border px-3 py-3 text-left transition sm:col-span-2",
+                    useCustomAmount
+                      ? "border-[#4a56dd] bg-white ring-2 ring-[#4a56dd]/30"
+                      : "border-black/10 bg-white/80 hover:border-[#4a56dd]/40",
+                    !showCustomAmount && "hidden",
+                  )}
+                >
+                  <p className="text-lg font-bold text-[#4a56dd]">
+                    Au-delà de 100&nbsp;€
+                  </p>
+                  <p className="text-sm text-black/65">
+                    Montant libre par pallier de 5&nbsp;€ (1 crédit = 5&nbsp;€)
+                  </p>
+                </button>
               </div>
             )}
+
+            {showCustomAmount && useCustomAmount ? (
+              <div className="mt-4 space-y-2 rounded-[12px] border border-black/10 bg-white p-4">
+                <Label htmlFor="custom-gift-amount">Montant (€)</Label>
+                <Input
+                  id="custom-gift-amount"
+                  type="number"
+                  min={100}
+                  step={5}
+                  value={customAmountEuros}
+                  onChange={(event) =>
+                    setCustomAmountEuros(
+                      Math.max(100, Math.round(Number(event.target.value) || 100)),
+                    )
+                  }
+                />
+                <p className="text-sm text-black/60">
+                  = {Math.round(customAmountEuros / 5)} crédits
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-5 rounded-[12px] border border-black/10 bg-white p-4">
               <GiftEmailForm
@@ -340,15 +401,21 @@ export function OffrirGiftModals({
                 type="button"
                 className="mt-4 w-full rounded-[12px] bg-[#4a56dd] hover:bg-[#3844c8]"
                 disabled={
-                  loading || !selectedPack || !creditsEmail.purchaserEmail.trim()
+                  loading ||
+                  !creditsEmail.purchaserEmail.trim() ||
+                  (!useCustomAmount && !selectedPack) ||
+                  (useCustomAmount &&
+                    (customAmountEuros < 100 || customAmountEuros % 5 !== 0))
                 }
                 onClick={() => void payCredits()}
               >
                 {loading
                   ? "Chargement..."
-                  : selectedPack
-                    ? `Payer ${priceFormatter.format(selectedPack.amountCents / 100)}`
-                    : "Payer"}
+                  : useCustomAmount
+                    ? `Payer ${priceFormatter.format(customAmountEuros)}`
+                    : selectedPack
+                      ? `Payer ${priceFormatter.format(selectedPack.amountCents / 100)}`
+                      : "Payer"}
               </Button>
               <p className="mt-2 text-xs text-black/55">
                 Valables un an pour la pratique libre.
@@ -404,7 +471,9 @@ export function OffrirGiftModals({
                       </p>
                     </div>
                     <p className="mt-1 text-sm text-black/60">
-                      {category.credits} crédits · {category.description}
+                      {category.hideCreditEquivalence
+                        ? category.description
+                        : `${category.credits} crédits · ${category.description}`}
                     </p>
                   </button>
                 );

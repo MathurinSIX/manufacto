@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { AccountPersonalInfo } from "@/components/account-personal-info";
 import { DocumentSigningForm } from "@/components/legal/document-signing-form";
 import { createClient } from "@/lib/supabase/server";
 import { getUserLegalCompliance } from "@/lib/legal/status";
+import { resolveAccountUserId } from "@/lib/account-share";
 
 type Search = {
   next?: string;
@@ -25,26 +27,45 @@ async function DocumentsContent({
     redirect(`/auth/login?next=${encodeURIComponent("/account/documents")}`);
   }
 
-  const status = await getUserLegalCompliance(supabase, user.id);
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+  const status = await getUserLegalCompliance(supabase, accountUserId);
   const returnTo =
     typeof sp.next === "string" && sp.next.startsWith("/") ? sp.next : "/account";
 
   if (status.complete) {
     return (
       <div>
-        <h1 className="text-[28px] font-bold tracking-[-0.02em] md:text-[34px]">
-          Documents signés
-        </h1>
-        <p className="mt-3 text-base text-black/70 md:text-lg">
-          Votre règlement intérieur et votre décharge sont à jour. Vous pouvez
-          réserver.
-        </p>
         <Link
           href={returnTo}
-          className="mt-6 inline-flex rounded-[12px] bg-[#4a56dd] px-5 py-3 text-base font-semibold text-white"
+          className="text-sm font-semibold text-[#4a56dd] underline underline-offset-2"
         >
-          Continuer
+          ← retour au compte
         </Link>
+        <h1 className="mt-4 text-[28px] font-bold tracking-[-0.02em] md:text-[34px]">
+          Mes infos
+        </h1>
+        <p className="mt-3 text-base text-black/70 md:text-lg">
+          Règlement intérieur, décharge et autorisation à l’image sont
+          enregistrés.
+        </p>
+        <div className="mt-6 rounded-[16px] border border-black/10 bg-white p-5 shadow-sm ring-1 ring-black/5 md:p-6">
+          <AccountPersonalInfo
+            firstName={
+              typeof user.user_metadata?.first_name === "string"
+                ? user.user_metadata.first_name
+                : null
+            }
+            lastName={
+              typeof user.user_metadata?.last_name === "string"
+                ? user.user_metadata.last_name
+                : null
+            }
+            email={user.email}
+            profile={status.profile}
+            signedDocuments={status.signedDocuments}
+            imageRights={status.imageRights}
+          />
+        </div>
       </div>
     );
   }
