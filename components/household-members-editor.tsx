@@ -53,18 +53,26 @@ export function HouseholdMembersEditor({
     setMessage(null);
     setError(null);
     startTransition(async () => {
-      const result = await updateHouseholdMembers(
-        userId,
-        normalizeNameList(members),
-        normalizeNameList(children),
-      );
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await updateHouseholdMembers(
+          userId,
+          normalizeNameList(members),
+          normalizeNameList(children),
+        );
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setMessage("Foyer enregistré.");
+        setMembers(editableList(normalizeNameList(members), 2));
+        setChildren(editableList(normalizeNameList(children), 0));
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Impossible d’enregistrer le foyer.",
+        );
       }
-      setMessage("Foyer enregistré.");
-      setMembers(editableList(normalizeNameList(members), 2));
-      setChildren(editableList(normalizeNameList(children), 0));
     });
   };
 

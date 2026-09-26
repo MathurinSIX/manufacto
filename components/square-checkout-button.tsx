@@ -13,6 +13,8 @@ type SquareCheckoutButtonProps = {
   reservationStart?: string;
   reservationEnd?: string;
   participantCount?: number;
+  participantNames?: string[];
+  participantEmails?: string[];
   /** Quantity for unit credit packs (1–5). Ignored for other products. */
   quantity?: number;
   children: React.ReactNode;
@@ -31,6 +33,8 @@ export function SquareCheckoutButton({
   reservationStart,
   reservationEnd,
   participantCount = 1,
+  participantNames = [],
+  participantEmails = [],
   quantity = 1,
   children,
   className,
@@ -73,6 +77,8 @@ export function SquareCheckoutButton({
           reservationStart,
           reservationEnd,
           participantCount,
+          participantNames,
+          participantEmails,
           quantity,
         }),
       });
@@ -92,7 +98,12 @@ export function SquareCheckoutButton({
       }
 
       if (response.status === 403 && payload.redirectTo) {
-        const next = window.location.pathname;
+        const url = new URL(window.location.href);
+        if (url.pathname === "/account" && !url.searchParams.get("tab")) {
+          url.searchParams.set("tab", "credits");
+        }
+        url.hash = `credit-pack-${productId}`;
+        const next = `${url.pathname}${url.search}${url.hash}`;
         window.location.href = `${payload.redirectTo}?next=${encodeURIComponent(next)}`;
         return;
       }

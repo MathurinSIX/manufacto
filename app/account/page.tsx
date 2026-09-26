@@ -488,55 +488,13 @@ async function AccountContent() {
               droit à l’image.
             </p>
             <Link
-              href="/account/documents?next=/account"
+              href="/account/documents?next=%2Faccount%3Ftab%3Dinfos"
               className="mt-4 inline-flex text-base font-semibold text-[#4a56dd] underline underline-offset-2"
             >
               Signer maintenant
             </Link>
           </div>
         ) : null}
-
-        <Card className={`${panelClassName} mb-8`}>
-          <CardHeader className="border-b border-black/10 p-5 md:p-7">
-            <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
-              Mes infos
-            </CardTitle>
-            <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
-              Identité, coordonnées et documents signés
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5 md:p-7">
-            <AccountPersonalInfo
-              firstName={
-                typeof user.user_metadata?.first_name === "string"
-                  ? user.user_metadata.first_name
-                  : null
-              }
-              lastName={
-                typeof user.user_metadata?.last_name === "string"
-                  ? user.user_metadata.last_name
-                  : null
-              }
-              email={share.isOwner ? user.email : ownerEmail}
-              profile={legalStatus.profile}
-              signedDocuments={legalStatus.signedDocuments}
-              imageRights={legalStatus.imageRights}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className={`${panelClassName} mb-8`}>
-          <CardContent className="p-5 md:p-7">
-            <HouseholdMembersEditor
-              userId={accountUserId}
-              memberNames={legalStatus.profile?.member_names}
-              childNames={legalStatus.profile?.child_names}
-              ownerEmail={ownerEmail}
-              partner={share.partner}
-              canInvite={share.isOwner}
-            />
-          </CardContent>
-        </Card>
 
         <AccountMainTabs
           reservations={
@@ -619,6 +577,47 @@ async function AccountContent() {
           }
           pratique={
             <AccountPratiquePanel activities={quickPracticeItems} />
+          }
+          infos={
+            <Card className={panelClassName}>
+              <CardHeader className="border-b border-black/10 p-5 md:p-7">
+                <CardTitle className="text-[24px] font-semibold leading-tight text-black/80 md:text-[28px]">
+                  Mes infos
+                </CardTitle>
+                <CardDescription className="mt-2 text-sm leading-normal text-black/65 md:text-base">
+                  Identité, coordonnées, foyer et documents signés
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-10 p-5 md:p-7">
+                <AccountPersonalInfo
+                  firstName={
+                    typeof user.user_metadata?.first_name === "string"
+                      ? user.user_metadata.first_name
+                      : null
+                  }
+                  lastName={
+                    typeof user.user_metadata?.last_name === "string"
+                      ? user.user_metadata.last_name
+                      : null
+                  }
+                  email={share.isOwner ? user.email : ownerEmail}
+                  profile={legalStatus.profile}
+                  signedDocuments={legalStatus.signedDocuments}
+                  imageRights={legalStatus.imageRights}
+                  editable
+                />
+                <div className="border-t border-black/10 pt-8">
+                  <HouseholdMembersEditor
+                    userId={accountUserId}
+                    memberNames={legalStatus.profile?.member_names}
+                    childNames={legalStatus.profile?.child_names}
+                    ownerEmail={ownerEmail}
+                    partner={share.partner}
+                    canInvite={share.isOwner}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           }
           credits={
             <>

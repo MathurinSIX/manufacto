@@ -23,6 +23,8 @@ export const EXPERIMENTS = {
   tilePratique: "exp-tile-pratique",
   /** L'atelier hero: previous Marseille line vs the “quatre univers” paragraph. */
   atelierHero: "exp-atelier-hero",
+  /** L'atelier tarifs: today’s purchase cards vs the quieter cream layout without Acheter/Souscrire. */
+  atelierTarifs: "exp-atelier-tarifs",
   /** Course calendar on homepage and cours: month cells without photos vs day images. */
   calendarImages: "exp-calendar-images",
 } as const;

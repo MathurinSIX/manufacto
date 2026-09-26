@@ -35,7 +35,7 @@ type DiscoveryPackModalTriggerProps = {
 export function DiscoveryPackModalTrigger({
   packs,
   isLoggedIn,
-  label = "Première visite",
+  label = "Pack découvertes",
   className = "",
 }: DiscoveryPackModalTriggerProps) {
   const [open, setOpen] = useState(false);
@@ -82,7 +82,9 @@ export function DiscoveryPackModalTrigger({
                     <p className="mt-1 text-sm font-semibold leading-tight text-black/85">
                       {pack.line1}
                     </p>
-                    <p className="text-sm leading-tight text-black/70">{pack.line2}</p>
+                    {pack.line2 ? (
+                      <p className="text-sm leading-tight text-black/70">{pack.line2}</p>
+                    ) : null}
                     <DiscoveryPackReservationButton
                       activityId={pack.activityId}
                       activityTitle={pack.title}

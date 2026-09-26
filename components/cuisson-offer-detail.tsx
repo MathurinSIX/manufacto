@@ -1,11 +1,6 @@
 export function CuissonOfferDetail() {
   return (
     <div className="space-y-4">
-      <p>
-        À manufacto, vous pouvez cuire les pièces que vous avez réalisées hors de
-        l’atelier. Le four se réserve alors en totalité.
-      </p>
-
       <p className="underline">
         Seules les pièces en grès sont pour le moment acceptées.
       </p>

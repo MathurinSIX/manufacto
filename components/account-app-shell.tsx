@@ -9,6 +9,7 @@ import {
   Home,
   LogOut,
   Ticket,
+  UserRound,
   Wrench,
 } from "lucide-react";
 import { Suspense } from "react";
@@ -41,6 +42,12 @@ const NAV = [
     tab: "credits" as const,
     label: "Crédits",
     Icon: CreditCard,
+  },
+  {
+    href: "/account?tab=infos",
+    tab: "infos" as const,
+    label: "Infos",
+    Icon: UserRound,
   },
 ] as const;
 
@@ -78,7 +85,7 @@ function AccountBottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       aria-label="Navigation compte"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-4 px-1 pt-1">
+      <div className="mx-auto grid max-w-lg grid-cols-5 px-1 pt-1">
         {NAV.map(({ href, tab, label, Icon }) => {
           const isActive = activeTab === tab;
           return (
@@ -132,7 +139,7 @@ export function AccountAppShell({ children }: { children: React.ReactNode }) {
                 priority
               />
             </span>
-            <span className="truncate text-sm font-semibold text-black/70 md:text-base">
+            <span className="truncate text-base font-semibold text-black/80 md:text-lg">
               Mon compte
             </span>
           </Link>
@@ -140,11 +147,11 @@ export function AccountAppShell({ children }: { children: React.ReactNode }) {
           <div className="flex shrink-0 items-center gap-1">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-2 text-sm font-medium text-black/50 transition hover:bg-black/5 hover:text-black/80"
+              className="inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-2 text-base font-semibold text-black/80 transition hover:bg-black/5 hover:text-black md:text-lg"
               title="Retour au site"
             >
               <Home className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
-              <span className="hidden sm:inline">Site</span>
+              <span className="hidden sm:inline">Retour site</span>
             </Link>
             <AccountLogoutButton />
           </div>

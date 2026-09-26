@@ -506,7 +506,6 @@ export function MockupPratiquePage({
         {heroSecondary ?? (
           <SecondaryCta href={h("/contact")}>Pack découvertes</SecondaryCta>
         )}
-        {scope === "site" ? <PracticeAvailabilityCalendarButton /> : null}
       </PageHero>
 
       {afterHero}
@@ -555,14 +554,28 @@ export function MockupPratiquePage({
                       className="flex flex-col rounded-[19px] border border-black/8 p-6"
                       style={{ backgroundColor: d.tint }}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <h4 className="text-xl font-bold text-black/90">{offer.title}</h4>
-                        <span
-                          className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
-                          style={{ color: d.color, backgroundColor: "white" }}
-                        >
-                          {offer.rate}
-                        </span>
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="min-w-0 text-xl font-bold text-black/90">
+                          {offer.title}
+                        </h4>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {scope === "site" &&
+                          (offer.type === "autonomie" ||
+                            offer.type === "autonomie_encadree") ? (
+                            <PracticeAvailabilityCalendarButton
+                              iconOnly
+                              accent={d.color}
+                              initialDiscipline={d.id}
+                              initialAutonomy={offer.type}
+                            />
+                          ) : null}
+                          <span
+                            className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                            style={{ color: d.color, backgroundColor: "white" }}
+                          >
+                            {offer.rate}
+                          </span>
+                        </div>
                       </div>
                       <p className="mt-3 text-base leading-snug text-black/70">
                         {offer.summary}

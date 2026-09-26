@@ -11,15 +11,16 @@ async function AtelierExperiment({
   searchParams: Promise<{ ph_exp?: string }>;
 }) {
   const params = await searchParams;
-  const [variant, heroLead] = await Promise.all([
+  const [variant, heroLead, tarifsVariant] = await Promise.all([
     getExperimentVariant(EXPERIMENTS.atelier, params),
     getExperimentVariant(EXPERIMENTS.atelierHero, params, { fallback: "test" }),
+    getExperimentVariant(EXPERIMENTS.atelierTarifs, params),
   ]);
   // control = yesterday UI-v2 atelier, test = today's retours
   return variant === "control" ? (
     <AtelierPageControl heroLead={heroLead} />
   ) : (
-    <AtelierPageTest heroLead={heroLead} />
+    <AtelierPageTest heroLead={heroLead} tarifsVariant={tarifsVariant} />
   );
 }
 

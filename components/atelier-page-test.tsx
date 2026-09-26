@@ -1,5 +1,11 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
+import {
+  AtelierCreditPackGrid,
+  AtelierDiscoveryPackStrip,
+  AtelierSubscriptionCards,
+} from "@/components/atelier-tarifs-purchases";
 import { MockupAtelierPage } from "@/components/mockups/site-pages";
 import type { ExperimentVariant } from "@/lib/posthog/experiments";
 
@@ -7,6 +13,7 @@ const RATE_GROUPS = [
   {
     title: "Menuiserie",
     color: "#f56800",
+    tint: "#fff3e8",
     rows: [
       { label: "Autonomie complète", value: "2 crédits / h" },
       { label: "Autonomie encadrée", value: "3 crédits / h" },
@@ -16,6 +23,7 @@ const RATE_GROUPS = [
   {
     title: "Couture",
     color: "#4a56dd",
+    tint: "#f0f1ff",
     rows: [
       { label: "Autonomie complète", value: "1 crédit / h" },
       { label: "Autonomie encadrée", value: "2 crédits / h" },
@@ -24,6 +32,7 @@ const RATE_GROUPS = [
   {
     title: "Céramique",
     color: "#d73459",
+    tint: "#fff0f3",
     rows: [
       { label: "Autonomie complète", value: "2 crédits / h" },
       { label: "Autonomie encadrée", value: "3 crédits / h" },
@@ -33,6 +42,7 @@ const RATE_GROUPS = [
   {
     title: "Cours",
     color: "#c9a227",
+    tint: "#fff8e6",
     rows: [
       { label: "Catégorie 01", value: "50 € / 10 crédits" },
       { label: "Catégorie 02", value: "72 € / 15 crédits" },
@@ -41,167 +51,215 @@ const RATE_GROUPS = [
   },
 ] as const;
 
-const SUBSCRIPTIONS = [
-  { label: "Abonnement 01", price: "90 €", credits: "20 crédits / mois" },
-  { label: "Abonnement 02", price: "170 €", credits: "40 crédits / mois" },
-  { label: "Abonnement 03", price: "240 €", credits: "60 crédits / mois" },
-] as const;
-
-const DISCOVERY = [
-  { label: "Couture", price: "15 €", detail: "2h autonomie encadrée" },
-  {
-    label: "Menuiserie / céramique",
-    price: "30 €",
-    detail: "2h autonomie encadrée",
-  },
-] as const;
-
 /** Today's retours atelier (test variant). */
 export function AtelierPageTest({
   heroLead = "test",
+  tarifsVariant = "test",
 }: {
   heroLead?: ExperimentVariant;
+  /** control = earlier today (purchase buttons). test = quieter cream layout. */
+  tarifsVariant?: ExperimentVariant;
 } = {}) {
+  const quietTarifs = tarifsVariant === "test";
+
   return (
     <>
       <MockupAtelierPage scope="site" heroLead={heroLead} />
       <section
         id="tarifs"
-        className="scroll-mt-28 border-t border-black/10 bg-white"
+        className={
+          quietTarifs
+            ? "scroll-mt-28 border-t border-black/10 bg-[#fff8f0]"
+            : "scroll-mt-28 border-t border-black/10 bg-white"
+        }
       >
-        <div className="mx-auto max-w-[1274px] px-5 py-14">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-            <div>
-              <h2 className="text-[30px] font-semibold text-black/80 md:text-[34px]">
-                Tarifs
-              </h2>
-              <p className="mt-4 max-w-xl text-lg leading-normal text-black/65">
-                Système de crédits (valables un an). Achats et recharges dans{" "}
-                <Link
-                  href="/account?tab=credits"
-                  className="font-semibold text-[#4a56dd] underline"
-                >
-                  mon compte
-                </Link>
-                .
-              </p>
+        <div
+          className={
+            quietTarifs
+              ? "mx-auto max-w-[1274px] px-5 py-14 md:py-16"
+              : "mx-auto max-w-[1274px] px-5 py-14"
+          }
+        >
+          {quietTarifs ? (
+            <div className="rounded-[28px] bg-white px-5 py-8 shadow-sm ring-1 ring-black/5 md:px-10 md:py-12">
+              <AtelierTarifsBody quiet />
             </div>
-            <p className="text-base leading-normal text-black/60 sm:max-w-xs sm:text-right">
-              <strong>15&nbsp;%</strong> étudiants / chômage / RSA — uniquement
-              sur place.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {RATE_GROUPS.map((group) => (
-              <div
-                key={group.title}
-                className="rounded-[14px] border border-black/8 bg-[#fff8f0]/70 px-4 py-3"
-              >
-                <h3
-                  className="border-b border-black/10 pb-1.5 text-sm font-bold uppercase tracking-wide"
-                  style={{ color: group.color }}
-                >
-                  {group.title}
-                </h3>
-                <ul className="mt-2 space-y-1.5 text-sm text-black/75">
-                  {group.rows.map((row) => (
-                    <li
-                      key={row.label}
-                      className="flex items-baseline justify-between gap-3"
-                    >
-                      <span className="min-w-0 leading-snug">{row.label}</span>
-                      <span className="shrink-0 font-semibold tabular-nums text-black/85">
-                        {row.value}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-[#f56800]">
-              Packs de crédits
-            </h3>
-            <p className="mt-1 text-sm text-black/55">
-              Valables un an, cumulables avec le solde restant — à acheter depuis{" "}
-              <Link
-                href="/account?tab=credits"
-                className="font-semibold text-[#4a56dd] underline"
-              >
-                mon compte
-              </Link>
-              .
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              {[
-                { price: "8 €", credits: "1 crédit" },
-                { price: "36 €", credits: "6 crédits" },
-                { price: "50 €", credits: "10 crédits" },
-                { price: "66 €", credits: "12 crédits" },
-                { price: "72 €", credits: "15 crédits" },
-                { price: "100 €", credits: "20 crédits" },
-              ].map((pack) => (
-                <div
-                  key={pack.credits}
-                  className="rounded-[14px] border border-[#f56800]/40 bg-[#fff8f0] px-3 py-4 text-center"
-                >
-                  <p className="text-2xl font-semibold tabular-nums text-black/90">
-                    {pack.price}
-                  </p>
-                  <p className="mt-1 text-sm text-black/65">{pack.credits}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-[14px] border border-black/8 px-4 py-3">
-              <h3 className="text-sm font-bold text-[#f56800]">Pack découverte</h3>
-              <p className="mt-0.5 text-xs text-black/50">
-                Première venue — un achat par personne
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-black/75">
-                {DISCOVERY.map((pack) => (
-                  <li
-                    key={pack.label}
-                    className="flex items-baseline justify-between gap-3"
-                  >
-                    <span>
-                      {pack.label}
-                      <span className="text-black/50"> — {pack.detail}</span>
-                    </span>
-                    <span className="font-semibold tabular-nums">{pack.price}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-[14px] border border-black/8 px-4 py-3">
-              <h3 className="text-sm font-bold text-[#f56800]">Abonnements</h3>
-              <p className="mt-0.5 text-xs text-black/50">
-                Engagement 3 mois, puis résiliation mensuelle
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-black/75">
-                {SUBSCRIPTIONS.map((plan) => (
-                  <li
-                    key={plan.label}
-                    className="flex items-baseline justify-between gap-3"
-                  >
-                    <span>
-                      {plan.label}
-                      <span className="text-black/50"> — {plan.credits}</span>
-                    </span>
-                    <span className="font-semibold tabular-nums">{plan.price}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          ) : (
+            <AtelierTarifsBody quiet={false} />
+          )}
         </div>
       </section>
+    </>
+  );
+}
+
+function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
+  const panelClass = quiet
+    ? "mt-8 rounded-[20px] bg-[#fff8f0] p-5 md:p-7"
+    : "mt-8 rounded-[19px] border border-black/10 bg-white p-6 md:p-8";
+
+  return (
+    <>
+      <h2 className="max-w-3xl text-[30px] font-bold leading-tight text-black md:text-[34px]">
+        Manufacto fonctionne avec un système de crédit.
+      </h2>
+      <div className="mt-4 max-w-3xl space-y-3 text-base leading-normal text-black/70">
+        <p>
+          Il y a deux façons d&apos;accéder à l&apos;atelier : en réservant un
+          cours, ou en achetant des crédits, qui vous permettront l&apos;accès
+          en pratique libre.
+        </p>
+        <p>
+          Pour la pratique libre : une fois les crédits chargés sur votre
+          espace, vous pouvez réserver un poste de travail en menuiserie, en
+          couture et en céramique, pour la durée de votre choix (à partir de
+          1h), directement depuis votre compte.
+        </p>
+      </div>
+
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {RATE_GROUPS.map((group) => (
+          <div
+            key={group.title}
+            className={
+              quiet
+                ? "rounded-[16px] border border-black/5 px-4 py-4"
+                : "rounded-[14px] border border-black/10 bg-white px-4 py-3"
+            }
+            style={quiet ? { backgroundColor: group.tint } : undefined}
+          >
+            <h3
+              className="text-xs font-bold uppercase tracking-[0.12em]"
+              style={{ color: group.color }}
+            >
+              {group.title}
+            </h3>
+            <ul className="mt-2 space-y-1 text-sm text-black/75">
+              {group.rows.map((row) => (
+                <li
+                  key={row.label}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <span className="min-w-0 leading-snug">{row.label}</span>
+                  <span className="shrink-0 font-semibold tabular-nums text-black/85">
+                    {row.value}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <div className={panelClass}>
+        <h3 className="text-[24px] font-semibold leading-tight text-black/85 md:text-[28px]">
+          Acheter des crédits
+        </h3>
+        <p className="mt-2 text-base leading-normal text-black/65">
+          Rechargez votre compte pour réserver vos prochains créneaux
+        </p>
+        <p className="mb-3 mt-6 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
+          Packs de crédits
+        </p>
+        <Suspense
+          fallback={
+            <div className="grid min-h-[155px] animate-pulse grid-cols-2 gap-3 rounded-[14px] bg-[#fff8f0] md:grid-cols-3 lg:grid-cols-5" />
+          }
+        >
+          <AtelierCreditPackGrid
+            purchasableOnly
+            showPurchaseButton={!quiet}
+          />
+        </Suspense>
+        <p className="mt-5 text-sm leading-normal text-black/60">
+          Les crédits sont valables un an à partir de leur date d&apos;achat.
+          Ils s&apos;ajoutent au solde déjà disponible sur votre compte.
+        </p>
+      </div>
+
+      <div className={quiet ? "mt-4 rounded-[20px] bg-[#fff8f0] p-5 md:p-7" : "mt-6 rounded-[19px] border border-black/10 bg-white p-6 md:p-8"}>
+        <h3 className="text-[24px] font-semibold leading-tight text-black/85 md:text-[28px]">
+          Mon abonnement
+        </h3>
+        <p className="mt-2 text-base leading-normal text-black/65">
+          Les abonnements vous permettent d&apos;avoir un volume de crédit
+          mensuel à utiliser à l&apos;atelier, à tarif préférentiel.
+        </p>
+        <div className="mt-6">
+          <Suspense
+            fallback={
+              <div className="grid gap-3 md:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="min-h-[220px] animate-pulse rounded-[14px] bg-[#fff8f0]"
+                  />
+                ))}
+              </div>
+            }
+          >
+            <AtelierSubscriptionCards showCheckout={!quiet} />
+          </Suspense>
+        </div>
+        <p className="mt-5 text-sm leading-normal text-black/60">
+          Les abonnements ont une durée d&apos;engagement de 3 mois, puis
+          peuvent être résiliés chaque mois. Les crédits non utilisés dans le
+          mois restent disponibles et se cumulent. Vous devez dans tous les
+          cas réserver vos créneaux avant de venir à l&apos;atelier. Après
+          résiliation, vous disposez de 3 mois pour utiliser votre solde de
+          crédits.
+        </p>
+      </div>
+
+      <p
+        className={
+          quiet
+            ? "mt-6 max-w-4xl rounded-[16px] bg-[#fff8f0] px-5 py-4 text-sm leading-normal text-black/65"
+            : "mt-6 max-w-4xl text-sm leading-normal text-black/60"
+        }
+      >
+        15% de réduction sur tous nos tarifs pour les personnes étudiantes, au
+        chômage, bénéficiaires du RSA. Si vous ne rentrez dans aucune de ces
+        cases mais que nos tarifs sont un frein à votre venue, venez nous
+        rencontrer et discutons-en.
+        <span className="mt-2 block">
+          Réductions appliquées uniquement pour les paiements sur place.
+        </span>
+      </p>
+
+      <div className="mt-6">
+        <Suspense
+          fallback={
+            <div className="min-h-[160px] animate-pulse rounded-[19px] bg-white" />
+          }
+        >
+          <AtelierDiscoveryPackStrip />
+        </Suspense>
+      </div>
+
+      <div
+        className={
+          quiet
+            ? "mt-6 flex flex-col gap-4 rounded-[20px] bg-[#fff3e8] px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
+            : "mt-6 flex flex-col gap-4 rounded-[19px] border border-black/10 bg-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
+        }
+      >
+        <div>
+          <p className="text-lg font-bold text-black/85">
+            Envie d&apos;offrir du temps à l&apos;atelier&nbsp;?
+          </p>
+          <p className="mt-1 text-sm text-black/60">
+            Un cours, une initiation, ou juste un accès pour pratiquer
+            librement&nbsp;?
+          </p>
+        </div>
+        <Link
+          href="/offrir"
+          className="inline-flex shrink-0 items-center justify-center rounded-[12px] bg-[#f56800] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d95700]"
+        >
+          Découvrez nos cartes cadeaux&nbsp;!
+        </Link>
+      </div>
     </>
   );
 }

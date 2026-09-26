@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { submitLegalPack } from "@/app/account/documents/actions";
@@ -33,6 +33,7 @@ export function DocumentSigningForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
+  const [signed, setSigned] = useState(false);
 
   const reglement = useMemo(
     () => documents.find((doc) => doc.doc_key === "reglement_interieur") ?? null,
@@ -108,10 +109,41 @@ export function DocumentSigningForm({
         return;
       }
 
-      router.push(returnTo || "/account");
-      router.refresh();
+      setSigned(true);
     });
   };
+
+  const destination =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+      ? returnTo
+      : "/account";
+  const returnsToCredits = destination.includes("credit-pack-") || destination.includes("tab=credits");
+
+  useEffect(() => {
+    if (!signed) return;
+    const timer = window.setTimeout(() => {
+      router.push(destination);
+      router.refresh();
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [signed, destination, router]);
+
+  if (signed) {
+    return (
+      <div className="rounded-[16px] border border-emerald-200 bg-emerald-50 px-5 py-6">
+        <h2 className="text-xl font-semibold text-emerald-950">Documents signés</h2>
+        <p className="mt-2 text-sm leading-relaxed text-emerald-900">
+          Le règlement intérieur, la décharge et votre choix pour le droit à
+          l’image sont enregistrés.
+        </p>
+        <p className="mt-3 text-sm text-emerald-900">
+          {returnsToCredits
+            ? "Retour à votre sélection de crédits…"
+            : "Retour à votre compte…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

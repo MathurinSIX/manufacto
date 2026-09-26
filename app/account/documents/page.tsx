@@ -30,7 +30,11 @@ async function DocumentsContent({
   const accountUserId = await resolveAccountUserId(supabase, user.id);
   const status = await getUserLegalCompliance(supabase, accountUserId);
   const returnTo =
-    typeof sp.next === "string" && sp.next.startsWith("/") ? sp.next : "/account";
+    typeof sp.next === "string" &&
+    sp.next.startsWith("/") &&
+    !sp.next.startsWith("//")
+      ? sp.next
+      : "/account";
 
   if (status.complete) {
     return (

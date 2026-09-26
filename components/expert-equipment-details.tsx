@@ -1,6 +1,6 @@
 import { CuissonOfferDetail } from "@/components/cuisson-offer-detail";
 
-/** Collapsed equipment / kiln detail for experts — not the main marketing pitch. */
+/** Collapsed equipment / kiln detail — machine & tool lists. */
 export function ExpertEquipmentDetails({
   kind,
   accent = "#4a56dd",
@@ -12,10 +12,10 @@ export function ExpertEquipmentDetails({
     kind === "cuisson"
       ? "Détail cuisson & four"
       : kind === "ceramique"
-        ? "Outils & matières (détail)"
+        ? "Détail de nos outils et matières"
         : kind === "couture"
-          ? "Machines (détail)"
-          : "Machines & outillage (détail)";
+          ? "Détail de nos machines"
+          : "Détail de nos machines et outils";
 
   return (
     <details className="mt-4 max-w-3xl rounded-[12px] border border-black/10 bg-white/70 px-4 py-3">
@@ -24,7 +24,6 @@ export function ExpertEquipmentDetails({
         style={{ color: accent }}
       >
         {label}
-        <span className="ml-1 font-normal text-black/40">— pour les expert·es</span>
       </summary>
       <div className="mt-3 text-sm leading-relaxed text-black/70">
         {kind === "menuiserie" ? (
@@ -41,6 +40,7 @@ export function ExpertEquipmentDetails({
                 <li>perceuse à colonne</li>
                 <li>mortaiseuse à bédane</li>
                 <li>tour à bois</li>
+                <li>tour</li>
                 <li>défonceuse sous table</li>
                 <li>scie à onglet</li>
               </ul>
@@ -65,6 +65,7 @@ export function ExpertEquipmentDetails({
         ) : null}
         {kind === "ceramique" ? (
           <ul className="list-disc space-y-1 pl-5">
+            <li>tour</li>
             <li>petit outillage à main (ébauchoirs, estèques…)</li>
             <li>four</li>
             <li>émaux, engobes</li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
@@ -25,6 +25,7 @@ type CreditPackPurchaseCardProps = {
   isLoggedIn?: boolean;
   returnPath?: string;
   allowQuantity?: boolean;
+  showPurchaseButton?: boolean;
   className?: string;
   buttonClassName?: string;
 };
@@ -37,18 +38,27 @@ export function CreditPackPurchaseCard({
   isLoggedIn = true,
   returnPath,
   allowQuantity = false,
+  showPurchaseButton = true,
   className,
   buttonClassName,
 }: CreditPackPurchaseCardProps) {
   const [quantity, setQuantity] = useState(1);
   const safeQuantity = allowQuantity ? clampCreditUnitQuantity(quantity) : 1;
+
+  useEffect(() => {
+    if (window.location.hash !== `#credit-pack-${productId}`) return;
+    document
+      .getElementById(`credit-pack-${productId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [productId]);
   const totalCents = amountCents * safeQuantity;
   const totalCredits = credits * safeQuantity;
 
   return (
     <div
+      id={`credit-pack-${productId}`}
       className={cn(
-        "flex min-h-[155px] flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-3 text-center",
+        "flex min-h-[155px] scroll-mt-28 flex-col items-center justify-center rounded-[14px] border border-[#f56800]/70 bg-[#fff8f0] p-3 text-center target:ring-2 target:ring-[#f56800] target:ring-offset-2",
         className,
       )}
     >
@@ -95,21 +105,23 @@ export function CreditPackPurchaseCard({
         </p>
       ) : null}
 
-      {catalogObjectId ? (
-        <SquareCheckoutButton
-          productId={productId}
-          quantity={safeQuantity}
-          isLoggedIn={isLoggedIn}
-          returnPath={returnPath}
-          className={cn("mt-3", buttonClassName)}
-        >
-          Acheter
-        </SquareCheckoutButton>
-      ) : (
-        <p className="mt-3 text-xs leading-snug text-black/50">
-          Paiement indisponible
-        </p>
-      )}
+      {showPurchaseButton ? (
+        catalogObjectId ? (
+          <SquareCheckoutButton
+            productId={productId}
+            quantity={safeQuantity}
+            isLoggedIn={isLoggedIn}
+            returnPath={returnPath}
+            className={cn("mt-3", buttonClassName)}
+          >
+            Acheter
+          </SquareCheckoutButton>
+        ) : (
+          <p className="mt-3 text-xs leading-snug text-black/50">
+            Paiement indisponible
+          </p>
+        )
+      ) : null}
     </div>
   );
 }

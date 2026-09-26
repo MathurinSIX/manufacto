@@ -577,26 +577,43 @@ export async function updateUser(
   const emailChanged =
     email !== (existing.user.email ?? "").trim().toLowerCase();
 
+  if (emailChanged) {
+    const { error: emailError } = await adminClient.rpc(
+      "admin_set_auth_user_email",
+      {
+        target_user_id: userId,
+        new_email: email,
+      },
+    );
+
+    if (emailError) {
+      console.error("Error updating user email:", emailError);
+      const message = emailError.message.toLowerCase();
+      if (
+        message.includes("already") ||
+        message.includes("registered") ||
+        message.includes("exists") ||
+        message.includes("duplicate")
+      ) {
+        return {
+          error: "Cette adresse e-mail est déjà utilisée par un autre compte.",
+          user: null,
+        };
+      }
+      if (message.includes("invalid email")) {
+        return { error: "Adresse e-mail invalide.", user: null };
+      }
+      return { error: emailError.message, user: null };
+    }
+  }
+
   const { data: updated, error } = await adminClient.auth.admin.updateUserById(
     userId,
-    emailChanged
-      ? {
-          email,
-          email_confirm: true,
-          user_metadata,
-        }
-      : { user_metadata },
+    { user_metadata },
   );
 
   if (error) {
     console.error("Error updating user:", error);
-    const message = error.message.toLowerCase();
-    if (message.includes("already") || message.includes("registered") || message.includes("exists")) {
-      return {
-        error: "Cette adresse e-mail est déjà utilisée par un autre compte.",
-        user: null,
-      };
-    }
     return { error: error.message, user: null };
   }
 

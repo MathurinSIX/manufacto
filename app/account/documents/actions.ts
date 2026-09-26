@@ -292,6 +292,77 @@ export async function updateAdminNotes(userId: string, notes: string) {
   return { error: null };
 }
 
+export async function updateAccountIdentity(input: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  birthDate: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+}) {
+  const { error, user, supabase } = await requireActor();
+  if (error || !user) {
+    return { error: error ?? "Non authentifié" };
+  }
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const phone = input.phone.trim();
+  const address = input.address.trim();
+  const birthDate = input.birthDate.trim();
+  const emergencyContactName = input.emergencyContactName.trim();
+  const emergencyContactPhone = input.emergencyContactPhone.trim();
+
+  if (!firstName || !lastName) {
+    return { error: "Indiquez votre prénom et votre nom." };
+  }
+
+  if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+    return { error: "La date de naissance n’est pas valide." };
+  }
+
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+  const adminClient = getAdminClient();
+
+  const { error: authError } = await adminClient.auth.admin.updateUserById(
+    user.id,
+    {
+      user_metadata: {
+        ...user.user_metadata,
+        first_name: firstName,
+        last_name: lastName,
+      },
+    },
+  );
+
+  if (authError) {
+    return { error: authError.message };
+  }
+
+  const { error: profileError } = await adminClient.from("user_profile").upsert(
+    {
+      user_id: accountUserId,
+      phone: phone || null,
+      address: address || null,
+      birth_date: birthDate || null,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (profileError) {
+    console.error("Account identity update failed:", profileError);
+    return { error: "Impossible d’enregistrer ces informations." };
+  }
+
+  revalidatePath("/account");
+  revalidatePath("/account/documents");
+  return { error: null };
+}
+
 export async function updateHouseholdMembers(
   userId: string,
   memberNames: string[],

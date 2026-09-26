@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 
 import {
   isValidAccountEmail,
@@ -79,6 +80,24 @@ async function ensureSecondMemberName(
   );
 }
 
+async function resolveInviteSiteUrl() {
+  try {
+    const headerStore = await headers();
+    const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+    if (host) {
+      const proto =
+        headerStore.get("x-forwarded-proto") ??
+        (host.startsWith("localhost") || host.startsWith("127.0.0.1")
+          ? "http"
+          : "https");
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // Outside a request, fall back to the configured public URL.
+  }
+  return getAuthSiteUrl();
+}
+
 function inviteEmailHtml({
   ownerName,
   signupUrl,
@@ -87,10 +106,11 @@ function inviteEmailHtml({
   signupUrl: string;
 }) {
   const safeName = escapeHtml(ownerName);
+  const safeUrl = escapeHtml(signupUrl);
   return `<p>Bonjour,</p>
 <p><strong>${safeName}</strong> vous invite à partager son compte Manufacto. Vous verrez les mêmes crédits et les mêmes réservations, et pourrez choisir qui participe à chaque cours.</p>
 <p>Créez votre compte avec cette adresse e-mail&nbsp;:</p>
-<p><a href="${signupUrl}">${signupUrl}</a></p>
+<p><a href="${safeUrl}">Créer mon compte</a></p>
 <p>À bientôt à l'atelier.</p>`;
 }
 
@@ -102,9 +122,10 @@ function linkedEmailHtml({
   loginUrl: string;
 }) {
   const safeName = escapeHtml(ownerName);
+  const safeUrl = escapeHtml(loginUrl);
   return `<p>Bonjour,</p>
 <p>Votre compte est maintenant lié à celui de <strong>${safeName}</strong>. En vous connectant, vous entrez sur le même foyer&nbsp;: crédits, réservations et choix de la personne qui vient au cours.</p>
-<p><a href="${loginUrl}">Se connecter</a></p>`;
+<p><a href="${safeUrl}">Se connecter</a></p>`;
 }
 
 export async function linkOrInviteAccountPartner(input: {
@@ -202,7 +223,7 @@ export async function linkOrInviteAccountPartner(input: {
     await ensureSecondMemberName(admin, input.ownerUserId, existingUser?.first_name?.trim() || partnerName);
   }
 
-  const siteUrl = getAuthSiteUrl();
+  const siteUrl = await resolveInviteSiteUrl();
   if (existingUser) {
     const { data: credits } = await admin
       .from("credit")

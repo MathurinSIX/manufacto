@@ -51,6 +51,9 @@ const TYPE_LABEL: Record<string, string> = {
   cuisson: "Cuisson",
 };
 
+const AUTONOMY_FILTERS = ["autonomie", "autonomie_encadree"] as const;
+type AutonomyFilter = (typeof AUTONOMY_FILTERS)[number];
+
 const monthFormatter = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
   year: "numeric",
@@ -127,14 +130,21 @@ function currentMonthAnchor() {
 
 function PracticeAvailabilityCalendar({
   onClose,
+  initialDiscipline = null,
+  initialAutonomy = null,
 }: {
   onClose?: () => void;
+  initialDiscipline?: CourseDiscipline | null;
+  initialAutonomy?: AutonomyFilter | null;
 }) {
   const [visibleMonth, setVisibleMonth] = useState(currentMonthAnchor);
   const [sessionsByDate, setSessionsByDate] = useState<SessionsByDate>({});
   const [loadingMonthKey, setLoadingMonthKey] = useState<string | null>(null);
   const [activeDiscipline, setActiveDiscipline] =
-    useState<CourseDiscipline | null>(null);
+    useState<CourseDiscipline | null>(initialDiscipline);
+  const [activeAutonomy, setActiveAutonomy] = useState<AutonomyFilter | null>(
+    initialAutonomy,
+  );
   const loadedMonthKeysRef = useRef(new Set<string>());
   const todayKey = toDayKey(new Date());
 
@@ -165,20 +175,47 @@ function PracticeAvailabilityCalendar({
     };
   }, [visibleMonth]);
 
-  const matchFilter = (session: CalendarSessionItem) =>
-    activeDiscipline == null || session.discipline === activeDiscipline;
+  const matchFilter = (session: CalendarSessionItem) => {
+    if (activeDiscipline != null && session.discipline !== activeDiscipline) {
+      return false;
+    }
+    if (activeAutonomy != null && session.activityType !== activeAutonomy) {
+      return false;
+    }
+    return true;
+  };
 
   const firstBusyKey = useMemo(() => {
     for (const day of calendarDays) {
       if (day.getUTCMonth() !== visibleMonth.getUTCMonth()) continue;
       const sessions = (sessionsByDate[toDayKey(day)] ?? []).filter(
-        (session) =>
-          activeDiscipline == null || session.discipline === activeDiscipline,
+        (session) => {
+          if (
+            activeDiscipline != null &&
+            session.discipline !== activeDiscipline
+          ) {
+            return false;
+          }
+          if (
+            activeAutonomy != null &&
+            session.activityType !== activeAutonomy
+          ) {
+            return false;
+          }
+          return true;
+        },
       );
       if (sessions.length > 0) return toDayKey(day);
     }
     return todayKey;
-  }, [calendarDays, visibleMonth, sessionsByDate, todayKey, activeDiscipline]);
+  }, [
+    calendarDays,
+    visibleMonth,
+    sessionsByDate,
+    todayKey,
+    activeDiscipline,
+    activeAutonomy,
+  ]);
 
   const [selectedKey, setSelectedKey] = useState(firstBusyKey);
   useEffect(() => {
@@ -272,6 +309,35 @@ function PracticeAvailabilityCalendar({
         })}
       </div>
 
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        {AUTONOMY_FILTERS.map((value) => {
+          const active = activeAutonomy === value;
+          const dimmed = activeAutonomy != null && !active;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                setActiveAutonomy((current) =>
+                  current === value ? null : value,
+                )
+              }
+              aria-pressed={active}
+              className={cn(
+                "inline-flex items-center rounded-full border px-3.5 py-1.5 text-sm font-semibold transition",
+                active
+                  ? "border-[#4a56dd] bg-[#eef0ff] text-[#4a56dd]"
+                  : dimmed
+                    ? "border-black/10 bg-white text-black/30"
+                    : "border-black/15 bg-white text-black/70 hover:border-black/25",
+              )}
+            >
+              {TYPE_LABEL[value]}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-4 mb-2 grid grid-cols-7 text-center text-xs font-semibold uppercase tracking-wide text-black/45">
         {WEEKDAY_SHORT.map((label, i) => (
           <span key={`${i}-${label}`} className="py-2">
@@ -349,8 +415,17 @@ function PracticeAvailabilityCalendar({
         {selectedSessions.length === 0 ? (
           <p className="mt-3 text-sm text-black/55">
             Aucune ouverture de pratique libre ce jour-là
-            {activeDiscipline
-              ? ` en ${DISCIPLINE_LABEL[activeDiscipline].toLowerCase()}`
+            {activeDiscipline || activeAutonomy
+              ? ` en ${[
+                  activeDiscipline
+                    ? DISCIPLINE_LABEL[activeDiscipline].toLowerCase()
+                    : null,
+                  activeAutonomy
+                    ? TYPE_LABEL[activeAutonomy].toLowerCase()
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}`
               : ""}
             .
           </p>
@@ -407,8 +482,16 @@ function PracticeAvailabilityCalendar({
 
 export function PracticeAvailabilityCalendarButton({
   className,
+  iconOnly = false,
+  accent,
+  initialDiscipline = null,
+  initialAutonomy = null,
 }: {
   className?: string;
+  iconOnly?: boolean;
+  accent?: string;
+  initialDiscipline?: CourseDiscipline | null;
+  initialAutonomy?: AutonomyFilter | null;
 } = {}) {
   const [open, setOpen] = useState(false);
 
@@ -418,13 +501,21 @@ export function PracticeAvailabilityCalendarButton({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-[#4a56dd] bg-white/90 px-5 py-3 text-lg font-semibold text-[#4a56dd] transition hover:bg-[#f0f1ff]",
+            iconOnly
+              ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-white transition hover:brightness-95"
+              : "inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-[#4a56dd] bg-white/90 px-5 py-3 text-lg font-semibold text-[#4a56dd] transition hover:bg-[#f0f1ff]",
+            !accent && iconOnly && "border-[#4a56dd]/40 text-[#4a56dd]",
             className,
           )}
+          style={
+            iconOnly && accent
+              ? { color: accent, borderColor: accent }
+              : undefined
+          }
           aria-label="Voir le calendrier des disponibilités"
         >
-          <CalendarDays className="h-5 w-5" aria-hidden />
-          <span>Voir le calendrier</span>
+          <CalendarDays className={iconOnly ? "h-4 w-4" : "h-5 w-5"} aria-hidden />
+          {iconOnly ? null : <span>Voir le calendrier</span>}
         </button>
       </DialogTrigger>
       <DialogContent
@@ -438,7 +529,11 @@ export function PracticeAvailabilityCalendarButton({
         </DialogTitle>
         <div className={cn(scrollableDialogBodyClass, "p-5 md:p-6")}>
           {open ? (
-            <PracticeAvailabilityCalendar onClose={() => setOpen(false)} />
+            <PracticeAvailabilityCalendar
+              onClose={() => setOpen(false)}
+              initialDiscipline={initialDiscipline}
+              initialAutonomy={initialAutonomy}
+            />
           ) : null}
         </div>
       </DialogContent>

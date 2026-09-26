@@ -10,6 +10,7 @@ export const ACCOUNT_TABS = [
   "cours",
   "pratique",
   "credits",
+  "infos",
 ] as const;
 
 export type AccountTab = (typeof ACCOUNT_TABS)[number];
@@ -19,6 +20,7 @@ const TAB_LABELS: Record<AccountTab, string> = {
   cours: "Cours",
   pratique: "Pratique libre",
   credits: "Crédits et abonnements",
+  infos: "Mes infos",
 };
 
 function isAccountTab(value: string | null | undefined): value is AccountTab {
@@ -33,6 +35,7 @@ function tabFromHash(hash: string): AccountTab | null {
   if (id === "reservations") return "reservations";
   if (id === "reserver" || id === "cours") return "cours";
   if (id === "pratique") return "pratique";
+  if (id === "infos") return "infos";
   return null;
 }
 
@@ -41,6 +44,7 @@ type AccountMainTabsProps = {
   cours: ReactNode;
   pratique: ReactNode;
   credits: ReactNode;
+  infos: ReactNode;
 };
 
 export function AccountMainTabs({
@@ -48,6 +52,7 @@ export function AccountMainTabs({
   cours,
   pratique,
   credits,
+  infos,
 }: AccountMainTabsProps) {
   const router = useRouter();
   const pathname = usePathname() ?? "/account";
@@ -77,7 +82,7 @@ export function AccountMainTabs({
 
   return (
     <Tabs value={tab} onValueChange={onTabChange} className="w-full">
-      <TabsList className="mb-6 hidden h-auto w-full grid-cols-4 gap-1 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid">
+      <TabsList className="mb-6 hidden h-auto w-full grid-cols-5 gap-1 rounded-[14px] bg-[#f2f2f2] p-1 text-black/60 md:grid">
         {ACCOUNT_TABS.map((id) => (
           <TabsTrigger
             key={id}
@@ -105,6 +110,9 @@ export function AccountMainTabs({
       </TabsContent>
       <TabsContent value="credits" className="mt-0 space-y-6">
         {credits}
+      </TabsContent>
+      <TabsContent value="infos" className="mt-0 space-y-6">
+        {infos}
       </TabsContent>
     </Tabs>
   );

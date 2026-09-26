@@ -345,8 +345,8 @@ export function WordStrip({ className = "" }: { className?: string }) {
   const words = [
     { src: P.wordMenuiserie, alt: "menuiserie", width: 496, height: 90, className: "h-7 w-auto sm:h-9" },
     { src: P.wordCouture, alt: "couture", width: 279, height: 63, className: "h-7 w-auto sm:h-9" },
-    { src: P.wordCeramique, alt: "céramique", width: 428, height: 130, className: "h-9 w-auto sm:h-12" },
-    { src: P.wordElectronique, alt: "électronique", width: 466, height: 124, className: "h-9 w-auto sm:h-12" },
+    { src: P.wordCeramique, alt: "céramique", width: 428, height: 130, className: "h-11 w-auto translate-y-1 sm:h-14" },
+    { src: P.wordElectronique, alt: "électronique", width: 466, height: 124, className: "h-11 w-auto translate-y-1 sm:h-14" },
   ];
 
   return (
