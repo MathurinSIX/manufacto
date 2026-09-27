@@ -36,7 +36,7 @@ function parseOverrideFromSearchParams(
     return Array.isArray(value) ? value[0] : value;
   };
 
-  // ?ph_exp=exp-homepage-retours:test  or  ?ph_exp=test (applies to all)
+  // ?ph_exp=exp-hero-headline:test  or  ?ph_exp=test (applies to all)
   return parseOverrideRaw(get("ph_exp"), flagKey);
 }
 
@@ -65,10 +65,7 @@ type SearchParamsInput =
 
 /**
  * Server-side experiment variant.
- * - `control` = yesterday’s UI-v2 (pre-retours)
- * - `test` = today’s retours 2.0
- *
- * When PostHog is not configured, defaults to `test` so the new UI stays visible.
+ * When PostHog is not configured, defaults to `test`.
  * Override with `?ph_exp=control` (stored in a cookie so it survives navigation).
  * Clear with `?ph_exp=clear`.
  */

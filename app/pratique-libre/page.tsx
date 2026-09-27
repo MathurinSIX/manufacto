@@ -1,10 +1,7 @@
 import { Suspense } from "react";
 
-import PratiqueLibrePageControl from "@/components/experiments/control/pratique-libre-page";
 import { DiscoveryPackPremiereVisiteButton } from "@/components/atelier-tarifs-purchases";
 import { MockupPratiquePage } from "@/components/mockups/site-pages";
-import { EXPERIMENTS } from "@/lib/posthog/experiments";
-import { getExperimentVariant } from "@/lib/posthog/variant";
 
 function PremiereVisiteFallback() {
   return (
@@ -14,7 +11,7 @@ function PremiereVisiteFallback() {
   );
 }
 
-function PratiqueLibreTest() {
+export default function PratiqueLibrePage() {
   return (
     <MockupPratiquePage
       scope="site"
@@ -24,31 +21,5 @@ function PratiqueLibreTest() {
         </Suspense>
       }
     />
-  );
-}
-
-async function PratiqueExperiment({
-  searchParams,
-}: {
-  searchParams: Promise<{ ph_exp?: string }>;
-}) {
-  const params = await searchParams;
-  const variant = await getExperimentVariant(EXPERIMENTS.pratiqueLibre, params);
-  return variant === "control" ? (
-    <PratiqueLibrePageControl />
-  ) : (
-    <PratiqueLibreTest />
-  );
-}
-
-export default function PratiqueLibrePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ ph_exp?: string }>;
-}) {
-  return (
-    <Suspense fallback={<MockupPratiquePage scope="site" />}>
-      <PratiqueExperiment searchParams={searchParams} />
-    </Suspense>
   );
 }

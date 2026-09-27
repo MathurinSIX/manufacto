@@ -1,5 +1,4 @@
 import { HomePage } from "@/components/home-page";
-import { HomePageControl } from "@/components/experiments/control/home-page";
 import { EXPERIMENTS } from "@/lib/posthog/experiments";
 import { getExperimentVariant } from "@/lib/posthog/variant";
 import { redirect } from "next/navigation";
@@ -44,34 +43,11 @@ async function HomeExperiment({
   searchParams: RootPageProps["searchParams"];
 }) {
   const params = await searchParams;
-  const variant = await getExperimentVariant(EXPERIMENTS.homepage, params);
+  const headline = await getExperimentVariant(EXPERIMENTS.heroHeadline, params, {
+    fallback: "control",
+  });
 
-  // control = yesterday (pre-retours UI-v2), test = today's retours
-  if (variant === "control") {
-    return <HomePageControl scope="site" />;
-  }
-
-  // Missing flags keep the current headline, short Marseille subtext, and “Je veux pratiquer”.
-  const [headline, subtext, pratiqueTile] = await Promise.all([
-    getExperimentVariant(EXPERIMENTS.heroHeadline, params, {
-      fallback: "control",
-    }),
-    getExperimentVariant(EXPERIMENTS.heroSubtext, params, {
-      fallback: "control",
-    }),
-    getExperimentVariant(EXPERIMENTS.tilePratique, params, {
-      fallback: "control",
-    }),
-  ]);
-
-  return (
-    <HomePage
-      scope="site"
-      headline={headline}
-      subtext={subtext}
-      pratiqueTile={pratiqueTile}
-    />
-  );
+  return <HomePage scope="site" headline={headline} />;
 }
 
 export default function RootPage({ searchParams }: RootPageProps) {

@@ -58,46 +58,26 @@ function HomeHeroHeadline({ variant }: { variant: ExperimentVariant }) {
   );
 }
 
-function PratiqueTileCopy({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <span className="flex flex-col items-center gap-2">
-        <span className="rounded-md bg-[#f56800] px-3 py-1.5 text-sm font-bold uppercase tracking-wide md:text-base">
-          Je veux faire
-        </span>
-        <span className="text-base font-medium">
-          pratique libre, autonome ou encadrée →
-        </span>
-      </span>
-    );
-  }
-
+function PratiqueTileCopy() {
   return (
     <span className="flex flex-col items-center gap-2">
       <span className="rounded-md bg-[#f56800] px-3 py-1.5 text-sm font-bold uppercase tracking-wide md:text-base">
-        Je veux pratiquer
+        Je veux faire
       </span>
-      <span className="text-base font-medium">pratique libre →</span>
+      <span className="text-base font-medium">
+        pratique libre, autonome ou encadrée →
+      </span>
     </span>
   );
 }
 
-function HomeHeroSubtext({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <p className="max-w-2xl text-lg text-black/70 md:text-xl">
-        Manufacto rassemble un atelier bois, un atelier couture, un atelier
-        céramique et un repair café. C&apos;est un lieu ouvert à toutes et
-        tous, qui donne accès à l&apos;espace, aux machines, outils et
-        compétences pour faire soi-même.
-      </p>
-    );
-  }
-
+function HomeHeroSubtext() {
   return (
-    <p className="max-w-xl text-lg text-black/70 md:text-xl">
-      Menuiserie, couture, céramique, électronique — l&apos;espace, les
-      machines et un coup de main, à Marseille.
+    <p className="max-w-2xl text-lg text-black/70 md:text-xl">
+      Manufacto rassemble un atelier bois, un atelier couture, un atelier
+      céramique et un repair café. C&apos;est un lieu ouvert à toutes et
+      tous, qui donne accès à l&apos;espace, aux machines, outils et
+      compétences pour faire soi-même.
     </p>
   );
 }
@@ -106,13 +86,9 @@ function HomeHeroSubtext({ variant }: { variant: ExperimentVariant }) {
 export function HomePage({
   scope = "site",
   headline = "control",
-  subtext = "control",
-  pratiqueTile = "control",
 }: {
   scope?: SiteScope;
   headline?: ExperimentVariant;
-  subtext?: ExperimentVariant;
-  pratiqueTile?: ExperimentVariant;
 } = {}) {
   const h = (path: string) => scopeHref(scope, path);
 
@@ -123,7 +99,7 @@ export function HomePage({
           <div className="flex flex-col items-start gap-4 md:items-center md:text-center">
             <BrandLockup />
             <HomeHeroHeadline variant={headline} />
-            <HomeHeroSubtext variant={subtext} />
+            <HomeHeroSubtext />
           </div>
 
           <div className="mt-10 grid gap-5 md:grid-cols-3 md:gap-6">
@@ -142,7 +118,7 @@ export function HomePage({
                 className="h-[260px] md:h-[340px]"
                 priority
               >
-                <PratiqueTileCopy variant={pratiqueTile} />
+                <PratiqueTileCopy />
               </ImageTile>
             </Link>
 
@@ -260,9 +236,6 @@ export function HomePage({
             </p>
             <p className="mt-3 text-lg text-black/60">
               Tarifs selon la discipline&nbsp;: de 1 à 4 crédits / heure.
-            </p>
-            <p className="mt-2 text-lg text-black/60">
-              Le détail des offres est sur la page pratique libre.
             </p>
             <PrimaryCta href={h("/pratique-libre")} className="mt-8">
               Découvrir la pratique libre

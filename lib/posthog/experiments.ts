@@ -1,29 +1,16 @@
-/** PostHog experiment flag keys — create matching experiments in the PostHog UI.
+/** PostHog experiments still running. Variants: `control` and `test`, 50/50.
  *
- * Variants (standard A/B naming):
- * - `control` = yesterday’s UI-v2 (last committed feat/ui-v2 before retours)
- * - `test` = today’s retours 2.0 changes
+ * Shipped as the test version (no longer flagged): homepage body, hero subtext,
+ * pratique tile, pratique libre, cours, and offrir.
  */
 export const EXPERIMENTS = {
-  /** Homepage retours 2.0 (copy, électronique strip, privatisation, newsletter, calendar…). */
-  homepage: "exp-homepage-retours",
-  /** L'atelier: today’s quatre univers / copy vs yesterday’s trois univers UI-v2. */
-  atelier: "exp-atelier-retours",
-  /** Pratique libre retours vs yesterday’s pratique libre UI-v2. */
-  pratiqueLibre: "exp-pratique-retours",
-  /** Cours: monthly calendar + privatisation vs yesterday’s points calendar. */
-  cours: "exp-cours-retours",
-  /** Offrir: new gift copy/packs vs yesterday’s offrir page. */
-  offrir: "exp-offrir-retours",
-  /** Homepage hero: current headline vs “Faire soi-même, réparer, réemployer, créer.” */
+  /** Homepage hero: “Un atelier pour faire, apprendre ou offrir” vs “Faire soi-même, réparer, réemployer, créer.” */
   heroHeadline: "exp-hero-headline",
-  /** Homepage hero subtext: short Marseille line vs the “Manufacto rassemble…” paragraph. */
-  heroSubtext: "exp-hero-subtext",
-  /** Pratique tile: “Je veux pratiquer” vs “Je veux faire” + autonome ou encadrée. */
-  tilePratique: "exp-tile-pratique",
-  /** L'atelier hero: previous Marseille line vs the “quatre univers” paragraph. */
+  /** L'atelier page: yesterday’s tarifs vs the credits / purchase layout. */
+  atelier: "exp-atelier-retours",
+  /** L'atelier hero: Marseille line vs the “quatre univers” paragraph. */
   atelierHero: "exp-atelier-hero",
-  /** L'atelier tarifs: today’s purchase cards vs the quieter cream layout without Acheter/Souscrire. */
+  /** L'atelier tarifs: white layout with Acheter/Souscrire vs quieter cream cards. */
   atelierTarifs: "exp-atelier-tarifs",
   /** Course calendar on homepage and cours: month cells without photos vs day images. */
   calendarImages: "exp-calendar-images",
