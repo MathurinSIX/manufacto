@@ -355,11 +355,14 @@ export function MockupPratiquePage({
   scope = "site",
   afterHero,
   heroSecondary,
+  showSignup = false,
 }: {
   scope?: SiteScope;
   afterHero?: React.ReactNode;
   /** Replaces the default “Première visite” secondary CTA (e.g. pack découverte modal). */
   heroSecondary?: React.ReactNode;
+  /** Test arm of exp-pratique-inscrire: a S'inscrire button on each offer. */
+  showSignup?: boolean;
   offers?: PracticeOfferByDiscipline;
 } = {}) {
   const h = (path: string) => scopeHref(scope, path);
@@ -595,6 +598,18 @@ export function MockupPratiquePage({
                             {offer.detail}
                           </p>
                         </details>
+                      ) : null}
+                      {showSignup &&
+                      scope === "site" &&
+                      (offer.type === "autonomie" ||
+                        offer.type === "autonomie_encadree") ? (
+                        <PracticeAvailabilityCalendarButton
+                          label="S'inscrire"
+                          accent={d.color}
+                          className="mt-5 self-start"
+                          initialDiscipline={d.id}
+                          initialAutonomy={offer.type}
+                        />
                       ) : null}
                     </article>
                   );

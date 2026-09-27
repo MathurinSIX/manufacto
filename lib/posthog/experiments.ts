@@ -10,8 +10,10 @@ export const EXPERIMENTS = {
   atelier: "exp-atelier-retours",
   /** L'atelier hero: Marseille line vs the “quatre univers” paragraph. */
   atelierHero: "exp-atelier-hero",
-  /** L'atelier tarifs: white layout with Acheter/Souscrire vs quieter cream cards. */
+  /** L'atelier tarifs: same cream layout. control hides checkout, test shows Acheter and Souscrire. */
   atelierTarifs: "exp-atelier-tarifs",
+  /** Pratique libre offer cards: control without S'inscrire, test with a S'inscrire button. */
+  pratiqueInscrire: "exp-pratique-inscrire",
   /** Course calendar on homepage and cours: month cells without photos vs day images. */
   calendarImages: "exp-calendar-images",
 } as const;

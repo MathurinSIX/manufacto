@@ -54,49 +54,33 @@ const RATE_GROUPS = [
 /** Today's retours atelier (test variant). */
 export function AtelierPageTest({
   heroLead = "test",
-  tarifsVariant = "test",
+  tarifsVariant = "control",
 }: {
   heroLead?: ExperimentVariant;
-  /** control = earlier today (purchase buttons). test = quieter cream layout. */
+  /** control = cream layout without checkout. test = same layout with Acheter and Souscrire. */
   tarifsVariant?: ExperimentVariant;
 } = {}) {
-  const quietTarifs = tarifsVariant === "test";
+  const showCheckout = tarifsVariant === "test";
 
   return (
     <>
       <MockupAtelierPage scope="site" heroLead={heroLead} />
       <section
         id="tarifs"
-        className={
-          quietTarifs
-            ? "scroll-mt-28 border-t border-black/10 bg-[#fff8f0]"
-            : "scroll-mt-28 border-t border-black/10 bg-white"
-        }
+        className="scroll-mt-28 border-t border-black/10 bg-[#fff8f0]"
       >
-        <div
-          className={
-            quietTarifs
-              ? "mx-auto max-w-[1274px] px-5 py-14 md:py-16"
-              : "mx-auto max-w-[1274px] px-5 py-14"
-          }
-        >
-          {quietTarifs ? (
-            <div className="rounded-[28px] bg-white px-5 py-8 shadow-sm ring-1 ring-black/5 md:px-10 md:py-12">
-              <AtelierTarifsBody quiet />
-            </div>
-          ) : (
-            <AtelierTarifsBody quiet={false} />
-          )}
+        <div className="mx-auto max-w-[1274px] px-5 py-14 md:py-16">
+          <div className="rounded-[28px] bg-white px-5 py-8 shadow-sm ring-1 ring-black/5 md:px-10 md:py-12">
+            <AtelierTarifsBody showCheckout={showCheckout} />
+          </div>
         </div>
       </section>
     </>
   );
 }
 
-function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
-  const panelClass = quiet
-    ? "mt-8 rounded-[20px] bg-[#fff8f0] p-5 md:p-7"
-    : "mt-8 rounded-[19px] border border-black/10 bg-white p-6 md:p-8";
+function AtelierTarifsBody({ showCheckout }: { showCheckout: boolean }) {
+  const panelClass = "mt-8 rounded-[20px] bg-[#fff8f0] p-5 md:p-7";
 
   return (
     <>
@@ -121,12 +105,8 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
         {RATE_GROUPS.map((group) => (
           <div
             key={group.title}
-            className={
-              quiet
-                ? "rounded-[16px] border border-black/5 px-4 py-4"
-                : "rounded-[14px] border border-black/10 bg-white px-4 py-3"
-            }
-            style={quiet ? { backgroundColor: group.tint } : undefined}
+            className="rounded-[16px] border border-black/5 px-4 py-4"
+            style={{ backgroundColor: group.tint }}
           >
             <h3
               className="text-xs font-bold uppercase tracking-[0.12em]"
@@ -168,7 +148,7 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
         >
           <AtelierCreditPackGrid
             purchasableOnly
-            showPurchaseButton={!quiet}
+            showPurchaseButton={showCheckout}
           />
         </Suspense>
         <p className="mt-5 text-sm leading-normal text-black/60">
@@ -177,7 +157,7 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
         </p>
       </div>
 
-      <div className={quiet ? "mt-4 rounded-[20px] bg-[#fff8f0] p-5 md:p-7" : "mt-6 rounded-[19px] border border-black/10 bg-white p-6 md:p-8"}>
+      <div className="mt-4 rounded-[20px] bg-[#fff8f0] p-5 md:p-7">
         <h3 className="text-[24px] font-semibold leading-tight text-black/85 md:text-[28px]">
           Mon abonnement
         </h3>
@@ -198,7 +178,7 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
               </div>
             }
           >
-            <AtelierSubscriptionCards showCheckout={!quiet} />
+            <AtelierSubscriptionCards showCheckout={showCheckout} />
           </Suspense>
         </div>
         <p className="mt-5 text-sm leading-normal text-black/60">
@@ -212,11 +192,7 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
       </div>
 
       <p
-        className={
-          quiet
-            ? "mt-6 max-w-4xl rounded-[16px] bg-[#fff8f0] px-5 py-4 text-sm leading-normal text-black/65"
-            : "mt-6 max-w-4xl text-sm leading-normal text-black/60"
-        }
+        className="mt-6 max-w-4xl rounded-[16px] bg-[#fff8f0] px-5 py-4 text-sm leading-normal text-black/65"
       >
         15% de réduction sur tous nos tarifs pour les personnes étudiantes, au
         chômage, bénéficiaires du RSA. Si vous ne rentrez dans aucune de ces
@@ -238,11 +214,7 @@ function AtelierTarifsBody({ quiet }: { quiet: boolean }) {
       </div>
 
       <div
-        className={
-          quiet
-            ? "mt-6 flex flex-col gap-4 rounded-[20px] bg-[#fff3e8] px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
-            : "mt-6 flex flex-col gap-4 rounded-[19px] border border-black/10 bg-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
-        }
+        className="mt-6 flex flex-col gap-4 rounded-[20px] bg-[#fff3e8] px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
           <p className="text-lg font-bold text-black/85">

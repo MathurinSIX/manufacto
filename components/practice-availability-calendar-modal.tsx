@@ -483,12 +483,15 @@ function PracticeAvailabilityCalendar({
 export function PracticeAvailabilityCalendarButton({
   className,
   iconOnly = false,
+  label,
   accent,
   initialDiscipline = null,
   initialAutonomy = null,
 }: {
   className?: string;
   iconOnly?: boolean;
+  /** Replaces the default “Voir le calendrier” label. */
+  label?: string;
   accent?: string;
   initialDiscipline?: CourseDiscipline | null;
   initialAutonomy?: AutonomyFilter | null;
@@ -501,21 +504,27 @@ export function PracticeAvailabilityCalendarButton({
         <button
           type="button"
           className={cn(
-            iconOnly
+            label
+              ? "inline-flex items-center justify-center rounded-[12px] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95"
+              : iconOnly
               ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-white transition hover:brightness-95"
               : "inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-[#4a56dd] bg-white/90 px-5 py-3 text-lg font-semibold text-[#4a56dd] transition hover:bg-[#f0f1ff]",
             !accent && iconOnly && "border-[#4a56dd]/40 text-[#4a56dd]",
             className,
           )}
           style={
-            iconOnly && accent
-              ? { color: accent, borderColor: accent }
-              : undefined
+            label && accent
+              ? { backgroundColor: accent }
+              : iconOnly && accent
+                ? { color: accent, borderColor: accent }
+                : undefined
           }
-          aria-label="Voir le calendrier des disponibilités"
+          aria-label={label ?? "Voir le calendrier des disponibilités"}
         >
-          <CalendarDays className={iconOnly ? "h-4 w-4" : "h-5 w-5"} aria-hidden />
-          {iconOnly ? null : <span>Voir le calendrier</span>}
+          {label ? null : (
+            <CalendarDays className={iconOnly ? "h-4 w-4" : "h-5 w-5"} aria-hidden />
+          )}
+          {label ? <span>{label}</span> : iconOnly ? null : <span>Voir le calendrier</span>}
         </button>
       </DialogTrigger>
       <DialogContent

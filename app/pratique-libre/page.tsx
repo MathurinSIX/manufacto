@@ -2,6 +2,8 @@ import { Suspense } from "react";
 
 import { DiscoveryPackPremiereVisiteButton } from "@/components/atelier-tarifs-purchases";
 import { MockupPratiquePage } from "@/components/mockups/site-pages";
+import { EXPERIMENTS } from "@/lib/posthog/experiments";
+import { getExperimentVariant } from "@/lib/posthog/variant";
 
 function PremiereVisiteFallback() {
   return (
@@ -11,15 +13,37 @@ function PremiereVisiteFallback() {
   );
 }
 
-export default function PratiqueLibrePage() {
+async function PratiqueLibreContent({
+  searchParams,
+}: {
+  searchParams: Promise<{ ph_exp?: string }>;
+}) {
+  const params = await searchParams;
+  const signup = await getExperimentVariant(EXPERIMENTS.pratiqueInscrire, params, {
+    fallback: "control",
+  });
+
   return (
     <MockupPratiquePage
       scope="site"
+      showSignup={signup === "test"}
       heroSecondary={
         <Suspense fallback={<PremiereVisiteFallback />}>
           <DiscoveryPackPremiereVisiteButton />
         </Suspense>
       }
     />
+  );
+}
+
+export default function PratiqueLibrePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ph_exp?: string }>;
+}) {
+  return (
+    <Suspense fallback={<MockupPratiquePage scope="site" />}>
+      <PratiqueLibreContent searchParams={searchParams} />
+    </Suspense>
   );
 }
