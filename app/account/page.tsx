@@ -13,9 +13,10 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
-import { CreditOfferPicker } from "@/components/credit-offer-picker";
+import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
+import { isPurchaseCreditPack } from "@/lib/square/products";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
 import { CourseCalendarPanel } from "@/components/course-calendar-panel";
 import { CoursePageTabs } from "@/components/course-page-tabs";
@@ -25,7 +26,6 @@ import { AccountPersonalInfo } from "@/components/account-personal-info";
 import { HouseholdMembersEditor } from "@/components/household-members-editor";
 import { loadAccountShare } from "@/lib/account-share";
 import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
-import { loadCreditCourseExamples, loadPracticeCreditRates } from "@/lib/credit-course-examples";
 import { AccountPwaHint } from "@/components/account-pwa-hint";
 import { formatCreditRate } from "@/lib/credit-rates";
 import { unstable_noStore } from "next/cache";
@@ -169,21 +169,12 @@ async function AccountContent() {
     ownerEmail = ownerUser.user?.email ?? ownerEmail;
   }
 
-  const [squareProducts, courseExamples, practiceRates] = await Promise.all([
-    loadSquareProducts(supabase),
-    loadCreditCourseExamples(),
-    loadPracticeCreditRates(),
-  ]);
+  const squareProducts = await loadSquareProducts(supabase);
   const squareProductsById = new Map(
     squareProducts.map((product) => [product.id, product]),
   );
   const creditPackProducts = squareProducts
-    .filter(
-      (product) =>
-        product.kind === "credit_pack" &&
-        product.id !== "credits-2" &&
-        product.credits !== 2,
-    )
+    .filter((product) => isPurchaseCreditPack(product))
     .sort((a, b) => a.amountCents - b.amountCents);
 
   const courses = await fetchCoursesForListing();
@@ -761,21 +752,21 @@ async function AccountContent() {
                   <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
                     Packs de crédits
                   </p>
-                  <CreditOfferPicker
-                    packs={creditPackProducts.map((pack) => ({
-                      id: pack.id,
-                      credits: pack.credits,
-                      amountCents: pack.amountCents,
-                      catalogObjectId: pack.catalogObjectId,
-                    }))}
-                    examples={courseExamples}
-                    practiceRates={practiceRates}
-                    showExamples
-                    examplesPlacement="after"
-                    mode="purchase"
-                    isLoggedIn
-                    returnPath="/account?tab=credits"
-                  />
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {creditPackProducts.map((pack) => (
+                      <CreditPackPurchaseCard
+                        key={pack.id}
+                        productId={pack.id}
+                        amountCents={pack.amountCents}
+                        credits={pack.credits}
+                        catalogObjectId={pack.catalogObjectId}
+                        isLoggedIn
+                        returnPath="/account?tab=credits"
+                        className="min-h-[180px] p-4"
+                        buttonClassName="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    ))}
+                  </div>
                   <p className="mt-5 text-sm leading-normal text-black/60">
                     Les crédits sont valables un an à partir de leur date
                     d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur votre

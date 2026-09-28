@@ -5,6 +5,7 @@ import { Minus, Plus } from "lucide-react";
 
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { Button } from "@/components/ui/button";
+import { formatCreditRate } from "@/lib/credit-rates";
 import {
   MAX_CREDIT_UNIT_QUANTITY,
   clampCreditUnitQuantity,
@@ -67,6 +68,9 @@ export function CreditPackPurchaseCard({
       </p>
       <p className="text-lg leading-none">
         {credits} crédit{credits > 1 ? "s" : ""}
+      </p>
+      <p className="mt-1 text-sm leading-none text-black/50">
+        {formatCreditRate(amountCents, credits)}
       </p>
 
       {allowQuantity ? (

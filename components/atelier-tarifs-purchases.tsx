@@ -1,4 +1,4 @@
-import { CreditOfferPicker } from "@/components/credit-offer-picker";
+import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
 import { DiscoveryPackReservationButton } from "@/components/discovery-pack-reservation-button";
 import {
   DiscoveryPackModalTrigger,
@@ -6,7 +6,7 @@ import {
 } from "@/components/discovery-pack-modal";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
-import { loadCreditCourseExamples, loadPracticeCreditRates } from "@/lib/credit-course-examples";
+import { isPurchaseCreditPack } from "@/lib/square/products";
 import { createClient } from "@/lib/supabase/server";
 
 const DISCOVERY_PACKS = [
@@ -221,35 +221,30 @@ export async function AtelierCreditPackGrid({
     data: { user },
   } = await supabase.auth.getUser();
   const products = await loadSquareProducts(supabase);
-  const [examples, practiceRates] = await Promise.all([
-    loadCreditCourseExamples(),
-    loadPracticeCreditRates(),
-  ]);
   const packs = products
     .filter(
       (product) =>
-        product.kind === "credit_pack" &&
-        product.id !== "credits-2" &&
-        product.credits !== 2,
+        isPurchaseCreditPack(product) &&
+        (!purchasableOnly || product.catalogObjectId),
     )
-    .sort((a, b) => a.amountCents - b.amountCents)
-    .map((pack) => ({
-      id: pack.id,
-      credits: pack.credits,
-      amountCents: pack.amountCents,
-      catalogObjectId: pack.catalogObjectId,
-    }));
+    .sort((a, b) => a.amountCents - b.amountCents);
 
   return (
-    <CreditOfferPicker
-      packs={packs}
-      examples={examples}
-      practiceRates={practiceRates}
-      mode="purchase"
-      isLoggedIn={!!user}
-      returnPath={returnPath}
-      showPurchaseButton={showPurchaseButton}
-    />
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+      {packs.map((pack) => (
+        <CreditPackPurchaseCard
+          key={pack.id}
+          productId={pack.id}
+          amountCents={pack.amountCents}
+          credits={pack.credits}
+          catalogObjectId={pack.catalogObjectId}
+          isLoggedIn={!!user}
+          returnPath={returnPath}
+          showPurchaseButton={showPurchaseButton}
+          buttonClassName={checkoutButtonClassName}
+        />
+      ))}
+    </div>
   );
 }
 

@@ -36,6 +36,21 @@ export function isUnitCreditPack(product: Pick<SquareProduct, "kind" | "credits"
   return product.kind === "credit_pack" && product.credits === 1;
 }
 
+/** Fixed packs sold on the account and tarifs pages. Gift cards can use any amount. */
+export const PURCHASE_CREDIT_PACK_IDS = [
+  "credits-1",
+  "credits-6",
+  "credits-12",
+  "credits-20",
+] as const;
+
+export function isPurchaseCreditPack(product: Pick<SquareProduct, "kind" | "id">) {
+  return (
+    product.kind === "credit_pack" &&
+    (PURCHASE_CREDIT_PACK_IDS as readonly string[]).includes(product.id)
+  );
+}
+
 export const DEFAULT_SQUARE_PRODUCTS = [
   {
     id: "formule-01",
@@ -89,8 +104,8 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     id: "credits-12",
     kind: "credit_pack",
     name: "Pack de crédit 02",
-    description: "Pack de 12 crédits (60€).",
-    amountCents: 6000,
+    description: "Pack de 12 crédits (66€).",
+    amountCents: 6600,
     credits: 12,
   },
   {
@@ -105,8 +120,8 @@ export const DEFAULT_SQUARE_PRODUCTS = [
     id: "credits-20",
     kind: "credit_pack",
     name: "Pack de crédit 03",
-    description: "Pack de 20 crédits (96€).",
-    amountCents: 9600,
+    description: "Pack de 20 crédits (100€).",
+    amountCents: 10000,
     credits: 20,
   },
   {

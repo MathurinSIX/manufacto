@@ -377,50 +377,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ url: paymentLink.paymentLinkUrl });
       }
 
-      if (catalogProduct.kind === "credit_pack") {
-        if (!user || !accountUserId) {
-          return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-        }
-
-        const checkoutQuantity = isUnitCreditPack(catalogProduct)
-          ? requestedQuantity
-          : 1;
-        const totalCredits = catalogProduct.credits * checkoutQuantity;
-        const totalAmountCents = catalogProduct.amountCents * checkoutQuantity;
-        const paymentLink = await createSquareAdHocPaymentLink({
-          name: `${catalogProduct.name} — ${totalCredits} crédits`,
-          amountCents: totalAmountCents,
-          buyer,
-          siteUrl,
-          redirectPath,
-          paymentNote: `Manufacto ${catalogProduct.id} for ${accountUserId}`,
-        });
-
-        const adminClient = getAdminClient();
-        const { error: insertError } = await adminClient.from("square_purchase").insert({
-          user_id: accountUserId,
-          product_id: catalogProduct.id,
-          product_kind: catalogProduct.kind,
-          amount_cents: totalAmountCents,
-          credits: totalCredits,
-          currency: "EUR",
-          status: "pending",
-          square_payment_link_id: paymentLink.paymentLinkId,
-          square_payment_link_url: paymentLink.paymentLinkUrl,
-          square_order_id: paymentLink.orderId,
-          square_customer_id: squareCustomerId,
-          idempotency_key: paymentLink.idempotencyKey,
-        });
-
-        if (insertError) {
-          console.error("Error recording credit pack purchase:", insertError);
-          return NextResponse.json(
-            { error: "Impossible de préparer le paiement" },
-            { status: 500 },
-          );
-        }
-
-        return NextResponse.json({ url: paymentLink.paymentLinkUrl });
+      if (catalogProduct.kind === "credit_pack" && (!user || !accountUserId)) {
+        return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
       }
 
       if (catalogProduct.catalogObjectId) {
