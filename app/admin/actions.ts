@@ -541,6 +541,46 @@ export async function getAllUsers() {
   };
 }
 
+const EMAIL_ALREADY_USED =
+  "Cette adresse e-mail est déjà utilisée par un autre compte.";
+
+async function findEmailConflict(
+  adminClient: ReturnType<typeof getAdminClient>,
+  userId: string,
+  email: string,
+) {
+  const { users, error } = await listAllAuthUsers(adminClient);
+  if (error) {
+    return "Impossible de vérifier si cette adresse e-mail est disponible.";
+  }
+
+  const taken = users.some(
+    (user) =>
+      user.id !== userId && (user.email ?? "").trim().toLowerCase() === email,
+  );
+  if (taken) {
+    return EMAIL_ALREADY_USED;
+  }
+
+  const { data: partners, error: partnerError } = await adminClient
+    .from("account_partner")
+    .select("partner_user_id")
+    .ilike("partner_email", email);
+
+  if (partnerError) {
+    return "Impossible de vérifier si cette adresse e-mail est disponible.";
+  }
+
+  const partnerTaken = partners?.some(
+    (partner) => partner.partner_user_id && partner.partner_user_id !== userId,
+  );
+  if (partnerTaken) {
+    return EMAIL_ALREADY_USED;
+  }
+
+  return null;
+}
+
 // Update a user profile
 export async function updateUser(
   userId: string,
@@ -578,43 +618,44 @@ export async function updateUser(
     email !== (existing.user.email ?? "").trim().toLowerCase();
 
   if (emailChanged) {
-    const { error: emailError } = await adminClient.rpc(
-      "admin_set_auth_user_email",
-      {
-        target_user_id: userId,
-        new_email: email,
-      },
-    );
-
-    if (emailError) {
-      console.error("Error updating user email:", emailError);
-      const message = emailError.message.toLowerCase();
-      if (
-        message.includes("already") ||
-        message.includes("registered") ||
-        message.includes("exists") ||
-        message.includes("duplicate")
-      ) {
-        return {
-          error: "Cette adresse e-mail est déjà utilisée par un autre compte.",
-          user: null,
-        };
-      }
-      if (message.includes("invalid email")) {
-        return { error: "Adresse e-mail invalide.", user: null };
-      }
-      return { error: emailError.message, user: null };
+    const duplicateError = await findEmailConflict(adminClient, userId, email);
+    if (duplicateError) {
+      return { error: duplicateError, user: null };
     }
   }
 
   const { data: updated, error } = await adminClient.auth.admin.updateUserById(
     userId,
-    { user_metadata },
+    {
+      email,
+      email_confirm: true,
+      user_metadata,
+    },
   );
 
   if (error) {
     console.error("Error updating user:", error);
+    if (emailChanged) {
+      const duplicateError = await findEmailConflict(adminClient, userId, email);
+      if (duplicateError) {
+        return { error: duplicateError, user: null };
+      }
+    }
     return { error: error.message, user: null };
+  }
+
+  if (emailChanged) {
+    const { error: partnerError } = await adminClient
+      .from("account_partner")
+      .update({
+        partner_email: email,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("partner_user_id", userId);
+
+    if (partnerError) {
+      console.error("Error updating partner email:", partnerError);
+    }
   }
 
   try {
@@ -745,11 +786,22 @@ export async function addCreditToUser(userId: string, amount: number, paymentTyp
 export async function makeUserAdmin(userId: string) {
   await checkAdmin();
   const adminClient = getAdminClient();
+
+  const { data: existing, error: fetchError } =
+    await adminClient.auth.admin.getUserById(userId);
+
+  if (fetchError || !existing.user) {
+    return {
+      error: fetchError?.message ?? "Utilisateur introuvable",
+      user: null,
+    };
+  }
   
   const { data, error } = await adminClient.auth.admin.updateUserById(
     userId,
     {
       app_metadata: {
+        ...existing.user.app_metadata,
         role: "admin",
       },
     }
@@ -768,11 +820,22 @@ export async function makeUserAdmin(userId: string) {
 export async function removeUserAdmin(userId: string) {
   await checkAdmin();
   const adminClient = getAdminClient();
+
+  const { data: existing, error: fetchError } =
+    await adminClient.auth.admin.getUserById(userId);
+
+  if (fetchError || !existing.user) {
+    return {
+      error: fetchError?.message ?? "Utilisateur introuvable",
+      user: null,
+    };
+  }
   
   const { data, error } = await adminClient.auth.admin.updateUserById(
     userId,
     {
       app_metadata: {
+        ...existing.user.app_metadata,
         role: null,
       },
     }
@@ -1815,7 +1878,7 @@ export async function getUpcomingSessionsForActivity(activityId: string) {
 export async function createSessionsForActivity(
   activityId: string,
   slots: ActivitySessionSlotInput[],
-  options?: { groupAsMultiDay?: boolean },
+  options?: { groupAsMultiDay?: boolean; sessionGroupId?: string | null },
 ) {
   await checkAdmin();
 
@@ -1827,8 +1890,29 @@ export async function createSessionsForActivity(
     return { error: null, created: 0 };
   }
 
-  const groupAsMultiDay = Boolean(options?.groupAsMultiDay) && slots.length > 1;
-  const sessionGroupId = groupAsMultiDay ? crypto.randomUUID() : null;
+  let sessionGroupId: string | null = null;
+  const requestedGroupId = options?.sessionGroupId?.trim() || null;
+  if (requestedGroupId) {
+    if (!UUID_RE.test(requestedGroupId)) {
+      return { error: "Session invalide", created: 0 };
+    }
+    const supabase = await createClient();
+    const { data: existingGroup, error: groupError } = await supabase
+      .from("session")
+      .select("id")
+      .eq("activity_id", activityId)
+      .eq("session_group_id", requestedGroupId)
+      .limit(1);
+    if (groupError || !existingGroup?.length) {
+      return {
+        error: groupError?.message ?? "Cette session en plusieurs parties est introuvable.",
+        created: 0,
+      };
+    }
+    sessionGroupId = requestedGroupId;
+  } else if (Boolean(options?.groupAsMultiDay) && slots.length > 1) {
+    sessionGroupId = crypto.randomUUID();
+  }
 
   const results = await Promise.all(
     slots.map((slot) =>

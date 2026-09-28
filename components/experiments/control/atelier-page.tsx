@@ -29,15 +29,6 @@ const RATE_GROUPS = [
       { label: "Cuisson (four entier)", value: "60 €" },
     ],
   },
-  {
-    title: "Cours",
-    color: "#c9a227",
-    rows: [
-      { label: "Catégorie 01", value: "50 € / 10 crédits" },
-      { label: "Catégorie 02", value: "72 € / 15 crédits" },
-      { label: "Catégorie 03", value: "100 € / 20 crédits" },
-    ],
-  },
 ] as const;
 
 const SUBSCRIPTIONS = [
@@ -86,7 +77,7 @@ export default function AtelierPageControl({
             </p>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {RATE_GROUPS.map((group) => (
               <div
                 key={group.title}

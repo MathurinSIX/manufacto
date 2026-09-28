@@ -98,11 +98,11 @@ export function GiftCardPaymentOption({
       <Button
         type="button"
         variant="outline"
-        className={cn("w-full sm:w-auto", className)}
+        className={cn("w-full", className)}
         disabled={disabled}
         onClick={() => setExpanded(true)}
       >
-        Carte cadeau
+        Réserver avec une carte cadeau
       </Button>
     );
   }

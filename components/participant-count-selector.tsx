@@ -1,137 +1,170 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MAX_PARTICIPANTS } from "@/lib/participant-count";
+import {
+  MAX_PARTICIPANTS,
+  bookingParticipantsAreValid,
+  normalizeBookingParticipants,
+  type BookingParticipant,
+} from "@/lib/participant-count";
 import { cn } from "@/lib/utils";
 
 type ParticipantCountSelectorProps = {
-  value: number;
-  onChange: (value: number) => void;
-  companionFirstNames?: string[];
-  onCompanionFirstNamesChange?: (names: string[]) => void;
+  participants: BookingParticipant[];
+  onChange: (next: BookingParticipant[]) => void;
   max?: number;
   disabled?: boolean;
   className?: string;
+  /** Household names that can be added in one click. */
+  quickAddNames?: string[];
 };
 
 export function ParticipantCountSelector({
-  value,
+  participants,
   onChange,
-  companionFirstNames = [],
-  onCompanionFirstNamesChange,
   max = MAX_PARTICIPANTS,
   disabled = false,
   className,
+  quickAddNames = [],
 }: ParticipantCountSelectorProps) {
   const effectiveMax = Math.min(MAX_PARTICIPANTS, Math.max(1, max));
-  const showCompanionFields =
-    value > 1 && typeof onCompanionFirstNamesChange === "function";
+  const canAdd = participants.length < effectiveMax;
 
-  const handleCountChange = (next: number) => {
-    onChange(next);
-    if (!onCompanionFirstNamesChange) return;
-    if (next <= 1) {
-      onCompanionFirstNamesChange([]);
-      return;
-    }
-    const needed = next - 1;
-    const nextNames = companionFirstNames.slice(0, needed);
-    while (nextNames.length < needed) {
-      nextNames.push("");
-    }
-    onCompanionFirstNamesChange(nextNames);
+  const updateAt = (index: number, patch: Partial<BookingParticipant>) => {
+    onChange(
+      participants.map((participant, participantIndex) =>
+        participantIndex === index ? { ...participant, ...patch } : participant,
+      ),
+    );
   };
 
+  const addParticipant = (name = "") => {
+    if (!canAdd) return;
+    onChange([...participants, { name, email: "" }]);
+  };
+
+  const listedNames = new Set(
+    participants.map((participant) => participant.name.trim().toLowerCase()),
+  );
+  const suggestions = quickAddNames.filter(
+    (name) => name.trim() && !listedNames.has(name.trim().toLowerCase()),
+  );
+
   return (
-    <div className={cn("space-y-2", className)}>
-      <Label>Nombre de personnes</Label>
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled || value <= 1}
-          onClick={() => handleCountChange(Math.max(1, value - 1))}
-          aria-label="Moins de personnes"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <span className="min-w-[2rem] text-center text-lg font-semibold tabular-nums">
-          {value}
+    <div className={cn("space-y-3", className)}>
+      <div className="flex items-center justify-between gap-2">
+        <Label>Qui participe ?</Label>
+        <span className="text-xs text-muted-foreground">
+          {participants.length} personne{participants.length > 1 ? "s" : ""}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled || value >= effectiveMax}
-          onClick={() => handleCountChange(Math.min(effectiveMax, value + 1))}
-          aria-label="Plus de personnes"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Un nom par personne. L&apos;e-mail est facultatif : s&apos;il est
+        renseigné, cette personne reçoit la confirmation.
+      </p>
       {effectiveMax < MAX_PARTICIPANTS ? (
         <p className="text-xs text-muted-foreground">
           {effectiveMax === 0
             ? "Plus de places disponibles."
-            : `Seulement ${effectiveMax} place${effectiveMax > 1 ? "s" : ""} disponible${effectiveMax > 1 ? "s" : ""}.`}
+            : `Jusqu'à ${effectiveMax} place${effectiveMax > 1 ? "s" : ""}.`}
         </p>
       ) : null}
 
-      {showCompanionFields ? (
-        <div className="space-y-2 pt-1">
-          <Label className="text-sm font-medium">
-            Prénom{value > 2 ? "s" : ""} de la / des personne{value > 2 ? "s" : ""} supplémentaire{value > 2 ? "s" : ""}
-          </Label>
-          {Array.from({ length: value - 1 }, (_, index) => (
+      <div className="space-y-3">
+        {participants.map((participant, index) => (
+          <div key={index} className="space-y-2 rounded-md border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Personne {index + 1}</Label>
+              {participants.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() =>
+                    onChange(participants.filter((_, participantIndex) => participantIndex !== index))
+                  }
+                  aria-label={`Retirer la personne ${index + 1}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
             <Input
-              key={index}
-              value={companionFirstNames[index] ?? ""}
+              value={participant.name}
               disabled={disabled}
-              placeholder={`Prénom de la personne ${index + 2}`}
-              onChange={(event) => {
-                const nextNames = [...companionFirstNames];
-                while (nextNames.length < value - 1) {
-                  nextNames.push("");
-                }
-                nextNames[index] = event.target.value;
-                onCompanionFirstNamesChange?.(nextNames.slice(0, value - 1));
-              }}
+              placeholder="Nom"
               required
+              onChange={(event) => updateAt(index, { name: event.target.value })}
             />
+            <Input
+              type="email"
+              value={participant.email}
+              disabled={disabled}
+              placeholder="E-mail (facultatif)"
+              onChange={(event) => updateAt(index, { email: event.target.value })}
+            />
+          </div>
+        ))}
+      </div>
+
+      {suggestions.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {suggestions.map((name) => (
+            <Button
+              key={name}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || !canAdd}
+              onClick={() => addParticipant(name)}
+            >
+              Ajouter {name}
+            </Button>
           ))}
         </div>
       ) : null}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || !canAdd}
+        onClick={() => addParticipant()}
+      >
+        <Plus className="mr-1 h-4 w-4" />
+        Ajouter une personne
+      </Button>
     </div>
   );
 }
 
-export function normalizeCompanionFirstNames(
-  participantCount: number,
-  names: string[],
-): string[] {
-  if (participantCount <= 1) {
-    return [];
-  }
-
-  return names
-    .slice(0, participantCount - 1)
-    .map((name) => name.trim())
-    .filter(Boolean);
+export function participantsToRegistrationFields(participants: BookingParticipant[]) {
+  const normalized = normalizeBookingParticipants(participants);
+  return {
+    participantCount: Math.max(1, normalized.length),
+    companionFirstNames: normalized.slice(1).map((participant) => participant.name),
+    participantNames: normalized.map((participant) => participant.name),
+    participantEmails: normalized.map((participant) => participant.email),
+  };
 }
 
 export function companionNamesAreValid(
   participantCount: number,
   names: string[],
 ): boolean {
-  if (participantCount <= 1) {
-    return true;
-  }
-
-  return normalizeCompanionFirstNames(participantCount, names).length ===
-    participantCount - 1;
+  if (participantCount <= 1) return true;
+  return (
+    names
+      .slice(0, participantCount - 1)
+      .map((name) => name.trim())
+      .filter(Boolean).length ===
+    participantCount - 1
+  );
 }
+
+export { bookingParticipantsAreValid };

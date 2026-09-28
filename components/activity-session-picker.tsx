@@ -15,8 +15,12 @@ import { GiftCardPaymentOption } from "@/components/gift-card-payment-option";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import {
   ParticipantCountSelector,
-  companionNamesAreValid,
+  bookingParticipantsAreValid,
+  participantsToRegistrationFields,
 } from "@/components/participant-count-selector";
+import { allHouseholdNames } from "@/lib/household";
+import type { BookingParticipant } from "@/lib/participant-count";
+import { resolveAccountUserId } from "@/lib/account-share";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -208,9 +212,54 @@ type SessionRow = {
   start_ts: string;
   end_ts: string;
   max_registrations: number | null;
+  session_group_id?: string | null;
   registrationCount?: number;
   isFull?: boolean;
 };
+
+type CourseOffer = {
+  key: string;
+  primary: SessionRow;
+  parts: SessionRow[];
+};
+
+function groupCourseOffers(sessions: SessionRow[]): CourseOffer[] {
+  const groups = new Map<string, SessionRow[]>();
+  const order: string[] = [];
+  const ordered = [...sessions].sort(
+    (left, right) =>
+      new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime(),
+  );
+
+  for (const session of ordered) {
+    const key = session.session_group_id ?? `single:${session.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(session);
+  }
+
+  return order.map((key) => {
+    const parts = groups.get(key) ?? [];
+    return { key, primary: parts[0]!, parts };
+  });
+}
+
+function offerAvailability(parts: SessionRow[]) {
+  let available: number | null = null;
+  let isFull = false;
+  for (const part of parts) {
+    const count = part.registrationCount ?? 0;
+    if (part.max_registrations === null) continue;
+    const remaining = part.max_registrations - count;
+    available = available === null ? remaining : Math.min(available, remaining);
+    if (count >= part.max_registrations) {
+      isFull = true;
+    }
+  }
+  return { available, isFull };
+}
 
 interface ActivitySessionPickerProps {
   activityId?: string;
@@ -273,8 +322,10 @@ export function ActivitySessionPicker({
   const [userRegistrations, setUserRegistrations] = useState<
     Record<string, { id: string; participantCount: number }>
   >({});
-  const [participantCount, setParticipantCount] = useState(1);
-  const [companionFirstNames, setCompanionFirstNames] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<BookingParticipant[]>([
+    { name: "", email: "" },
+  ]);
+  const [householdOptions, setHouseholdOptions] = useState<string[]>([]);
   const [showAuthStep, setShowAuthStep] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
@@ -298,18 +349,52 @@ export function ActivitySessionPicker({
 
   const refreshUser = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
-    const nextUserId = data.user?.id ?? null;
-    setUserId(nextUserId);
-
-    if (!nextUserId) {
+    const authUserId = data.user?.id ?? null;
+    if (!authUserId) {
+      setUserId(null);
       setUserCredits(0);
+      setHouseholdOptions([]);
       return null;
     }
 
-    const { data: creditsData, error } = await supabase
-      .from("credit")
-      .select("amount")
-      .eq("user_id", nextUserId);
+    const nextUserId = await resolveAccountUserId(supabase, authUserId);
+    setUserId(nextUserId);
+
+    const accountDisplayName = [
+      data.user?.user_metadata?.first_name,
+      data.user?.user_metadata?.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const [{ data: creditsData, error }, { data: profile }] = await Promise.all([
+      supabase.from("credit").select("amount").eq("user_id", nextUserId),
+      supabase
+        .from("user_profile")
+        .select("member_names, child_names")
+        .eq("user_id", nextUserId)
+        .maybeSingle(),
+    ]);
+
+    const options = allHouseholdNames({
+      memberNames: profile?.member_names,
+      childNames: profile?.child_names,
+      accountDisplayName: accountDisplayName || data.user?.email || null,
+    });
+    setHouseholdOptions(options);
+    setParticipants((current) => {
+      const hasDetails = current.some(
+        (participant) => participant.name.trim() || participant.email.trim(),
+      );
+      if (hasDetails) return current;
+      return [
+        {
+          name: accountDisplayName || data.user?.email || "",
+          email: data.user?.email ?? "",
+        },
+      ];
+    });
 
     if (error) {
       console.error("Error fetching credits:", error);
@@ -359,7 +444,7 @@ export function ActivitySessionPicker({
       setSuccessMessage(null);
       const { data, error } = await supabase
         .from("session")
-        .select("id, start_ts, end_ts, max_registrations")
+        .select("id, start_ts, end_ts, max_registrations, session_group_id")
         .eq("activity_id", activityId)
         .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
         .order("start_ts", { ascending: true });
@@ -496,9 +581,17 @@ export function ActivitySessionPicker({
       (session) => session.id === requestedSessionId,
     );
     if (!matchedSession) return;
+    const primary = matchedSession.session_group_id
+      ? groupCourseOffers(
+          sessions.filter(
+            (session) =>
+              session.session_group_id === matchedSession.session_group_id,
+          ),
+        )[0]?.primary ?? matchedSession
+      : matchedSession;
     setAppliedInitialSessionId(requestedSessionId);
-    setSelectedDate(new Date(matchedSession.start_ts));
-    setSelectedSessionId(matchedSession.id);
+    setSelectedDate(new Date(primary.start_ts));
+    setSelectedSessionId(primary.id);
     setOpen(true);
   }, [sessions, requestedSessionId, appliedInitialSessionId, setOpen]);
 
@@ -540,6 +633,17 @@ export function ActivitySessionPicker({
       );
   }, [selectedDate, sessions, isCours]);
 
+  const visibleOffers = useMemo(() => {
+    if (!isCours) {
+      return sessionsForSelectedDate.map((session) => ({
+        key: session.id,
+        primary: session,
+        parts: [session],
+      }));
+    }
+    return groupCourseOffers(sessionsForSelectedDate);
+  }, [isCours, sessionsForSelectedDate]);
+
   const selectedSession = useMemo(
     () =>
       selectedSessionId
@@ -557,20 +661,28 @@ export function ActivitySessionPicker({
   }, [selectedSession]);
 
   const maxParticipantsForSelection = maxSelectableCount(selectedSessionAvailableSpots);
+  const {
+    participantCount,
+    companionFirstNames,
+    participantNames,
+    participantEmails,
+  } = participantsToRegistrationFields(
+    participants.slice(0, Math.max(1, maxParticipantsForSelection)),
+  );
   const totalCredits = (normalizedCredits ?? 0) * participantCount;
   const totalPrice =
     normalizedPrice !== null ? normalizedPrice * participantCount : null;
 
   useEffect(() => {
-    if (participantCount > maxParticipantsForSelection) {
-      setParticipantCount(Math.max(1, maxParticipantsForSelection));
+    if (participants.length > maxParticipantsForSelection) {
+      setParticipants((current) =>
+        current.slice(0, Math.max(1, maxParticipantsForSelection)),
+      );
     }
-  }, [maxParticipantsForSelection, participantCount]);
+  }, [maxParticipantsForSelection, participants.length]);
 
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
-    setParticipantCount(1);
-    setCompanionFirstNames([]);
     setShowAuthStep(false);
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -611,9 +723,9 @@ export function ActivitySessionPicker({
       return;
     }
 
-    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+    if (!bookingParticipantsAreValid(participants)) {
       setErrorMessage(
-        "Indiquez le prénom de chaque personne supplémentaire.",
+        "Indiquez le nom de chaque personne. L'e-mail, s'il est rempli, doit être valide.",
       );
       return;
     }
@@ -627,6 +739,9 @@ export function ActivitySessionPicker({
       undefined,
       participantCount,
       companionFirstNames,
+      undefined,
+      participantEmails,
+      participantNames,
     );
     setIsRegistering(false);
     if (result.error) {
@@ -666,8 +781,10 @@ export function ActivitySessionPicker({
       throw new Error("Vous êtes déjà inscrit à cette session.");
     }
 
-    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
-      throw new Error("Indiquez le prénom de chaque personne supplémentaire.");
+    if (!bookingParticipantsAreValid(participants)) {
+      throw new Error(
+        "Indiquez le nom de chaque personne. L'e-mail, s'il est rempli, doit être valide.",
+      );
     }
 
     setIsRegistering(true);
@@ -681,6 +798,8 @@ export function ActivitySessionPicker({
       participantCount,
       companionFirstNames,
       giftCardCode,
+      participantEmails,
+      participantNames,
     );
     setIsRegistering(false);
 
@@ -821,27 +940,43 @@ export function ActivitySessionPicker({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Chargement des sessions...
                 </div>
-              ) : sessionsForSelectedDate.length ? (
+              ) : visibleOffers.length ? (
                 <div className="space-y-3">
-                  {sessionsForSelectedDate.map((session) => {
+                  {visibleOffers.map((offer) => {
+                    const session = offer.primary;
                     const start = new Date(session.start_ts);
                     const end = new Date(session.end_ts);
+                    const isMultiPart = offer.parts.length > 1;
                     const isSelected = session.id === selectedSessionId;
+                    const availability = offerAvailability(offer.parts);
                     const registeredCount = session.registrationCount || 0;
-                    const available = session.max_registrations !== null 
-                      ? session.max_registrations - registeredCount 
-                      : null;
-                    const isFull = session.max_registrations !== null && registeredCount >= session.max_registrations;
-                    const isUserRegistered = !!userRegistrations[session.id];
-                    const userRegistration = userRegistrations[session.id];
-                    const canCancelRegistration = canUserCancelRegistration(start);
+                    const available = isMultiPart
+                      ? availability.available
+                      : session.max_registrations !== null
+                        ? session.max_registrations - registeredCount
+                        : null;
+                    const isFull = isMultiPart
+                      ? availability.isFull
+                      : session.max_registrations !== null &&
+                        registeredCount >= session.max_registrations;
+                    const registeredPart = offer.parts.find(
+                      (part) => userRegistrations[part.id],
+                    );
+                    const isUserRegistered = Boolean(registeredPart);
+                    const userRegistration = registeredPart
+                      ? userRegistrations[registeredPart.id]
+                      : undefined;
+                    const canCancelRegistration = canUserCancelRegistration(
+                      new Date(offer.parts[0]!.start_ts),
+                    );
 
                     const handleCancelThisSession = async (e: React.MouseEvent) => {
                       e.stopPropagation();
                       if (!userRegistration) return;
 
-                      const cancelLabel =
-                        userRegistration.participantCount > 1
+                      const cancelLabel = isMultiPart
+                        ? "Annuler toute la session ? Le paiement couvre toutes les parties."
+                        : userRegistration.participantCount > 1
                           ? `Annuler la réservation pour ${userRegistration.participantCount} personnes ?`
                           : "Êtes-vous sûr de vouloir annuler cette réservation ?";
 
@@ -864,7 +999,9 @@ export function ActivitySessionPicker({
                       // Update user registrations state
                       setUserRegistrations(prev => {
                         const updated = { ...prev };
-                        delete updated[session.id];
+                        for (const part of offer.parts) {
+                          delete updated[part.id];
+                        }
                         return updated;
                       });
                       
@@ -874,7 +1011,7 @@ export function ActivitySessionPicker({
                     };
                     
                     return (
-                      <div key={session.id} className="rounded-lg border p-4">
+                      <div key={offer.key} className="rounded-lg border p-4">
                         <button
                           type="button"
                           disabled={isFull || isUserRegistered}
@@ -889,19 +1026,42 @@ export function ActivitySessionPicker({
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium">
-                                {timeFormatter.format(start)} –{" "}
-                                {timeFormatter.format(end)}
-                              </p>
-                              <p className="text-sm text-muted-foreground capitalize">
-                                {dateFormatter.format(start)}
-                              </p>
+                              {isMultiPart ? (
+                                <>
+                                  <p className="font-medium">
+                                    Session en {offer.parts.length} parties
+                                  </p>
+                                  <ul className="mt-2 space-y-1 text-sm capitalize text-muted-foreground">
+                                    {offer.parts.map((part, partIndex) => (
+                                      <li key={part.id}>
+                                        Partie {partIndex + 1} —{" "}
+                                        {dateFormatter.format(new Date(part.start_ts))}
+                                        , {timeFormatter.format(new Date(part.start_ts))}
+                                        –{timeFormatter.format(new Date(part.end_ts))}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    Un seul paiement pour toutes les parties.
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="font-medium">
+                                    {timeFormatter.format(start)} –{" "}
+                                    {timeFormatter.format(end)}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground capitalize">
+                                    {dateFormatter.format(start)}
+                                  </p>
+                                </>
+                              )}
                             </div>
                             {isSelected && !isFull && !isUserRegistered && (
                               <CheckCircle2 className="h-5 w-5 text-primary" />
                             )}
                           </div>
-                          {session.max_registrations !== null && (
+                          {(isMultiPart ? availability.available !== null : session.max_registrations !== null) && (
                             <p className={cn(
                               "mt-2 text-xs",
                               isFull ? "text-destructive font-medium" : "text-muted-foreground"
@@ -965,14 +1125,15 @@ export function ActivitySessionPicker({
           {effectiveIsLoggedIn &&
             selectedSessionId &&
             !userRegistrations[selectedSessionId] && (
-              <ParticipantCountSelector
-                value={participantCount}
-                onChange={setParticipantCount}
-                companionFirstNames={companionFirstNames}
-                onCompanionFirstNamesChange={setCompanionFirstNames}
-                max={maxParticipantsForSelection}
-                className="w-full sm:mr-auto"
-              />
+              <div className="w-full space-y-3 sm:mr-auto">
+                <ParticipantCountSelector
+                  participants={participants}
+                  onChange={setParticipants}
+                  max={maxParticipantsForSelection}
+                  disabled={isRegistering}
+                  quickAddNames={householdOptions}
+                />
+              </div>
             )}
           {effectiveIsLoggedIn && selectedSessionId && (
             <>
@@ -996,8 +1157,7 @@ export function ActivitySessionPicker({
                   </p>
                 )
               ) : (
-                <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  <BookingPoliciesNotice context="booking" className="w-full" />
+                <div className="flex w-full flex-col items-stretch gap-2">
                   {isSquareOnlyActivity && squareCatalogProductId && (
                     <SquareCheckoutButton
                       productId={squareCatalogProductId}
@@ -1006,15 +1166,14 @@ export function ActivitySessionPicker({
                       reservationStart={selectedSession?.start_ts}
                       reservationEnd={selectedSession?.end_ts}
                       participantCount={participantCount}
+                      participantNames={participantNames}
+                      participantEmails={participantEmails}
                       isLoggedIn={effectiveIsLoggedIn}
                       disabled={
                         maxParticipantsForSelection < 1 ||
-                        !companionNamesAreValid(
-                          participantCount,
-                          companionFirstNames,
-                        )
+                        !bookingParticipantsAreValid(participants)
                       }
-                      className="w-full sm:w-auto"
+                      className="w-full"
                     >
                       {participantCount > 1
                         ? `Payer et réserver (${participantCount} personnes)`
@@ -1025,11 +1184,12 @@ export function ActivitySessionPicker({
                     <>
                       <Button
                         variant="default"
-                        className="w-full sm:w-auto"
+                        className="w-full"
                         disabled={
                           isRegistering ||
                           userCredits < totalCredits ||
-                          maxParticipantsForSelection < 1
+                          maxParticipantsForSelection < 1 ||
+                          !bookingParticipantsAreValid(participants)
                         }
                         onClick={() => handleRegister("credits")}
                       >
@@ -1046,30 +1206,29 @@ export function ActivitySessionPicker({
                       )}
                     </>
                   )}
-                  {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId && (
+                  {!isSquareOnlyActivity && normalizedPrice !== null && (
                     <SquareCheckoutButton
-                      productId={squareCatalogProductId}
+                      productId={squareCatalogProductId ?? "course"}
                       activityId={activityId}
                       sessionId={selectedSessionId ?? undefined}
                       reservationStart={selectedSession?.start_ts}
                       reservationEnd={selectedSession?.end_ts}
                       participantCount={participantCount}
+                      participantNames={participantNames}
+                      participantEmails={participantEmails}
                       isLoggedIn={effectiveIsLoggedIn}
                       disabled={
                         maxParticipantsForSelection < 1 ||
-                        !companionNamesAreValid(
-                          participantCount,
-                          companionFirstNames,
-                        )
+                        !bookingParticipantsAreValid(participants)
                       }
-                      className="w-full sm:w-auto"
+                      className="w-full"
                     >
                       {participantCount > 1
                         ? `Réserver pour ${totalPrice!.toFixed(2)}€ (${participantCount} personnes)`
                         : `Réserver pour ${totalPrice!.toFixed(2)}€`}
                     </SquareCheckoutButton>
                   )}
-                  {(normalizedCredits !== null || squareCatalogProductId) && (
+                  {(normalizedCredits !== null || normalizedPrice !== null || squareCatalogProductId) && (
                     <GiftCardPaymentOption
                       activityId={activityId}
                       sessionId={selectedSessionId ?? undefined}
@@ -1083,13 +1242,10 @@ export function ActivitySessionPicker({
                       disabled={
                         isRegistering ||
                         maxParticipantsForSelection < 1 ||
-                        !companionNamesAreValid(
-                          participantCount,
-                          companionFirstNames,
-                        )
+                        !bookingParticipantsAreValid(participants)
                       }
                       onRedeem={handleGiftCardRegister}
-                      className="w-full sm:w-auto"
+                      className="w-full"
                     />
                   )}
                 </div>
@@ -1099,7 +1255,7 @@ export function ActivitySessionPicker({
           {effectiveIsLoggedIn && !isSquareOnlyActivity && (!normalizedCredits && !normalizedPrice) && selectedSessionId && !userRegistrations[selectedSessionId] && (
             <Button
               className="w-full sm:w-auto"
-              disabled={isRegistering}
+              disabled={isRegistering || !bookingParticipantsAreValid(participants)}
               onClick={() => handleRegister("credits")}
             >
               {isRegistering ? "Inscription..." : "Confirmer mon inscription"}
@@ -1108,11 +1264,10 @@ export function ActivitySessionPicker({
           {!effectiveIsLoggedIn && hasSelectedSession && !showAuthStep ? (
             <div className="flex w-full flex-col gap-2 sm:w-auto">
               <ParticipantCountSelector
-                value={participantCount}
-                onChange={setParticipantCount}
-                companionFirstNames={companionFirstNames}
-                onCompanionFirstNamesChange={setCompanionFirstNames}
+                participants={participants}
+                onChange={setParticipants}
                 max={maxParticipantsForSelection}
+                quickAddNames={householdOptions}
               />
               {isSquareOnlyActivity && squareCatalogProductId ? (
                 <Button
@@ -1133,7 +1288,7 @@ export function ActivitySessionPicker({
                     : `Réserver pour ${totalCredits} crédits`}
                 </Button>
               ) : null}
-              {!isSquareOnlyActivity && normalizedPrice !== null && squareCatalogProductId ? (
+              {!isSquareOnlyActivity && normalizedPrice !== null ? (
                 <Button
                   className="w-full sm:w-auto"
                   onClick={() => handleAuthRequired()}
@@ -1155,6 +1310,9 @@ export function ActivitySessionPicker({
             </div>
           ) : null}
         </DialogFooter>
+        {hasSelectedSession && !showAuthStep ? (
+          <BookingPoliciesNotice context="booking" className="mt-4" />
+        ) : null}
         </div>
       </DialogContent>
     </Dialog>

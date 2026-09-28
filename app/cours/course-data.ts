@@ -2,6 +2,8 @@ export type Course = {
   id: string;
   slug: string;
   discipline: string;
+  /** All universe labels for filtering (includes primary). */
+  disciplines: string[];
   title: string;
   image: string;
   images: string[];
@@ -18,7 +20,10 @@ export type Course = {
   nextSessionStart: string | null;
 };
 
-import { formatCourseDiscipline } from "@/lib/course-disciplines";
+import {
+  formatCourseDiscipline,
+  normalizeActivityDisciplines,
+} from "@/lib/course-disciplines";
 
 export type DbCourse = {
   id: string;
@@ -33,6 +38,7 @@ export type DbCourse = {
   level: string | null;
   audience: string | null;
   discipline: string | null;
+  disciplines?: string[] | null;
   durationMinutes?: number | null;
 };
 
@@ -195,8 +201,21 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
 
   return data.map((activity) => {
     const name = activity.name?.trim() || "Cours";
-    const { discipline, title } = splitCourseName(name, activity.discipline);
+    const disciplineKeys = normalizeActivityDisciplines(
+      activity.discipline,
+      activity.disciplines,
+    );
+    const primaryKey = disciplineKeys[0] ?? activity.discipline;
+    const { discipline, title } = splitCourseName(name, primaryKey);
     const displayTitle = title || name;
+    const disciplineLabels = Array.from(
+      new Set(
+        [
+          ...disciplineKeys.map((key) => formatCourseDiscipline(key)),
+          discipline,
+        ].filter((value): value is string => Boolean(value)),
+      ),
+    );
 
     const images = resolveActivityImages(activity.image_url, activity.image_urls);
 
@@ -204,6 +223,7 @@ export function getCoursesFromDb(data?: DbCourse[] | null): Course[] {
       id: activity.id,
       slug: slugify(displayTitle),
       discipline,
+      disciplines: disciplineLabels.length > 0 ? disciplineLabels : [discipline],
       title: displayTitle,
       image: images[0],
       images,

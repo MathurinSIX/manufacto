@@ -80,6 +80,17 @@ export async function POST(request: Request) {
 
     if (createdUser?.user?.id) {
       try {
+        const { claimAccountPartnerInvite } = await import("@/lib/account-partner");
+        await claimAccountPartnerInvite({
+          userId: createdUser.user.id,
+          email,
+          firstName,
+        });
+      } catch (claimError) {
+        console.error("Error linking invited household login:", claimError);
+      }
+
+      try {
         await syncSupabaseUserToSquare({
           supabase: adminClient,
           userId: createdUser.user.id,

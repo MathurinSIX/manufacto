@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { resolveAccountUserId } from "@/lib/account-share";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,10 +22,12 @@ export async function toggleCourseInterest(activityId: string) {
     return { error: "Vous devez être connecté·e", interested: false };
   }
 
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+
   const { data: existing, error: selectError } = await supabase
     .from("activity_interest")
     .select("id")
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .eq("activity_id", activityId)
     .maybeSingle();
 
@@ -50,7 +53,7 @@ export async function toggleCourseInterest(activityId: string) {
   }
 
   const { error: insertError } = await supabase.from("activity_interest").insert({
-    user_id: user.id,
+    user_id: accountUserId,
     activity_id: activityId,
   });
 

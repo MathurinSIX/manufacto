@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { DisciplinePhotoCarousel } from "@/components/discipline-photo-carousel";
 import { ExpertEquipmentDetails } from "@/components/expert-equipment-details";
 import { PracticeAvailabilityCalendarButton } from "@/components/practice-availability-calendar-modal";
 import { PrivatisationBanner } from "@/components/privatisation-banner";
@@ -8,13 +9,21 @@ import {
   P,
   PhotoRibbon,
   PrimaryCta,
-  RIBBON_LIEU,
-  RIBBON_PORTRAITS,
   SecondaryCta,
   WordStrip,
 } from "@/components/mockups/shared";
 import { type SiteScope, scopeHref } from "@/components/mockups/paths";
 import type { ExperimentVariant } from "@/lib/posthog/experiments";
+import {
+  ATELIER_HERO_PHOTO,
+  ATELIER_RIBBON,
+  ATELIER_SIDE_PHOTO,
+  DISCIPLINE_CAROUSEL_PHOTOS,
+  CONTACT_PHOTO,
+  PRATIQUE_CRAFT_PHOTOS,
+  PRATIQUE_HERO_PHOTO,
+  PRATIQUE_RIBBON,
+} from "@/lib/site-photo-sets";
 
 function PageHero({
   title,
@@ -91,7 +100,7 @@ export function MockupAtelierPage({
             ? "Un atelier partagé et multidisciplinaire au cœur de Marseille : espace, machines, outils et compétences pour faire de vos mains."
             : "Manufacto est un lieu ouvert à tous et toutes. Un atelier, quatre univers : un atelier bois, un atelier couture, un atelier céramique et un atelier électronique. L’idée : donner accès aux espaces, aux machines et aux connaissances pour favoriser le faire soi-même, la réparation, ou la transformation de matière et objets pour leur donner une deuxième vie."
         }
-        image={P.atelierFrame}
+        image={ATELIER_HERO_PHOTO}
       >
         <PrimaryCta href={h("/contact")}>Réserver une visite</PrimaryCta>
       </PageHero>
@@ -119,10 +128,10 @@ export function MockupAtelierPage({
           </p>
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-          <ImageTile src={P.pl28} alt="Menuiserie" className="h-56" />
-          <ImageTile src={P.handsCouture} alt="Couture" className="h-56" />
-          <ImageTile src={P.heroCeramique} alt="Céramique" className="h-56" />
-          <ImageTile src={P.heroElecNew} alt="Électronique" className="h-56" />
+          <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.menuiserie![0]} alt="Menuiserie" className="h-56" />
+          <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.couture![0]} alt="Couture" className="h-56" />
+          <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.ceramique![0]} alt="Céramique" className="h-56" />
+          <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.electronique![0]} alt="Électronique" className="h-56" />
         </div>
       </section>
 
@@ -179,14 +188,14 @@ export function MockupAtelierPage({
               </p>
             </div>
             <ImageTile
-              src={P.atelierVector}
+              src={ATELIER_SIDE_PHOTO}
               alt="Chaise en bois en cours de fabrication"
               className="h-[320px] md:h-[420px]"
             />
           </div>
 
           <div className="mt-14">
-            <PhotoRibbon images={[...RIBBON_LIEU]} />
+            <PhotoRibbon images={[...ATELIER_RIBBON]} />
           </div>
         </div>
       </section>
@@ -503,11 +512,11 @@ export function MockupPratiquePage({
             </p>
           </>
         }
-        image={P.pratiqueLibre}
+        image={PRATIQUE_HERO_PHOTO}
       >
         <PrimaryCta href="/account?tab=credits">Acheter des crédits</PrimaryCta>
         {heroSecondary ?? (
-          <SecondaryCta href={h("/contact")}>Pack découvertes</SecondaryCta>
+          <SecondaryCta href={h("/contact")}>Pack découverte</SecondaryCta>
         )}
       </PageHero>
 
@@ -546,7 +555,12 @@ export function MockupPratiquePage({
                   </p>
                   <ExpertEquipmentDetails kind={d.expertKind} accent={d.color} />
                 </div>
-                <ImageTile src={d.image} alt={d.label} className="h-48 md:h-64" />
+                <DisciplinePhotoCarousel
+                  discipline={d.id}
+                  images={PRATIQUE_CRAFT_PHOTOS[d.id]}
+                  alt={d.label}
+                  className="h-48 md:h-64"
+                />
               </div>
 
               <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -621,7 +635,7 @@ export function MockupPratiquePage({
       </section>
 
       <section className="mx-auto max-w-[1274px] px-5 py-14">
-        <PhotoRibbon images={[...RIBBON_PORTRAITS, ...RIBBON_LIEU].slice(0, 12)} />
+        <PhotoRibbon images={[...PRATIQUE_RIBBON]} />
       </section>
     </main>
   );
@@ -704,7 +718,7 @@ export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {})
       <PageHero
         title="Contact & visite"
         lead="Tous les mardis de 18h30 à 19h, Martin, Nafissa, Cyprien et Delphine vous présentent le lieu. C’est gratuit, sur inscription."
-        image={P.atelierPeople}
+        image={CONTACT_PHOTO}
       >
         <PrimaryCta href="/reserver">Réserver une visite</PrimaryCta>
       </PageHero>

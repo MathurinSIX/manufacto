@@ -1,4 +1,5 @@
 import { updateSession } from "@/lib/supabase/proxy";
+import { COOKIE_CONSENT } from "@/lib/cookies/consent";
 import {
   DISTINCT_ID_COOKIE,
   EXPERIMENT_OVERRIDE_COOKIE,
@@ -10,7 +11,18 @@ const OVERRIDE_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days for local QA
 export async function proxy(request: NextRequest) {
   const response = await updateSession(request);
 
-  if (!request.cookies.get(DISTINCT_ID_COOKIE)?.value) {
+  const consent = request.cookies.get(COOKIE_CONSENT)?.value;
+
+  if (consent === "refused") {
+    response.cookies.set(DISTINCT_ID_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+      sameSite: "lax",
+    });
+  } else if (
+    consent === "accepted" &&
+    !request.cookies.get(DISTINCT_ID_COOKIE)?.value
+  ) {
     response.cookies.set(DISTINCT_ID_COOKIE, crypto.randomUUID(), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,

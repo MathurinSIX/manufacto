@@ -13,6 +13,10 @@ import type {
   RegistrationEmailVariables,
 } from "@/lib/email/types";
 import { getAdminClient, getSiteUrl } from "@/lib/square/server";
+import {
+  formatSeriesSchedule,
+  listSeriesSessions,
+} from "@/lib/course-session-series";
 
 type RegistrationStatusRow = {
   registration_id: string;
@@ -24,10 +28,16 @@ type RegistrationDetails = {
   id: string;
   user_id: string;
   participant_count: number | null;
+  participant_names: string[];
+  participant_emails: string[];
+  reserved_start_ts: string | null;
+  reserved_end_ts: string | null;
   session: {
     start_ts: string;
+    end_ts: string | null;
     activity: { name: string; type: string | null } | { name: string; type: string | null }[] | null;
   } | null;
+  seriesSchedule: string | null;
 };
 
 function activityFromRow(
@@ -97,7 +107,7 @@ async function loadRegistrationDetails(
   const { data, error } = await supabase
     .from("registration")
     .select(
-      "id, user_id, participant_count, session:session_id(start_ts, activity:activity_id(name, type))",
+      "id, user_id, participant_count, participant_names, participant_emails, reserved_start_ts, reserved_end_ts, session:session_id(id, start_ts, end_ts, session_group_id, activity:activity_id(name, type))",
     )
     .eq("id", registrationId)
     .maybeSingle();
@@ -108,14 +118,31 @@ async function loadRegistrationDetails(
   }
 
   const sessionRow = Array.isArray(data.session) ? data.session[0] : data.session;
+  let seriesSchedule: string | null = null;
+  if (sessionRow?.session_group_id) {
+    const grouped = await listSeriesSessions(supabase, sessionRow.session_group_id);
+    if (!grouped.error && grouped.sessions.length > 1) {
+      seriesSchedule = formatSeriesSchedule(grouped.sessions);
+    }
+  }
 
   return {
     id: data.id,
     user_id: data.user_id,
     participant_count: data.participant_count,
+    participant_names: Array.isArray(data.participant_names)
+      ? data.participant_names.filter((name: unknown): name is string => typeof name === "string")
+      : [],
+    participant_emails: Array.isArray(data.participant_emails)
+      ? data.participant_emails.filter((email: unknown): email is string => typeof email === "string")
+      : [],
+    reserved_start_ts: data.reserved_start_ts ?? null,
+    reserved_end_ts: data.reserved_end_ts ?? null,
+    seriesSchedule,
     session: sessionRow
       ? {
           start_ts: sessionRow.start_ts,
+          end_ts: sessionRow.end_ts ?? null,
           activity: sessionRow.activity,
         }
       : null,
@@ -138,7 +165,7 @@ function buildRegistrationVariables(
   return {
     user_name: userName,
     activity_name: activity.name,
-    session_date: formatSessionDate(session.start_ts),
+    session_date: registration.seriesSchedule ?? formatSessionDate(session.start_ts),
     session_time: formatSessionTime(session.start_ts),
     participant_count: String(getParticipantCount(registration)),
     account_url: `${siteUrl}/account`,
@@ -207,25 +234,93 @@ async function sendRegistrationEmail({
     registration,
     getUserDisplayName(authData.user),
   );
+  const accountEmail = authData.user.email.trim().toLowerCase();
 
-  if (!variables) {
-    return { ok: true as const, skipped: true as const };
+  if (variables) {
+    const template = await loadEmailTemplate(templateKey);
+    const rendered = renderTemplate(template, variables);
+    const result = await sendEmail({
+      to: accountEmail,
+      subject: rendered.subject,
+      html: rendered.html,
+    });
+
+    if (!result.ok) {
+      return { ok: false as const, skipped: false as const, error: result.error };
+    }
+  } else {
+    const notice = buildParticipantNotice(registration, getUserDisplayName(authData.user));
+    if (notice) {
+      const result = await sendEmail({
+        to: accountEmail,
+        subject: notice.subject,
+        html: notice.html,
+      });
+      if (!result.ok) {
+        return { ok: false as const, skipped: false as const, error: result.error };
+      }
+    }
   }
 
-  const template = await loadEmailTemplate(templateKey);
-  const rendered = renderTemplate(template, variables);
-  const result = await sendEmail({
-    to: authData.user.email,
-    subject: rendered.subject,
-    html: rendered.html,
-  });
-
-  if (!result.ok) {
-    return { ok: false as const, skipped: false as const, error: result.error };
-  }
-
+  await sendAdditionalParticipantEmails(registration, accountEmail);
   await logEmailSent(registrationId, emailType);
   return { ok: true as const, skipped: false as const };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function buildParticipantNotice(
+  registration: RegistrationDetails,
+  recipientName: string,
+) {
+  const session = registration.session;
+  const activity = activityFromRow(session?.activity ?? null);
+  if (!session || !activity) return null;
+
+  const start = registration.reserved_start_ts ?? session.start_ts;
+  const whenLabel =
+    registration.seriesSchedule ??
+    `${formatSessionDate(start)} à ${formatSessionTime(start)}`;
+  const safeName = escapeHtml(recipientName.trim() || "Bonjour");
+  const safeActivity = escapeHtml(activity.name);
+
+  return {
+    subject: `Votre place — ${activity.name}`,
+    html: `<p>Bonjour ${safeName},</p>
+<p>Une place est réservée pour vous à <strong>${safeActivity}</strong>, le ${escapeHtml(whenLabel)}.</p>
+<p>À bientôt à l'atelier Manufacto.</p>`,
+  };
+}
+
+async function sendAdditionalParticipantEmails(
+  registration: RegistrationDetails,
+  accountEmail: string,
+) {
+  const seen = new Set<string>([accountEmail]);
+
+  for (const [index, rawEmail] of registration.participant_emails.entries()) {
+    const email = rawEmail.trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    const notice = buildParticipantNotice(
+      registration,
+      registration.participant_names[index] ?? "",
+    );
+    if (!notice) continue;
+    const result = await sendEmail({
+      to: email,
+      subject: notice.subject,
+      html: notice.html,
+    });
+    if (!result.ok) {
+      console.error("Error emailing participant:", email, result.error);
+    }
+  }
 }
 
 export async function notifyRegistrationConfirmed(registrationId: string) {

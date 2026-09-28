@@ -1,4 +1,4 @@
-/** Compact policies shown at credit purchase / session booking. */
+/** Compact policies shown at the end of credit purchase / session booking. */
 export function BookingPoliciesNotice({
   context = "booking",
   className = "",
@@ -8,13 +8,15 @@ export function BookingPoliciesNotice({
 }) {
   return (
     <details
-      className={`rounded-[12px] border border-black/10 bg-[#fff8f0]/80 px-3 py-2 text-left text-xs leading-relaxed text-black/65 ${className}`}
+      className={`w-full rounded-[12px] border border-black/10 bg-[#f7f7f8] px-4 py-3 text-left text-[13px] leading-relaxed text-black/70 ${className}`}
     >
-      <summary className="cursor-pointer list-none font-semibold text-black/75 [&::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer list-none font-medium text-black/80 [&::-webkit-details-marker]:hidden">
         Conditions importantes
-        <span className="ml-1 font-normal text-black/45">(annulation, atelier…)</span>
+        <span className="ml-1.5 font-normal text-black/45">
+          annulation, atelier…
+        </span>
       </summary>
-      <ul className="mt-2 list-disc space-y-1.5 pl-4">
+      <ul className="mt-3 list-disc space-y-2 pl-5">
         <li>
           Annulation en ligne uniquement <strong>plus de 48&nbsp;h</strong> avant
           le créneau ; sinon contactez l&apos;atelier.

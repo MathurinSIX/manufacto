@@ -35,7 +35,7 @@ type DiscoveryPackModalTriggerProps = {
 export function DiscoveryPackModalTrigger({
   packs,
   isLoggedIn,
-  label = "Pack découvertes",
+  label = "Pack découverte",
   className = "",
 }: DiscoveryPackModalTriggerProps) {
   const [open, setOpen] = useState(false);

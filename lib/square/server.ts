@@ -2,6 +2,11 @@ import crypto from "node:crypto";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { getPasswordSetupRedirectUrl } from "@/lib/auth-redirect";
 import { squareLedgerPaymentType } from "@/lib/format-payment-type";
+import {
+  INCLUDED_SERIES_PAYMENT,
+  bookableSeriesParts,
+  listSeriesSessions,
+} from "@/lib/course-session-series";
 import { resolveSquareSubscriptionFromItemVariation } from "@/lib/square/catalog-api";
 import { getSquareApiBaseUrl, getSquareEnvironment } from "@/lib/square/environment";
 import { getSquareProduct } from "@/lib/square/load-products";
@@ -1540,6 +1545,8 @@ type SquarePurchaseRow = {
   reserved_start_ts?: string | null;
   reserved_end_ts?: string | null;
   participant_count?: number | null;
+  participant_names?: string[] | null;
+  participant_emails?: string[] | null;
   square_order_id?: string | null;
   square_payment_id?: string | null;
   square_customer_id?: string | null;
@@ -1607,19 +1614,23 @@ async function registerUserForCourseSession({
   squarePaymentId,
   reservation,
   participantCount: participantCountInput = 1,
+  participantNames = [],
+  participantEmails = [],
 }: {
   userId: string;
   sessionId: string;
   squarePaymentId?: string | null;
   reservation?: { start: string; end: string } | null;
   participantCount?: number;
+  participantNames?: string[];
+  participantEmails?: string[];
 }) {
   const participantCount = clampParticipantCount(participantCountInput);
   const supabase = getAdminClient();
 
   const { data: session, error: sessionError } = await supabase
     .from("session")
-    .select("id, start_ts, end_ts, max_registrations, activity_id")
+    .select("id, start_ts, end_ts, max_registrations, session_group_id, activity_id")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -1682,10 +1693,85 @@ async function registerUserForCourseSession({
       activeRegistrationIds.has(registration.id),
     ) ?? [];
 
+  const enrollRemainingSeriesParts = async () => {
+    if (isPracticeReservation || !session.session_group_id) {
+      return;
+    }
+
+    const grouped = await listSeriesSessions(supabase, session.session_group_id);
+    if (grouped.error) {
+      throw new Error(grouped.error);
+    }
+    const bookable = bookableSeriesParts(grouped.sessions, session.id);
+    const includedSessions = bookable.parts.filter((part) => part.id !== session.id);
+    if (includedSessions.length === 0) {
+      return;
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("registration")
+      .select("id, session_id")
+      .eq("user_id", userId)
+      .in(
+        "session_id",
+        includedSessions.map((part) => part.id),
+      );
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    const existingIds = existing?.map((row) => row.id) ?? [];
+    const { data: existingStatuses, error: statusError } = existingIds.length
+      ? await supabase
+          .from("registration_status")
+          .select("registration_id, status, created_at")
+          .in("registration_id", existingIds)
+          .order("created_at", { ascending: false })
+      : { data: [], error: null };
+
+    if (statusError) {
+      throw new Error(statusError.message);
+    }
+
+    const activeIds = getLatestActiveRegistrationIds(
+      existingIds,
+      existingStatuses ?? [],
+    );
+    const takenSessionIds = new Set(
+      existing
+        ?.filter((row) => activeIds.has(row.id))
+        .map((row) => row.session_id) ?? [],
+    );
+    const missing = includedSessions.filter((part) => !takenSessionIds.has(part.id));
+    if (missing.length === 0) {
+      return;
+    }
+
+    const { error: includedError } = await supabase.from("registration").insert(
+      missing.map((part) => ({
+        session_id: part.id,
+        user_id: userId,
+        payment_type: INCLUDED_SERIES_PAYMENT,
+        participant_count: participantCount,
+        companion_first_names: participantNames.slice(1),
+        participant_names: participantNames,
+        participant_emails: participantEmails,
+        reserved_start_ts: null,
+        reserved_end_ts: null,
+      })),
+    );
+
+    if (includedError) {
+      throw new Error(includedError.message);
+    }
+  };
+
   if (
     !isPracticeReservation &&
     activeRegistrations.some((registration) => registration.user_id === userId)
   ) {
+    await enrollRemainingSeriesParts();
     return { alreadyRegistered: true };
   }
 
@@ -1745,6 +1831,9 @@ async function registerUserForCourseSession({
       user_id: userId,
       payment_type: paymentType,
       participant_count: participantCount,
+      companion_first_names: participantNames.slice(1),
+      participant_names: participantNames,
+      participant_emails: participantEmails,
       reserved_start_ts: reservationStart?.toISOString() ?? null,
       reserved_end_ts: reservationEnd?.toISOString() ?? null,
     })
@@ -1753,6 +1842,10 @@ async function registerUserForCourseSession({
 
   if (insertError || !insertedRegistration) {
     throw new Error(insertError?.message ?? "Registration insert failed");
+  }
+
+  if (!isPracticeReservation && session.session_group_id) {
+    await enrollRemainingSeriesParts();
   }
 
   void notifyRegistrationConfirmed(insertedRegistration.id).catch((err) => {
@@ -1836,6 +1929,8 @@ async function fulfillCourseSquarePurchase({
       sessionId: claimedPurchase.session_id,
       squarePaymentId: paymentId ?? claimedPurchase.square_payment_id,
       participantCount: claimedPurchase.participant_count ?? 1,
+      participantNames: claimedPurchase.participant_names ?? [],
+      participantEmails: claimedPurchase.participant_emails ?? [],
       reservation:
         claimedPurchase.reserved_start_ts && claimedPurchase.reserved_end_ts
           ? {
@@ -2021,8 +2116,14 @@ export async function fulfillSquarePurchase({
   }
 
   const product = await getSquareProduct(purchase.product_id, supabase);
+  const storedCredits = Number(purchase.credits);
+  const isCustomCreditPack =
+    purchase.product_id === "credits-custom" &&
+    purchase.product_kind === "credit_pack" &&
+    Number.isFinite(storedCredits) &&
+    storedCredits > 0;
 
-  if (!product) {
+  if (!product && !isCustomCreditPack) {
     await supabase
       .from("square_purchase")
       .update({ status: "failed" })
@@ -2115,12 +2216,15 @@ export async function fulfillSquarePurchase({
   const creditAmount =
     typeof claimedPurchase.credits === "number"
       ? claimedPurchase.credits
-      : Number(claimedPurchase.credits) || product.credits;
+      : Number(claimedPurchase.credits) || product?.credits;
 
   const { error: creditError } = await supabase.from("credit").insert({
     user_id: claimedPurchase.user_id,
     amount: creditAmount,
-    payment_type: squareLedgerPaymentType(product.kind, resolvedPaymentId),
+    payment_type: squareLedgerPaymentType(
+      product?.kind ?? "credit_pack",
+      resolvedPaymentId,
+    ),
   });
 
   if (creditError && creditError.code !== "23505") {

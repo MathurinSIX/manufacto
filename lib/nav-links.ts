@@ -13,8 +13,7 @@ export const NAV_LINKS: NavLink[] = [
     label: "l'atelier",
     subLinks: [
       { href: "/atelier#concept", label: "concept" },
-      { href: "/atelier#fonctionnement", label: "fonctionnement" },
-      { href: "/atelier#horaires-et-tarifs", label: "horaires" },
+      { href: "/atelier#horaires", label: "horaires" },
       { href: "/atelier#tarifs", label: "tarifs" },
     ],
   },

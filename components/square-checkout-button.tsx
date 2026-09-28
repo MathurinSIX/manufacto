@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { AuthModal } from "@/components/auth-modal";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 type SquareCheckoutButtonProps = {
@@ -141,14 +142,14 @@ export function SquareCheckoutButton({
   }
 
   return (
-    <div>
+    <div className="w-full">
       <Button
         type="button"
         onClick={() => void startCheckout()}
         disabled={loading || disabled}
         variant={buttonVariant}
         size={size}
-        className={className}
+        className={cn("w-full", className)}
       >
         {loading ? "Chargement..." : children}
       </Button>

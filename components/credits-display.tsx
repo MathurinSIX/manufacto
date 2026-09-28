@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { CreditsDisplayClient } from "./credits-display-client";
 import { unstable_noStore } from "next/cache";
+import { resolveAccountUserId } from "@/lib/account-share";
 
 export async function CreditsDisplay() {
   unstable_noStore();
@@ -12,11 +13,12 @@ export async function CreditsDisplay() {
   let credits = 0;
 
   if (user?.id) {
+    const accountUserId = await resolveAccountUserId(supabase, user.id);
     // Fetch all credits for the user and sum the amount
     const { data: creditsData, error } = await supabase
       .from("credit")
       .select("amount")
-      .eq("user_id", user.id);
+      .eq("user_id", accountUserId);
 
     if (error) {
       console.error("Error fetching credits:", error);

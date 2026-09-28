@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
 import { getGiftCourseCategory } from "@/lib/gift-cards/course-categories";
 import { giftCardExpiresAt } from "@/lib/gift-cards/fulfill";
-import { getSquareProduct } from "@/lib/square/load-products";
+import { getSquareProduct, loadSquareProducts } from "@/lib/square/load-products";
+import { quoteCustomCredits } from "@/lib/credit-rates";
 import {
   clampCreditUnitQuantity,
   isUnitCreditPack,
@@ -11,7 +12,6 @@ import {
 } from "@/lib/square/products";
 import {
   createSquareAdHocPaymentLink,
-  createSquareCatalogPaymentLink,
   getAdminClient,
   getSiteUrl,
 } from "@/lib/square/server";
@@ -66,19 +66,33 @@ export async function POST(request: Request) {
     const adminClient = getAdminClient();
 
     if (kind === "credits_custom") {
-      const euros = Number(body.customAmountEuros);
-      if (!Number.isFinite(euros) || euros < 100 || euros % 5 !== 0) {
+      const amountCents = Math.round(Number(body.customAmountEuros) * 100);
+      const products = await loadSquareProducts();
+      const quote = quoteCustomCredits(
+        amountCents,
+        products
+          .filter(
+            (product) =>
+              product.kind === "credit_pack" && product.credits !== 2,
+          )
+          .map((product) => ({
+            id: product.id,
+            credits: product.credits,
+            amountCents: product.amountCents,
+          })),
+      );
+      if (!quote) {
         return NextResponse.json(
           {
             error:
-              "Choisissez un montant libre d'au moins 100€, par pallier de 5€.",
+              "Choisissez un montant au moins égal au plus petit pack de crédits.",
           },
           { status: 400 },
         );
       }
 
-      const totalCredits = Math.round(euros / 5);
-      const totalAmountCents = Math.round(euros * 100);
+      const totalCredits = quote.credits;
+      const totalAmountCents = quote.amountCents;
       const code = generateGiftCardCode();
       const expiresAt = giftCardExpiresAt();
 
@@ -150,23 +164,14 @@ export async function POST(request: Request) {
       const code = generateGiftCardCode();
       const expiresAt = giftCardExpiresAt();
 
-      const paymentLink = product.catalogObjectId
-        ? await createSquareCatalogPaymentLink({
-            catalogObjectId: product.catalogObjectId,
-            buyer: { userEmail: purchaserEmail },
-            siteUrl,
-            redirectPath,
-            quantity,
-            paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
-          })
-        : await createSquareAdHocPaymentLink({
-            name: `Carte cadeau crédits — ${totalCredits} crédits`,
-            amountCents: totalAmountCents,
-            buyer: { userEmail: purchaserEmail },
-            siteUrl,
-            redirectPath,
-            paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
-          });
+      const paymentLink = await createSquareAdHocPaymentLink({
+        name: `Carte cadeau crédits — ${totalCredits} crédits`,
+        amountCents: totalAmountCents,
+        buyer: { userEmail: purchaserEmail },
+        siteUrl,
+        redirectPath,
+        paymentNote: `Manufacto carte cadeau ${product.id} (${code})`,
+      });
 
       const { error: insertError } = await adminClient.from("gift_card").insert({
         code,

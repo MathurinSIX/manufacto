@@ -9,17 +9,27 @@ import { parseSquarePaymentId } from "@/lib/format-payment-type";
 import { getAdminClient, refundSquarePayment, retrieveSquarePayment } from "@/lib/square/server";
 import { getPracticeHourlyCounts } from "@/lib/practice-capacity";
 import {
+  bookingParticipantsAreValid,
   clampParticipantCount,
+  isOptionalBookingEmail,
+  normalizeBookingParticipants,
   sumParticipantCount,
+  type BookingParticipant,
 } from "@/lib/participant-count";
 import { revalidatePath } from "next/cache";
 import { notifyRegistrationConfirmed } from "@/lib/email/registration-emails";
 import { isSameParisDay } from "@/lib/paris-time";
 import { notifyAdminSameDayRegistration } from "@/lib/email/admin-same-day-notify";
-import {
-  getUserLegalCompliance,
+import { getUserLegalCompliance,
   legalDocsRequiredError,
 } from "@/lib/legal/status";
+import { resolveAccountUserId } from "@/lib/account-share";
+import {
+  INCLUDED_SERIES_PAYMENT,
+  bookableSeriesParts,
+  listSeriesSessions,
+  type SeriesSession,
+} from "@/lib/course-session-series";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -67,6 +77,39 @@ const PRACTICE_ACTIVITY_TYPES = new Set([
   "accompagnement",
   "cuisson",
 ]);
+
+function bookingFromInputs(
+  participantCountInput: number,
+  companionFirstNamesInput: string[],
+  participantEmailsInput: string[],
+  participantNamesInput: string[],
+): { error: string | null; participants: BookingParticipant[] } {
+  const participantCount = clampParticipantCount(participantCountInput);
+  const names =
+    participantNamesInput.length > 0
+      ? participantNamesInput
+      : ["", ...companionFirstNamesInput];
+  const participants = normalizeBookingParticipants(
+    Array.from({ length: participantCount }, (_, index) => ({
+      name: names[index] ?? "",
+      email: participantEmailsInput[index] ?? "",
+    })),
+  );
+
+  if (!bookingParticipantsAreValid(participants)) {
+    const invalidEmail = participants.some(
+      (participant) => !isOptionalBookingEmail(participant.email),
+    );
+    return {
+      error: invalidEmail
+        ? "Un e-mail de participant n'est pas valide."
+        : "Indiquez le nom de chaque personne.",
+      participants: [],
+    };
+  }
+
+  return { error: null, participants };
+}
 
 function toNumber(value: number | string | null | undefined) {
   if (typeof value === "number") return value;
@@ -128,22 +171,24 @@ export async function registerForSession(
   participantCountInput = 1,
   companionFirstNamesInput: string[] = [],
   giftCardCode?: string,
+  participantEmailsInput: string[] = [],
+  participantNamesInput: string[] = [],
 ) {
-  const participantCount = clampParticipantCount(participantCountInput);
-  const companionFirstNames =
-    participantCount > 1
-      ? companionFirstNamesInput
-          .map((name) => name.trim())
-          .filter(Boolean)
-          .slice(0, participantCount - 1)
-      : [];
-
-  if (participantCount > 1 && companionFirstNames.length < participantCount - 1) {
-    return {
-      error: "Indiquez le prénom de chaque personne supplémentaire.",
-      registrationId: null,
-    };
+  const parsedBooking = bookingFromInputs(
+    participantCountInput,
+    companionFirstNamesInput,
+    participantEmailsInput,
+    participantNamesInput,
+  );
+  if (parsedBooking.error) {
+    return { error: parsedBooking.error, registrationId: null };
   }
+  const participantCount = parsedBooking.participants.length;
+  const companionFirstNames = parsedBooking.participants
+    .slice(1)
+    .map((participant) => participant.name);
+  const participantNames = parsedBooking.participants.map((participant) => participant.name);
+  const participantEmails = parsedBooking.participants.map((participant) => participant.email);
 
   const supabase = await createClient();
   const {
@@ -154,7 +199,9 @@ export async function registerForSession(
     return { error: "Non authentifié", registrationId: null };
   }
 
-  const compliance = await getUserLegalCompliance(supabase, user.id);
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+
+  const compliance = await getUserLegalCompliance(supabase, accountUserId);
   if (!compliance.complete) {
     const required = legalDocsRequiredError();
     return { error: required.error, registrationId: null };
@@ -167,7 +214,7 @@ export async function registerForSession(
   const { data: session, error: sessionError } = await supabase
     .from("session")
     .select(
-      "id, start_ts, end_ts, max_registrations, activity:activity_id(id, name, nb_credits, price, type)",
+      "id, start_ts, end_ts, max_registrations, session_group_id, activity:activity_id(id, name, nb_credits, price, type)",
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -240,10 +287,41 @@ export async function registerForSession(
     return { error: "Cette activité se réserve sur une session fixe.", registrationId: null };
   }
 
+  let seriesSessions: SeriesSession[] = [
+    {
+      id: session.id,
+      start_ts: session.start_ts,
+      end_ts: session.end_ts,
+      max_registrations: session.max_registrations,
+      session_group_id: session.session_group_id ?? null,
+    },
+  ];
+
+  if (
+    !isPracticeActivity &&
+    activity?.type === "cours" &&
+    session.session_group_id
+  ) {
+    const grouped = await listSeriesSessions(supabase, session.session_group_id);
+    if (grouped.error || grouped.sessions.length === 0) {
+      return {
+        error: "Impossible de charger les dates de cette session",
+        registrationId: null,
+      };
+    }
+    const bookable = bookableSeriesParts(grouped.sessions, session.id);
+    if (bookable.error) {
+      return { error: bookable.error, registrationId: null };
+    }
+    seriesSessions = bookable.parts;
+  }
+
+  const seriesIds = seriesSessions.map((part) => part.id);
+
   const { data: registrations, error: registrationsError } = await supabase
     .from("registration")
-    .select("id, user_id, reserved_start_ts, reserved_end_ts, participant_count")
-    .eq("session_id", sessionId);
+    .select("id, user_id, session_id, reserved_start_ts, reserved_end_ts, participant_count")
+    .in("session_id", seriesIds);
 
   if (registrationsError) {
     console.error("Error fetching registrations:", registrationsError);
@@ -273,14 +351,14 @@ export async function registerForSession(
 
   if (
     !isPracticeActivity &&
-    activeRegistrations.some((registration) => registration.user_id === user.id)
+    activeRegistrations.some((registration) => registration.user_id === accountUserId)
   ) {
     return { error: "Vous êtes déjà inscrit à cette session.", registrationId: null };
   }
 
   if (isPracticeActivity) {
     const overlappingOwnRegistration = activeRegistrations.some((registration) => {
-      if (registration.user_id !== user.id) return false;
+      if (registration.user_id !== accountUserId) return false;
       if (!registration.reserved_start_ts || !registration.reserved_end_ts) {
         return false;
       }
@@ -313,12 +391,17 @@ export async function registerForSession(
       }
     }
   } else {
-    if (
-      session.max_registrations !== null &&
-      sumParticipantCount(activeRegistrations) + participantCount >
-        session.max_registrations
-    ) {
-      return { error: "Cette session est complète.", registrationId: null };
+    for (const part of seriesSessions) {
+      const partRegistrations = activeRegistrations.filter(
+        (registration) => registration.session_id === part.id,
+      );
+      if (
+        part.max_registrations !== null &&
+        sumParticipantCount(partRegistrations) + participantCount >
+          part.max_registrations
+      ) {
+        return { error: "Cette session est complète.", registrationId: null };
+      }
     }
   }
 
@@ -364,7 +447,7 @@ export async function registerForSession(
       const { data: credits, error: creditsError } = await supabase
         .from("credit")
         .select("amount")
-        .eq("user_id", user.id);
+        .eq("user_id", accountUserId);
 
       if (creditsError) {
         console.error("Error fetching credits:", creditsError);
@@ -394,10 +477,12 @@ export async function registerForSession(
     .from("registration")
     .insert({
       session_id: sessionId,
-      user_id: user.id,
+      user_id: accountUserId,
       payment_type: resolvedPaymentType,
       participant_count: participantCount,
       companion_first_names: companionFirstNames,
+      participant_names: participantNames,
+      participant_emails: participantEmails,
       reserved_start_ts: isPracticeActivity ? reservationStart!.toISOString() : null,
       reserved_end_ts: isPracticeActivity ? reservationEnd!.toISOString() : null,
     })
@@ -413,7 +498,7 @@ export async function registerForSession(
     const { redeemGiftCardForRegistration } = await import("@/lib/gift-cards/redeem");
     const redeemResult = await redeemGiftCardForRegistration({
       giftCard: validatedGiftCard.giftCard,
-      userId: user.id,
+      userId: accountUserId,
       registrationId: data.id,
       creditsUsed:
         validatedGiftCard.giftCard.kind === "credits" ? requiredCredits : 0,
@@ -429,11 +514,40 @@ export async function registerForSession(
     }
   }
 
+  const includedSessions = seriesSessions.filter((part) => part.id !== session.id);
+  if (includedSessions.length > 0) {
+    const { error: includedError } = await supabase.from("registration").insert(
+      includedSessions.map((part) => ({
+        session_id: part.id,
+        user_id: accountUserId,
+        payment_type: INCLUDED_SERIES_PAYMENT,
+        participant_count: participantCount,
+        companion_first_names: companionFirstNames,
+        participant_names: participantNames,
+        participant_emails: participantEmails,
+        reserved_start_ts: null,
+        reserved_end_ts: null,
+      })),
+    );
+
+    if (includedError) {
+      console.error("Error creating series registrations:", includedError);
+      await supabase.from("registration_status").insert({
+        registration_id: data.id,
+        status: "CANCELLED",
+      });
+      return {
+        error: "Votre inscription n'a pas pu être enregistrée.",
+        registrationId: null,
+      };
+    }
+  }
+
   revalidatePath("/account");
   revalidatePath("/cours");
   revalidatePath("/reserver");
   revalidatePath("/admin");
-  revalidatePath(`/admin/users/${user.id}`);
+  revalidatePath(`/admin/users/${accountUserId}`);
 
   void notifyRegistrationConfirmed(data.id).catch((err) => {
     console.error("Failed to send registration confirmation email:", err);
@@ -487,22 +601,24 @@ export async function registerForPracticeReservation(
   participantCountInput = 1,
   companionFirstNamesInput: string[] = [],
   giftCardCode?: string,
+  participantEmailsInput: string[] = [],
+  participantNamesInput: string[] = [],
 ) {
-  const participantCount = clampParticipantCount(participantCountInput);
-  const companionFirstNames =
-    participantCount > 1
-      ? companionFirstNamesInput
-          .map((name) => name.trim())
-          .filter(Boolean)
-          .slice(0, participantCount - 1)
-      : [];
-
-  if (participantCount > 1 && companionFirstNames.length < participantCount - 1) {
-    return {
-      error: "Indiquez le prénom de chaque personne supplémentaire.",
-      registrationIds: [] as string[],
-    };
+  const parsedBooking = bookingFromInputs(
+    participantCountInput,
+    companionFirstNamesInput,
+    participantEmailsInput,
+    participantNamesInput,
+  );
+  if (parsedBooking.error) {
+    return { error: parsedBooking.error, registrationIds: [] as string[] };
   }
+  const participantCount = parsedBooking.participants.length;
+  const companionFirstNames = parsedBooking.participants
+    .slice(1)
+    .map((participant) => participant.name);
+  const participantNames = parsedBooking.participants.map((participant) => participant.name);
+  const participantEmails = parsedBooking.participants.map((participant) => participant.email);
 
   const supabase = await createClient();
   const {
@@ -513,7 +629,9 @@ export async function registerForPracticeReservation(
     return { error: "Non authentifié", registrationIds: [] as string[] };
   }
 
-  const compliance = await getUserLegalCompliance(supabase, user.id);
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+
+  const compliance = await getUserLegalCompliance(supabase, accountUserId);
   if (!compliance.complete) {
     const required = legalDocsRequiredError();
     return { error: required.error, registrationIds: [] as string[] };
@@ -678,7 +796,7 @@ export async function registerForPracticeReservation(
     );
 
   const ownOverlaps = activeRegistrations.some((registration) => {
-    if (registration.user_id !== user.id) return false;
+    if (registration.user_id !== accountUserId) return false;
     if (!registration.reserved_start_ts || !registration.reserved_end_ts) {
       return false;
     }
@@ -758,7 +876,7 @@ export async function registerForPracticeReservation(
       const { data: credits, error: creditsError } = await supabase
         .from("credit")
         .select("amount")
-        .eq("user_id", user.id);
+        .eq("user_id", accountUserId);
 
       if (creditsError) {
         console.error("Error fetching credits:", creditsError);
@@ -792,10 +910,12 @@ export async function registerForPracticeReservation(
     .insert(
       sortedBlocks.map((block) => ({
         session_id: block.sessionId,
-        user_id: user.id,
+        user_id: accountUserId,
         payment_type: resolvedPaymentType,
         participant_count: participantCount,
         companion_first_names: companionFirstNames,
+        participant_names: participantNames,
+        participant_emails: participantEmails,
         reserved_start_ts: block.start.toISOString(),
         reserved_end_ts: block.end.toISOString(),
       })),
@@ -814,7 +934,7 @@ export async function registerForPracticeReservation(
     const { redeemGiftCardForRegistration } = await import("@/lib/gift-cards/redeem");
     const redeemResult = await redeemGiftCardForRegistration({
       giftCard: validatedGiftCard.giftCard,
-      userId: user.id,
+      userId: accountUserId,
       registrationId: inserted[0].id,
       creditsUsed: requiredCredits,
       amountCentsUsed: 0,
@@ -836,7 +956,13 @@ export async function registerForPracticeReservation(
   revalidatePath("/cours");
   revalidatePath("/reserver");
   revalidatePath("/admin");
-  revalidatePath(`/admin/users/${user.id}`);
+  revalidatePath(`/admin/users/${accountUserId}`);
+
+  if (inserted[0]) {
+    void notifyRegistrationConfirmed(inserted[0].id).catch((err) => {
+      console.error("Failed to send registration confirmation email:", err);
+    });
+  }
 
   if (isSameParisDay(totalStart) && inserted[0]) {
     void notifyAdminSameDayRegistration({
@@ -868,13 +994,15 @@ export async function cancelRegistration(registrationId: string) {
     return { error: "Non authentifié" };
   }
 
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+
   const { data: registration, error: regError } = await supabase
     .from("registration")
     .select(
-      "id, user_id, payment_type, reserved_start_ts, session:session_id(id, start_ts)",
+      "id, user_id, payment_type, reserved_start_ts, session:session_id(id, start_ts, session_group_id)",
     )
     .eq("id", registrationId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .single();
 
   if (regError) {
@@ -898,9 +1026,57 @@ export async function cancelRegistration(registrationId: string) {
   const session = Array.isArray(registration.session)
     ? registration.session[0]
     : registration.session;
+
+  let seriesStart = session?.start_ts ?? null;
+  let registrationsToCancel: Array<{ id: string; payment_type: string | null }> = [
+    { id: registration.id, payment_type: registration.payment_type },
+  ];
+
+  if (session?.session_group_id) {
+    const grouped = await listSeriesSessions(supabase, session.session_group_id);
+    if (!grouped.error && grouped.sessions.length > 0) {
+      seriesStart = grouped.sessions.reduce<string | null>(
+        (earliest, part) =>
+          !earliest ||
+          new Date(part.start_ts).getTime() < new Date(earliest).getTime()
+            ? part.start_ts
+            : earliest,
+        seriesStart,
+      );
+
+      const { data: seriesRegistrations } = await supabase
+        .from("registration")
+        .select("id, payment_type")
+        .eq("user_id", accountUserId)
+        .in(
+          "session_id",
+          grouped.sessions.map((part) => part.id),
+        );
+
+      const seriesIds = seriesRegistrations?.map((row) => row.id) ?? [];
+      const { data: seriesStatuses } = seriesIds.length
+        ? await supabase
+            .from("registration_status")
+            .select("registration_id, status, created_at")
+            .in("registration_id", seriesIds)
+            .order("created_at", { ascending: false })
+        : { data: [] };
+
+      const activeIds = getLatestActiveRegistrationIds(
+        seriesIds,
+        seriesStatuses ?? [],
+      );
+      const activeSeries =
+        seriesRegistrations?.filter((row) => activeIds.has(row.id)) ?? [];
+      if (activeSeries.length > 0) {
+        registrationsToCancel = activeSeries;
+      }
+    }
+  }
+
   const registrationStart = getRegistrationStartTime(
     registration.reserved_start_ts,
-    session?.start_ts ?? null,
+    seriesStart,
   );
 
   if (
@@ -919,7 +1095,9 @@ export async function cancelRegistration(registrationId: string) {
     !Number.isNaN(refundableStartTs) &&
     refundableStartTs > Date.now();
 
-  const squarePaymentId = parseSquarePaymentId(registration.payment_type);
+  const squarePaymentId = registrationsToCancel
+    .map((row) => parseSquarePaymentId(row.payment_type))
+    .find((paymentId): paymentId is string => Boolean(paymentId));
 
   if (squarePaymentId && isFutureSession) {
     try {
@@ -937,13 +1115,14 @@ export async function cancelRegistration(registrationId: string) {
     }
   }
 
-  // Insert a new registration_status with CANCELLED status
   const { error: statusError } = await supabase
     .from("registration_status")
-    .insert({
-      registration_id: registrationId,
-      status: "CANCELLED",
-    });
+    .insert(
+      registrationsToCancel.map((row) => ({
+        registration_id: row.id,
+        status: "CANCELLED",
+      })),
+    );
 
   if (statusError) {
     console.error("Error cancelling registration:", statusError);
@@ -964,6 +1143,8 @@ export async function cancelSubscriptionPurchase(purchaseId: string) {
     return { error: "Non authentifié" };
   }
 
+  const accountUserId = await resolveAccountUserId(supabase, user.id);
+
   if (!UUID_RE.test(purchaseId)) {
     return { error: "Formule invalide" };
   }
@@ -974,7 +1155,7 @@ export async function cancelSubscriptionPurchase(purchaseId: string) {
       "id, status, product_kind, square_subscription_id, square_customer_id, square_payment_id, fulfilled_at",
     )
     .eq("id", purchaseId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .eq("product_kind", "subscription")
     .maybeSingle();
 
@@ -1020,7 +1201,7 @@ export async function cancelSubscriptionPurchase(purchaseId: string) {
       .from("square_purchase")
       .update({ status: "cancelled" })
       .eq("id", purchaseId)
-      .eq("user_id", user.id)
+      .eq("user_id", accountUserId)
       .eq("product_kind", "subscription")
       .eq("status", "completed");
 
@@ -1054,7 +1235,7 @@ export async function cancelSubscriptionPurchase(purchaseId: string) {
       square_customer_id: purchase.square_customer_id,
     })
     .eq("id", purchaseId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountUserId)
     .eq("product_kind", "subscription")
     .eq("status", "completed");
 

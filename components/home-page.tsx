@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { CourseCalendarPanel } from "@/components/course-calendar-panel";
+import { HOME_CRAFT_PHOTOS, HOME_HERO_PHOTOS } from "@/lib/site-photo-sets";
 import {
   BrandLockup,
   CourseCarousel,
@@ -113,7 +114,7 @@ export function HomePage({
                 aria-hidden
               />
               <ImageTile
-                src={P.pl28}
+                src={HOME_HERO_PHOTOS[0]}
                 alt="Pratique libre"
                 className="h-[260px] md:h-[340px]"
                 priority
@@ -132,7 +133,7 @@ export function HomePage({
                 aria-hidden
               />
               <ImageTile
-                src={P.boisMain}
+                src={HOME_HERO_PHOTOS[1]}
                 alt="Cours ponctuels"
                 className="h-[260px] md:h-[340px]"
                 priority
@@ -156,7 +157,7 @@ export function HomePage({
                 aria-hidden
               />
               <ImageTile
-                src={P.portrait15}
+                src={HOME_HERO_PHOTOS[2]}
                 alt="Offrir Manufacto"
                 className="h-[260px] md:h-[340px]"
               >
@@ -242,10 +243,26 @@ export function HomePage({
             </PrimaryCta>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <ImageTile src={P.heroMenuiserie} alt="Menuiserie" className="h-40 md:h-48" />
-            <ImageTile src={P.heroCoutureNew} alt="Couture" className="h-40 md:h-48" />
-            <ImageTile src={P.heroCeramique} alt="Céramique" className="h-40 md:h-48" />
-            <ImageTile src={P.heroElecNew} alt="Électronique" className="h-40 md:h-48" />
+            <ImageTile
+              src={HOME_CRAFT_PHOTOS.menuiserie}
+              alt="Menuiserie"
+              className="h-40 md:h-48"
+            />
+            <ImageTile
+              src={HOME_CRAFT_PHOTOS.couture}
+              alt="Couture"
+              className="h-40 md:h-48"
+            />
+            <ImageTile
+              src={HOME_CRAFT_PHOTOS.ceramique}
+              alt="Céramique"
+              className="h-40 md:h-48"
+            />
+            <ImageTile
+              src={HOME_CRAFT_PHOTOS.electronique}
+              alt="Électronique"
+              className="h-40 md:h-48"
+            />
           </div>
         </div>
       </section>

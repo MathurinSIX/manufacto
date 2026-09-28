@@ -97,7 +97,7 @@ export async function fetchCoursesForListing(): Promise<Course[]> {
   const { data: activities, error } = await supabase
     .from("activity")
     .select(
-      "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline",
+      "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline, disciplines",
     )
     .eq("type", "cours")
     .is("deleted_at", null)

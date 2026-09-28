@@ -88,30 +88,41 @@ export function CourseImageCarousel({
             <ChevronRight className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
           </button>
 
-          <div
-            className={cn(
-              "absolute left-1/2 flex -translate-x-1/2 items-center",
-              compact ? "bottom-1.5 gap-1" : "bottom-3 gap-2",
-            )}
-          >
-            {images.map((image, index) => (
-              <button
-                key={`${image}-${index}`}
-                type="button"
-                aria-label={`Afficher la photo ${index + 1}`}
-                aria-current={index === activeIndex}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setActiveIndex(index);
-                }}
-                className={cn(
-                  "rounded-full transition",
-                  compact ? "h-1.5 w-1.5" : "h-2.5 w-2.5",
-                  index === activeIndex ? "bg-white" : "bg-white/50 hover:bg-white/75",
-                )}
-              />
-            ))}
-          </div>
+          {images.length > 8 ? (
+            <p
+              className={cn(
+                "absolute left-1/2 -translate-x-1/2 rounded-full bg-black/45 font-medium text-white",
+                compact ? "bottom-1.5 px-1.5 py-0.5 text-[10px]" : "bottom-3 px-2.5 py-1 text-xs",
+              )}
+            >
+              {activeIndex + 1} / {images.length}
+            </p>
+          ) : (
+            <div
+              className={cn(
+                "absolute left-1/2 flex max-w-[90%] -translate-x-1/2 flex-wrap items-center justify-center",
+                compact ? "bottom-1.5 gap-1" : "bottom-3 gap-2",
+              )}
+            >
+              {images.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  aria-label={`Afficher la photo ${index + 1}`}
+                  aria-current={index === activeIndex ? "true" : undefined}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setActiveIndex(index);
+                  }}
+                  className={cn(
+                    "rounded-full transition",
+                    compact ? "h-1.5 w-1.5" : "h-2.5 w-2.5",
+                    index === activeIndex ? "bg-white" : "bg-white/50 hover:bg-white/75",
+                  )}
+                />
+              ))}
+            </div>
+          )}
         </>
       ) : null}
     </div>

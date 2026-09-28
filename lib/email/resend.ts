@@ -19,14 +19,23 @@ export function getResendFromEmail() {
   return process.env.RESEND_FROM_EMAIL ?? "Manufacto <contact@manufacto-marseille.fr>";
 }
 
+export function getResendReplyToEmail() {
+  return process.env.RESEND_REPLY_TO_EMAIL ?? "contact@manufacto-marseille.fr";
+}
+
 export async function sendEmail({
   to,
   subject,
   html,
+  replyTo,
+  listUnsubscribeUrl,
 }: {
   to: string;
   subject: string;
   html: string;
+  replyTo?: string;
+  /** Optional absolute unsubscribe URL (newsletter / marketing only). */
+  listUnsubscribeUrl?: string;
 }) {
   const resend = getResendClient();
   if (!resend) {
@@ -34,11 +43,19 @@ export async function sendEmail({
     return { ok: false as const, error: "RESEND_API_KEY is not configured" };
   }
 
+  const headers: Record<string, string> = {};
+  if (listUnsubscribeUrl) {
+    headers["List-Unsubscribe"] = `<${listUnsubscribeUrl}>`;
+    headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+  }
+
   const { error } = await resend.emails.send({
     from: getResendFromEmail(),
     to,
     subject,
     html,
+    replyTo: replyTo ?? getResendReplyToEmail(),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
   });
 
   if (error) {

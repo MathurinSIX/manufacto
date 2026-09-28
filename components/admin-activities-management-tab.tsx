@@ -161,7 +161,7 @@ export function AdminActivitiesManagementTab({
   const [activityLevel, setActivityLevel] = useState("");
   const [activityAudience, setActivityAudience] = useState("");
   const [draftSlots, setDraftSlots] = useState<DraftSessionSlot[]>([]);
-  const [groupDraftSlotsAsMultiDay, setGroupDraftSlotsAsMultiDay] = useState(false);
+  const [seriesTarget, setSeriesTarget] = useState("independent");
   const [existingSessions, setExistingSessions] = useState<ExistingSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -193,6 +193,28 @@ export function AdminActivitiesManagementTab({
     }
     return null;
   }, [activitySquareProductId, squareVariations, editingActivity]);
+
+  const existingSeries = useMemo(() => {
+    const groups = new Map<string, ExistingSession[]>();
+    const singles: ExistingSession[] = [];
+    const ordered = [...existingSessions].sort(
+      (left, right) =>
+        new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime(),
+    );
+    for (const session of ordered) {
+      if (!session.session_group_id) {
+        singles.push(session);
+        continue;
+      }
+      const current = groups.get(session.session_group_id) ?? [];
+      current.push(session);
+      groups.set(session.session_group_id, current);
+    }
+    return {
+      groups: [...groups.entries()].map(([id, sessions]) => ({ id, sessions })),
+      singles,
+    };
+  }, [existingSessions]);
 
   const loadActivities = useCallback(async () => {
     setLoading(true);
@@ -234,7 +256,7 @@ export function AdminActivitiesManagementTab({
     setDraftSlots([createEmptySlot()]);
     setExistingSessions([]);
     setDeletingSessionId(null);
-    setGroupDraftSlotsAsMultiDay(false);
+    setSeriesTarget("independent");
 
     if (activity) {
       setEditingActivity(activity);
@@ -296,7 +318,7 @@ export function AdminActivitiesManagementTab({
     setActivityLevel("");
     setActivityAudience("");
     setDraftSlots([createEmptySlot()]);
-    setGroupDraftSlotsAsMultiDay(false);
+    setSeriesTarget("independent");
     setExistingSessions([]);
     setDeletingSessionId(null);
     setError(null);
@@ -484,8 +506,11 @@ export function AdminActivitiesManagementTab({
           activityId,
           slotsToCreate,
           {
-            groupAsMultiDay:
-              groupDraftSlotsAsMultiDay && slotsToCreate.length > 1,
+            groupAsMultiDay: seriesTarget === "new" && slotsToCreate.length > 1,
+            sessionGroupId:
+              seriesTarget !== "independent" && seriesTarget !== "new"
+                ? seriesTarget
+                : null,
           },
         );
         if (sessionsResult.error && sessionsResult.created === 0) {
@@ -728,26 +753,39 @@ export function AdminActivitiesManagementTab({
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Chaque ligne est une date réservable, avec son propre
-                    horaire. Laissez la case décochée pour que les dates restent
-                    indépendantes sur le même cours.
+                    Ajoutez une date par ligne. Pour un cours qui se poursuit
+                    (fabriquer une chaise, commencer un jour et finir un autre),
+                    choisissez une seule session : le client paie une fois pour
+                    toutes les parties.
                   </p>
 
-                  {draftSlots.filter((slot) => slot.date).length > 1 ||
-                  draftSlots.length > 1 ? (
-                    <label className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
-                      <Checkbox
-                        checked={groupDraftSlotsAsMultiDay}
-                        onCheckedChange={(value) =>
-                          setGroupDraftSlotsAsMultiDay(value === true)
-                        }
-                        className="mt-0.5"
-                      />
-                      <span>
-                        Regrouper ces dates en une seule session multi-jours
-                        (Session 01, etc.)
-                      </span>
-                    </label>
+                  {draftSlots.some((slot) => slot.date) &&
+                  (draftSlots.filter((slot) => slot.date).length > 1 ||
+                    existingSeries.groups.length > 0) ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="series-target">Ces dates</Label>
+                      <Select value={seriesTarget} onValueChange={setSeriesTarget}>
+                        <SelectTrigger id="series-target">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="independent">
+                            Chacune est une session payée séparément
+                          </SelectItem>
+                          {draftSlots.filter((slot) => slot.date).length > 1 ? (
+                            <SelectItem value="new">
+                              Une seule session, payée une fois (partie 1, partie 2…)
+                            </SelectItem>
+                          ) : null}
+                          {existingSeries.groups.map((group, index) => (
+                            <SelectItem key={group.id} value={group.id}>
+                              Ajouter à la session {index + 1} ({group.sessions.length}{" "}
+                              {group.sessions.length > 1 ? "parties" : "partie"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   ) : null}
 
                   {editingActivity && (
@@ -763,8 +801,45 @@ export function AdminActivitiesManagementTab({
                           Aucune date à venir pour ce cours.
                         </p>
                       ) : (
-                        <ul className="space-y-2">
-                          {existingSessions.map((session) => (
+                        <ul className="space-y-3">
+                          {existingSeries.groups.map((group, groupIndex) => (
+                            <li key={group.id} className="space-y-2">
+                              <p className="text-sm font-medium">
+                                Session {groupIndex + 1} — {group.sessions.length} parties,
+                                un seul paiement
+                              </p>
+                              <ul className="space-y-2">
+                                {group.sessions.map((session, partIndex) => (
+                                  <li
+                                    key={session.id}
+                                    className="flex items-center justify-between gap-2 text-sm"
+                                  >
+                                    <span className="capitalize">
+                                      Partie {partIndex + 1} — {formatExistingSessionLabel(session)}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="outline"
+                                      className="h-8 w-8 shrink-0"
+                                      disabled={deletingSessionId === session.id}
+                                      onClick={() =>
+                                        void handleDeleteExistingSession(session.id)
+                                      }
+                                      aria-label="Supprimer cette date"
+                                    >
+                                      {deletingSessionId === session.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ))}
+                          {existingSeries.singles.map((session) => (
                             <li
                               key={session.id}
                               className="flex items-center justify-between gap-2 text-sm"
@@ -805,7 +880,18 @@ export function AdminActivitiesManagementTab({
                         >
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-medium">
-                              Date {index + 1}
+                              {seriesTarget === "new" ||
+                              (seriesTarget !== "independent" && seriesTarget !== "new")
+                                ? `Partie ${
+                                    seriesTarget === "new"
+                                      ? index + 1
+                                      : (existingSeries.groups.find(
+                                          (group) => group.id === seriesTarget,
+                                        )?.sessions.length ?? 0) +
+                                        index +
+                                        1
+                                  }`
+                                : `Date ${index + 1}`}
                               {editingActivity ? " (nouvelle)" : ""}
                             </p>
                             <Button

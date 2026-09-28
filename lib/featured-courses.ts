@@ -20,14 +20,59 @@ import { createClient } from "@/lib/supabase/server";
 
 const MAX_FEATURED = 8;
 
+/** Prefer one course per flagship universe first (homepage carousel). */
+const FEATURED_UNIVERSE_ORDER: CourseDiscipline[] = [
+  "menuiserie",
+  "couture",
+  "ceramique",
+  "electronique",
+];
+
+function preferFeaturedTitle(discipline: CourseDiscipline, title: string) {
+  const normalized = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (discipline === "ceramique") {
+    return normalized.includes("modelage") || normalized.includes("initiation");
+  }
+  if (discipline === "electronique") {
+    return normalized.includes("repair");
+  }
+  return false;
+}
+
+function orderFeaturedCourses(courses: Course[]): Course[] {
+  const remaining = [...courses];
+  const picked: Course[] = [];
+
+  for (const discipline of FEATURED_UNIVERSE_ORDER) {
+    const preferredIndex = remaining.findIndex(
+      (course) =>
+        toDisciplineKey(course.discipline) === discipline &&
+        preferFeaturedTitle(discipline, course.title),
+    );
+    const index =
+      preferredIndex >= 0
+        ? preferredIndex
+        : remaining.findIndex(
+            (course) => toDisciplineKey(course.discipline) === discipline,
+          );
+    if (index < 0) continue;
+    picked.push(remaining.splice(index, 1)[0]!);
+  }
+
+  return [...picked, ...remaining].slice(0, MAX_FEATURED);
+}
+
 const DISCIPLINE_WORDS: Record<
   CourseDiscipline,
   { word: string; wordW: number; wordH: number }
 > = {
   menuiserie: { word: P.wordMenuiserie, wordW: 496, wordH: 90 },
-  couture: { word: P.wordCouture, wordW: 400, wordH: 90 },
-  ceramique: { word: P.wordCeramique, wordW: 420, wordH: 90 },
-  electronique: { word: P.wordElectronique, wordW: 480, wordH: 90 },
+  couture: { word: P.wordCouture, wordW: 279, wordH: 63 },
+  ceramique: { word: P.wordCeramique, wordW: 428, wordH: 130 },
+  electronique: { word: P.wordElectronique, wordW: 466, wordH: 124 },
   autre: { word: P.wordMenuiserie, wordW: 496, wordH: 90 },
 };
 
@@ -79,7 +124,7 @@ export async function getFeaturedCoursesWithImages(): Promise<
       supabase
         .from("activity")
         .select(
-          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline",
+          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines",
         )
         .eq("type", "cours")
         .is("deleted_at", null)
@@ -116,13 +161,47 @@ export async function getFeaturedCoursesWithImages(): Promise<
       courseFutureSessions,
       courseFutureSessions,
     ),
-  )
-    .filter((course) => course.hasUpcomingSessions)
-    .slice(0, MAX_FEATURED);
+  ).filter((course) => course.hasUpcomingSessions);
 
   if (upcoming.length === 0) {
-    return [...FEATURED_COURSES];
+    return FEATURED_COURSES.slice(0, 4);
   }
 
-  return upcoming.map(toFeaturedCourse);
+  // First four cards = one course per flagship universe when possible
+  const universeOrder: CourseDiscipline[] = [
+    "menuiserie",
+    "couture",
+    "ceramique",
+    "electronique",
+  ];
+  const preferredTitle: Partial<Record<CourseDiscipline, RegExp>> = {
+    ceramique: /modelage/i,
+    electronique: /repair\s*caf[eé]/i,
+  };
+
+  const picked: Course[] = [];
+  const used = new Set<string>();
+
+  for (const discipline of universeOrder) {
+    const candidates = upcoming.filter(
+      (course) => toDisciplineKey(course.discipline) === discipline,
+    );
+    const preferred = preferredTitle[discipline]
+      ? candidates.find((course) => preferredTitle[discipline]!.test(course.title))
+      : undefined;
+    const chosen = preferred ?? candidates[0];
+    if (chosen) {
+      picked.push(chosen);
+      used.add(chosen.slug);
+    }
+  }
+
+  for (const course of upcoming) {
+    if (picked.length >= MAX_FEATURED) break;
+    if (used.has(course.slug)) continue;
+    picked.push(course);
+    used.add(course.slug);
+  }
+
+  return picked.map(toFeaturedCourse);
 }

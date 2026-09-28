@@ -90,9 +90,13 @@ export function CourseListing({ courses }: CourseListingProps) {
   const [currentPage, setCurrentPage] = useState(1);
 
   const disciplineOptions = useMemo(() => {
-    return Array.from(new Set(courses.map((course) => course.discipline))).sort((left, right) =>
-      left.localeCompare(right, "fr"),
-    );
+    return Array.from(
+      new Set(
+        courses.flatMap((course) =>
+          course.disciplines?.length ? course.disciplines : [course.discipline],
+        ),
+      ),
+    ).sort((left, right) => left.localeCompare(right, "fr"));
   }, [courses]);
 
   const priceOptions = useMemo(() => {
@@ -137,8 +141,14 @@ export function CourseListing({ courses }: CourseListingProps) {
 
   const filteredCourses = useMemo(() => {
     return courses.filter((course) => {
-      if (discipline !== ALL && course.discipline !== discipline) {
-        return false;
+      if (discipline !== ALL) {
+        const courseDisciplines =
+          course.disciplines?.length > 0
+            ? course.disciplines
+            : [course.discipline];
+        if (!courseDisciplines.includes(discipline)) {
+          return false;
+        }
       }
 
       if (price !== ALL && String(course.price) !== price) {

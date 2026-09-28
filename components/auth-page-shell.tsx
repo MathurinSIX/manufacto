@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AUTH_ASIDE_PHOTO } from "@/lib/site-photo-sets";
 import { P } from "@/components/mockups/shared";
 
 type AuthPageShellProps = {
@@ -42,7 +43,7 @@ export function AuthPageShell({
       <div className="relative flex min-h-screen flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <aside className="relative flex min-h-[220px] flex-col justify-between overflow-hidden lg:min-h-screen">
           <Image
-            src={P.atelierPeople}
+            src={AUTH_ASIDE_PHOTO}
             alt=""
             fill
             priority

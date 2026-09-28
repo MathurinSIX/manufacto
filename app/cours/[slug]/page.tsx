@@ -4,6 +4,7 @@ import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
 import { createClient } from "@/lib/supabase/server";
+import { resolveAccountUserId } from "@/lib/account-share";
 import { ActivitySessionReserveTrigger } from "@/components/activity-session-reserve-trigger";
 import { CourseImageCarousel } from "@/components/course-image-carousel";
 import { CourseInterestButton } from "@/components/course-interest-button";
@@ -30,6 +31,15 @@ type CourseSession = {
   id: string;
   start_ts: string;
   end_ts: string;
+  session_group_id: string | null;
+};
+
+type CourseSessionOffer = {
+  key: string;
+  label: string;
+  /** Session used as the booking entry point (first date of the group). */
+  primarySessionId: string;
+  dates: CourseSession[];
 };
 
 const UUID_RE =
@@ -65,6 +75,36 @@ function formatSession(session: CourseSession) {
   return `${sessionDateFormatter.format(start)} - ${formatHour(start)} / ${formatHour(end)}`;
 }
 
+function groupSessionsIntoOffers(sessions: CourseSession[]): CourseSessionOffer[] {
+  const groups = new Map<string, CourseSession[]>();
+  const order: string[] = [];
+
+  for (const session of sessions) {
+    const key = session.session_group_id ?? `single:${session.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(session);
+  }
+
+  return order.map((key, index) => {
+    const dates = (groups.get(key) ?? []).slice().sort(
+      (left, right) =>
+        new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime(),
+    );
+    const isMultiDay = Boolean(dates[0]?.session_group_id) && dates.length > 1;
+    return {
+      key,
+      label: isMultiDay
+        ? `Session en ${dates.length} parties`
+        : `Session ${String(index + 1).padStart(2, "0")}`,
+      primarySessionId: dates[0]!.id,
+      dates: isMultiDay ? dates : dates.slice(0, 1),
+    };
+  });
+}
+
 async function getCourses() {
   unstable_noStore();
   const supabase = await createClient();
@@ -74,7 +114,7 @@ async function getCourses() {
       supabase
         .from("activity")
         .select(
-          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline",
+          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines",
         )
         .eq("type", "cours")
         .is("deleted_at", null)
@@ -122,18 +162,23 @@ async function getUpcomingSessions(activityId: string): Promise<CourseSession[]>
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("session")
-    .select("id, start_ts, end_ts")
+    .select("id, start_ts, end_ts, session_group_id")
     .eq("activity_id", activityId)
     .gte("start_ts", new Date(Date.now() - 15 * 60 * 1000).toISOString())
     .order("start_ts", { ascending: true })
-    .limit(20);
+    .limit(40);
 
   if (error) {
     console.error("Error fetching course sessions", error);
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    start_ts: row.start_ts,
+    end_ts: row.end_ts,
+    session_group_id: row.session_group_id ?? null,
+  }));
 }
 
 async function CourseDetailContent({ params }: CourseDetailPageProps) {
@@ -145,6 +190,7 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
     notFound();
   }
   const sessions = await getUpcomingSessions(course.id);
+  const sessionOffers = groupSessionsIntoOffers(sessions);
   const supabase = await createClient();
   const {
     data: { user },
@@ -153,10 +199,11 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
   let isInterested = false;
 
   if (user) {
+    const accountUserId = await resolveAccountUserId(supabase, user.id);
     const { data: interest } = await supabase
       .from("activity_interest")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", accountUserId)
       .eq("activity_id", course.id)
       .maybeSingle();
 
@@ -234,28 +281,48 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
               Prochaines dates disponibles
             </MarketingSectionTitle>
             <div className="mt-9 space-y-7">
-              {sessions.length ? (
-                sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="flex items-center justify-between gap-4 text-xl leading-normal text-black/75"
-                  >
-                    <p className="capitalize">{formatSession(session)}</p>
-                    <ActivitySessionReserveTrigger
-                      activityId={course.id}
-                      activityTitle={course.title}
-                      activityType="cours"
-                      sessionId={session.id}
-                      credits={course.credits}
-                      price={course.price}
-                      squareProductId={course.squareProductId}
-                      isLoggedIn={!!user}
-                      className={`${MARKETING_LINK_CLASS} cursor-pointer bg-transparent p-0 text-left`}
+              {sessionOffers.length ? (
+                sessionOffers.map((offer) => {
+                  const isMultiDay = offer.dates.length > 1;
+                  return (
+                    <div
+                      key={offer.key}
+                      className="flex items-start justify-between gap-4 text-xl leading-normal text-black/75"
                     >
-                      réserver
-                    </ActivitySessionReserveTrigger>
-                  </div>
-                ))
+                      <div className="min-w-0">
+                        {isMultiDay ? (
+                          <>
+                            <p className="font-semibold text-black">{offer.label}</p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5 capitalize">
+                              {offer.dates.map((session, dateIndex) => (
+                                <li key={session.id}>
+                                  Partie {dateIndex + 1} — {formatSession(session)}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        ) : (
+                          <p className="capitalize">
+                            {formatSession(offer.dates[0]!)}
+                          </p>
+                        )}
+                      </div>
+                      <ActivitySessionReserveTrigger
+                        activityId={course.id}
+                        activityTitle={course.title}
+                        activityType="cours"
+                        sessionId={offer.primarySessionId}
+                        credits={course.credits}
+                        price={course.price}
+                        squareProductId={course.squareProductId}
+                        isLoggedIn={!!user}
+                        className={`${MARKETING_LINK_CLASS} cursor-pointer bg-transparent p-0 text-left`}
+                      >
+                        réserver
+                      </ActivitySessionReserveTrigger>
+                    </div>
+                  );
+                })
               ) : (
                 <div className="space-y-5">
                   <p className="text-xl leading-normal text-black/75">
@@ -270,6 +337,14 @@ async function CourseDetailContent({ params }: CourseDetailPageProps) {
                 </div>
               )}
             </div>
+            <p className="mt-8">
+              <Link
+                href="/offrir"
+                className={`${MARKETING_LINK_CLASS} text-lg`}
+              >
+                Offrir ce cours
+              </Link>
+            </p>
           </div>
         </div>
 

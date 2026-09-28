@@ -4,13 +4,13 @@ import { AuthPageShell } from "@/components/auth-page-shell";
 import { SignUpForm } from "@/components/sign-up-form";
 
 interface SignUpPageProps {
-  searchParams?: Promise<{ next?: string }>;
+  searchParams?: Promise<{ next?: string; email?: string; invite?: string }>;
 }
 
 async function SignUpPanel({
   searchParams,
 }: {
-  searchParams?: Promise<{ next?: string }>;
+  searchParams?: Promise<{ next?: string; email?: string; invite?: string }>;
 }) {
   const resolvedSearchParams = await searchParams;
   const redirectTo =
@@ -18,8 +18,19 @@ async function SignUpPanel({
     resolvedSearchParams.next.length > 0
       ? resolvedSearchParams.next
       : undefined;
+  const initialEmail =
+    typeof resolvedSearchParams?.email === "string"
+      ? resolvedSearchParams.email
+      : "";
+  const lockEmail = resolvedSearchParams?.invite === "1" && initialEmail.length > 0;
 
-  return <SignUpForm redirectTo={redirectTo} />;
+  return (
+    <SignUpForm
+      redirectTo={redirectTo}
+      initialEmail={initialEmail}
+      lockEmail={lockEmail}
+    />
+  );
 }
 
 export default function Page({ searchParams }: SignUpPageProps) {

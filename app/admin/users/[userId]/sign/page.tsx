@@ -28,7 +28,7 @@ async function AdminSignContent({ params }: PageProps) {
     notFound();
   }
 
-  const status = await getUserLegalCompliance(supabase, userId);
+  const status = await getUserLegalCompliance(adminClient, userId);
   const defaultTypedName = [
     target.user.user_metadata?.first_name,
     target.user.user_metadata?.last_name,

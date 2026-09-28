@@ -2,9 +2,10 @@ import { Suspense } from "react";
 
 import { CourseCalendarPanel } from "@/components/course-calendar-panel";
 import { CoursePageTabs } from "@/components/course-page-tabs";
-import { P, PrimaryCta } from "@/components/mockups/shared";
+import { PrimaryCta } from "@/components/mockups/shared";
 import { PageHero } from "@/components/mockups/site-pages";
 import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
+import { COURS_HERO_PHOTO } from "@/lib/site-photo-sets";
 import { unstable_noStore } from "next/cache";
 
 async function CoursContent() {
@@ -16,7 +17,7 @@ async function CoursContent() {
       <PageHero
         title="Nos cours"
         lead="Des ateliers ponctuels de montée en compétences, à choisir selon vos envies et besoins. Adultes ou enfants, apprenez à utiliser une machine, fabriquer un objet, initiez vous ou perfectionnez-vous."
-        image={P.cours}
+        image={COURS_HERO_PHOTO}
       >
         <PrimaryCta href="/offrir">Offrir un cours</PrimaryCta>
       </PageHero>

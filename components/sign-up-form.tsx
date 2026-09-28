@@ -19,6 +19,8 @@ interface SignUpFormProps extends React.ComponentPropsWithoutRef<"div"> {
   onSwitchToLogin?: () => void;
   onSuccess?: () => void | Promise<void>;
   redirectTo?: string;
+  initialEmail?: string;
+  lockEmail?: boolean;
 }
 
 export function SignUpForm({
@@ -26,9 +28,11 @@ export function SignUpForm({
   onSwitchToLogin,
   onSuccess,
   redirectTo,
+  initialEmail = "",
+  lockEmail = false,
   ...props
 }: SignUpFormProps) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -139,10 +143,16 @@ export function SignUpForm({
                   type="email"
                   placeholder="vous@exemple.com"
                   required
+                  readOnly={lockEmail}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={inputClass}
                 />
+                {lockEmail ? (
+                  <p className="text-sm text-black/55">
+                    Utilisez cette adresse pour rejoindre le compte qui vous a invité.
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">

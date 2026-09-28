@@ -6,6 +6,8 @@ import {
   ConditionalSiteChrome,
   ConditionalSiteFooter,
 } from "@/components/conditional-site-chrome";
+import { AppPostHogProvider } from "@/components/app-posthog-provider";
+import { CookieBanner, ConsentAnalytics } from "@/components/cookie-banner";
 import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
 import { PwaRegistration } from "@/components/pwa-registration";
 import "./globals.css";
@@ -64,20 +66,24 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Suspense fallback={null}>
-            <ConditionalSiteChrome />
-          </Suspense>
-          <div className="flex-1 flex flex-col">
-            {children}
-            {modal}
-          </div>
-          <Suspense fallback={null}>
-            <ConditionalSiteFooter />
-          </Suspense>
-          <Suspense fallback={null}>
-            <PwaRegistration />
-          </Suspense>
-          <AuthRecoveryRedirect />
+          <AppPostHogProvider>
+            <Suspense fallback={null}>
+              <ConditionalSiteChrome />
+            </Suspense>
+            <div className="flex-1 flex flex-col">
+              {children}
+              {modal}
+            </div>
+            <Suspense fallback={null}>
+              <ConditionalSiteFooter />
+            </Suspense>
+            <Suspense fallback={null}>
+              <PwaRegistration />
+            </Suspense>
+            <AuthRecoveryRedirect />
+            <CookieBanner />
+            <ConsentAnalytics />
+          </AppPostHogProvider>
         </ThemeProvider>
       </body>
     </html>

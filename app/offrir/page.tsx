@@ -1,26 +1,19 @@
 import { Suspense } from "react";
 
-import {
-  OffrirGiftModals,
-  type OffrirCourseCategoryOption,
-  type OffrirCreditPackOption,
-} from "@/components/offrir-gift-modals";
+import { CreditOfferPicker } from "@/components/credit-offer-picker";
 import { PageHero } from "@/components/mockups/site-pages";
 import { PrimaryCta } from "@/components/mockups/shared";
-import { getGiftCourseCategoriesWithExamples } from "@/lib/gift-cards/upcoming-examples";
+import { loadCreditCourseExamples, loadPracticeCreditRates } from "@/lib/credit-course-examples";
 import { loadSquareProducts } from "@/lib/square/load-products";
+import { OFFER_HERO_PHOTO } from "@/lib/site-photo-sets";
 
-const P = {
-  tabouret12: "/assets/photos-new/site/15_Photo_en_bas_verticale_.jpg",
-};
-
-async function OffrirGiftSectionTest() {
-  const [products, courseCategories] = await Promise.all([
+async function OffrirCreditsSection() {
+  const [products, examples, practiceRates] = await Promise.all([
     loadSquareProducts(),
-    getGiftCourseCategoriesWithExamples(),
+    loadCreditCourseExamples(),
+    loadPracticeCreditRates(),
   ]);
-
-  const creditPacks: OffrirCreditPackOption[] = products
+  const packs = products
     .filter(
       (product) =>
         product.kind === "credit_pack" &&
@@ -29,47 +22,21 @@ async function OffrirGiftSectionTest() {
     )
     .map((product) => ({
       id: product.id,
-      name: product.name,
       credits: product.credits,
       amountCents: product.amountCents,
-      description: product.description,
-    }));
-
-  const ensureGiftPack = (id: string, credits: number, amountCents: number) => {
-    if (creditPacks.some((pack) => pack.id === id || pack.credits === credits)) {
-      return;
-    }
-    creditPacks.push({
-      id,
-      name: `${credits} crédits`,
-      credits,
-      amountCents,
-      description: `Pack de ${credits} crédits.`,
-    });
-  };
-  ensureGiftPack("credits-10", 10, 5000);
-  ensureGiftPack("credits-15", 15, 7200);
-  creditPacks.sort((a, b) => a.amountCents - b.amountCents);
-
-  const categories: OffrirCourseCategoryOption[] = courseCategories.map(
-    (category) => ({
-      id: category.id,
-      label: category.label,
-      amountCents: category.amountCents,
-      credits: category.credits,
-      description: category.description,
-      examples: category.examples,
-      hideCreditEquivalence: true,
-    }),
-  );
+      catalogObjectId: product.catalogObjectId,
+    }))
+    .sort((left, right) => left.amountCents - right.amountCents);
 
   return (
-    <OffrirGiftModals
-      creditPacks={creditPacks}
-      courseCategories={categories}
-      showCustomAmount
-      creditsIntro="Pour la pratique libre : choisissez un nombre de crédits. La personne à qui vous les offrez pourra ensuite réserver ses créneaux de pratique directement depuis son espace en ligne. Tarifs dégressifs, crédits valables un an."
-    />
+    <section className="mx-auto max-w-[1274px] px-5 py-8">
+      <CreditOfferPicker
+        packs={packs}
+        examples={examples}
+        practiceRates={practiceRates}
+        mode="gift"
+      />
+    </section>
   );
 }
 
@@ -81,29 +48,24 @@ function OffrirPageBody() {
         lead={
           <>
             <p>
-              Carte cadeau, cours ponctuel ou pack de crédits&nbsp;: Manufacto est
-              le cadeau parfait pour toutes celles et ceux qui aiment faire
-              eux-même, veulent découvrir de nouveaux univers créatifs, se
-              perfectionner, ou avoir accès à un atelier de création selon leurs
-              envies et leurs besoins, “à la carte”.
+              Une carte cadeau en crédits&nbsp;: la personne choisit ensuite ses
+              cours ou ses créneaux de pratique libre, selon le nombre de
+              crédits offerts.
             </p>
             <p>Les crédits sont valables un an.</p>
           </>
         }
-        image={P.tabouret12}
+        image={OFFER_HERO_PHOTO}
       />
 
       <Suspense
         fallback={
-          <section className="mx-auto max-w-[1274px] px-5 py-14">
-            <h2 className="text-[30px] font-semibold text-black/80">
-              Deux façons d&apos;offrir
-            </h2>
-            <p className="mt-6 text-black/60">Chargement…</p>
+          <section className="mx-auto max-w-[1274px] px-5 py-8">
+            <p className="text-black/60">Chargement…</p>
           </section>
         }
       >
-        <OffrirGiftSectionTest />
+        <OffrirCreditsSection />
       </Suspense>
 
       <section className="bg-[#fff8f0]">

@@ -16,8 +16,12 @@ import { GiftCardPaymentOption } from "@/components/gift-card-payment-option";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import {
   ParticipantCountSelector,
-  companionNamesAreValid,
+  bookingParticipantsAreValid,
+  participantsToRegistrationFields,
 } from "@/components/participant-count-selector";
+import { allHouseholdNames } from "@/lib/household";
+import type { BookingParticipant } from "@/lib/participant-count";
+import { resolveAccountUserId } from "@/lib/account-share";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -274,8 +278,16 @@ export function PracticeReservationPicker({
   const [userId, setUserId] = useState<string | null>(null);
   const [userCredits, setUserCredits] = useState(0);
   const [showAuthStep, setShowAuthStep] = useState(false);
-  const [participantCount, setParticipantCount] = useState(1);
-  const [companionFirstNames, setCompanionFirstNames] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<BookingParticipant[]>([
+    { name: "", email: "" },
+  ]);
+  const [householdOptions, setHouseholdOptions] = useState<string[]>([]);
+  const {
+    participantCount,
+    companionFirstNames,
+    participantNames,
+    participantEmails,
+  } = participantsToRegistrationFields(participants);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -284,18 +296,52 @@ export function PracticeReservationPicker({
 
   const refreshUser = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
-    const nextUserId = data.user?.id ?? null;
-    setUserId(nextUserId);
-
-    if (!nextUserId) {
+    const authUserId = data.user?.id ?? null;
+    if (!authUserId) {
+      setUserId(null);
       setUserCredits(0);
+      setHouseholdOptions([]);
       return null;
     }
 
-    const { data: creditsData, error } = await supabase
-      .from("credit")
-      .select("amount")
-      .eq("user_id", nextUserId);
+    const nextUserId = await resolveAccountUserId(supabase, authUserId);
+    setUserId(nextUserId);
+
+    const accountDisplayName = [
+      data.user?.user_metadata?.first_name,
+      data.user?.user_metadata?.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const [{ data: creditsData, error }, { data: profile }] = await Promise.all([
+      supabase.from("credit").select("amount").eq("user_id", nextUserId),
+      supabase
+        .from("user_profile")
+        .select("member_names, child_names")
+        .eq("user_id", nextUserId)
+        .maybeSingle(),
+    ]);
+
+    const options = allHouseholdNames({
+      memberNames: profile?.member_names,
+      childNames: profile?.child_names,
+      accountDisplayName: accountDisplayName || data.user?.email || null,
+    });
+    setHouseholdOptions(options);
+    setParticipants((current) => {
+      const hasDetails = current.some(
+        (participant) => participant.name.trim() || participant.email.trim(),
+      );
+      if (hasDetails) return current;
+      return [
+        {
+          name: accountDisplayName || data.user?.email || "",
+          email: data.user?.email ?? "",
+        },
+      ];
+    });
 
     if (error) {
       console.error("Error fetching credits:", error);
@@ -619,10 +665,12 @@ export function PracticeReservationPicker({
     (check) => check.available !== null && check.available < participantCount,
   );
   useEffect(() => {
-    if (participantCount > maxParticipantsForSelection) {
-      setParticipantCount(Math.max(1, maxParticipantsForSelection));
+    if (participants.length > maxParticipantsForSelection) {
+      setParticipants((current) =>
+        current.slice(0, Math.max(1, maxParticipantsForSelection)),
+      );
     }
-  }, [maxParticipantsForSelection, participantCount]);
+  }, [maxParticipantsForSelection, participants.length]);
 
   const hasEnoughCredits = totalCredits <= 0 || userCredits >= totalCredits;
   const hasRequiredHourCount = isAccompagnement
@@ -772,10 +820,10 @@ export function PracticeReservationPicker({
       return;
     }
 
-    if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+    if (!bookingParticipantsAreValid(participants)) {
       setIsRegistering(false);
       setErrorMessage(
-        "Indiquez le prénom de chaque personne supplémentaire.",
+        "Indiquez le nom de chaque personne. L'e-mail, s'il est rempli, doit être valide.",
       );
       return;
     }
@@ -800,6 +848,8 @@ export function PracticeReservationPicker({
           participantCount,
           companionFirstNames,
           giftCardCode,
+          participantEmails,
+          participantNames,
         );
 
         if (result.error) {
@@ -838,6 +888,8 @@ export function PracticeReservationPicker({
         participantCount,
         companionFirstNames,
         giftCardCode,
+        participantEmails,
+        participantNames,
       );
 
       if (result.error) {
@@ -855,8 +907,7 @@ export function PracticeReservationPicker({
       : orderedSelectedSlots.length;
     setIsRegistering(false);
     setSelectedHourKeys([]);
-    setParticipantCount(1);
-    setCompanionFirstNames([]);
+    setParticipants((current) => current.slice(0, 1));
     setSuccessMessage(
       bookedCount > 1
         ? `${bookedCount} créneaux réservés ! Nous vous attendons à l'atelier.`
@@ -1030,8 +1081,6 @@ export function PracticeReservationPicker({
             onValueChange={(value) => {
               setSelectedDay(value);
               setSelectedHourKeys([]);
-              setParticipantCount(1);
-              setCompanionFirstNames([]);
             }}
           >
             <SelectTrigger>
@@ -1181,17 +1230,15 @@ export function PracticeReservationPicker({
       ) : null}
 
       {hasSelectedHours && !showAuthStep ? (
-        <ParticipantCountSelector
-          value={participantCount}
-          onChange={setParticipantCount}
-          companionFirstNames={companionFirstNames}
-          onCompanionFirstNamesChange={setCompanionFirstNames}
-          max={maxParticipantsForSelection}
-        />
-      ) : null}
-
-      {hasSelectedHours && (showAuthStep || effectiveIsLoggedIn) ? (
-        <BookingPoliciesNotice context="booking" />
+        <div className="space-y-3">
+          <ParticipantCountSelector
+            participants={participants}
+            onChange={setParticipants}
+            max={maxParticipantsForSelection}
+            disabled={isRegistering}
+            quickAddNames={householdOptions}
+          />
+        </div>
       ) : null}
 
       {isSquareReservation ? (
@@ -1219,6 +1266,8 @@ export function PracticeReservationPicker({
             reservationStart={checkoutStartIso}
             reservationEnd={checkoutEndIso}
             participantCount={participantCount}
+            participantNames={participantNames}
+            participantEmails={participantEmails}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
             disabled={
               isRegistering ||
@@ -1227,7 +1276,7 @@ export function PracticeReservationPicker({
               hasFullHour ||
               !hasRequiredHourCount ||
               maxParticipantsForSelection < 1 ||
-              !companionNamesAreValid(participantCount, companionFirstNames)
+              !bookingParticipantsAreValid(participants)
             }
           >
             {reservationRuleMessage
@@ -1253,7 +1302,8 @@ export function PracticeReservationPicker({
               hasFullHour ||
               !hasRequiredHourCount ||
               !hasEnoughCredits ||
-              maxParticipantsForSelection < 1
+              maxParticipantsForSelection < 1 ||
+              !bookingParticipantsAreValid(participants)
             }
             onClick={() => void handleRegister()}
           >
@@ -1327,12 +1377,15 @@ export function PracticeReservationPicker({
             hasFullHour ||
             !hasRequiredHourCount ||
             maxParticipantsForSelection < 1 ||
-            !companionNamesAreValid(participantCount, companionFirstNames)
+            !bookingParticipantsAreValid(participants)
           }
           onRedeem={async (code) => {
             await handleRegister({ paymentType: "gift_card", giftCardCode: code });
           }}
         />
+      ) : null}
+      {hasSelectedHours && (showAuthStep || effectiveIsLoggedIn) ? (
+        <BookingPoliciesNotice context="booking" className="mt-1" />
       ) : null}
     </div>
   );

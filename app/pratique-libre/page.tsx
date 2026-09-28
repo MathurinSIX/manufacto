@@ -8,7 +8,7 @@ import { getExperimentVariant } from "@/lib/posthog/variant";
 function PremiereVisiteFallback() {
   return (
     <span className="inline-flex h-[52px] min-w-[160px] animate-pulse items-center justify-center rounded-[12px] border-2 border-[#4a56dd]/30 bg-white/80 px-6 text-lg font-semibold text-[#4a56dd]/40">
-      Pack découvertes
+      Pack découverte
     </span>
   );
 }

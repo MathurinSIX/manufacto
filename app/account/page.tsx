@@ -13,7 +13,7 @@ import { UpcomingReservationsList } from "@/components/upcoming-reservations-lis
 import { PastReservationsList } from "@/components/past-reservations-list";
 import { CancelledReservationsList } from "@/components/cancelled-reservations-list";
 import { CreditHistoryList } from "@/components/credit-history-list";
-import { CreditPackPurchaseCard } from "@/components/credit-pack-purchase-card";
+import { CreditOfferPicker } from "@/components/credit-offer-picker";
 import { SquareCheckoutButton } from "@/components/square-checkout-button";
 import { loadSquareProducts } from "@/lib/square/load-products";
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button";
@@ -25,6 +25,9 @@ import { AccountPersonalInfo } from "@/components/account-personal-info";
 import { HouseholdMembersEditor } from "@/components/household-members-editor";
 import { loadAccountShare } from "@/lib/account-share";
 import { fetchCoursesForListing } from "@/lib/fetch-courses-listing";
+import { loadCreditCourseExamples, loadPracticeCreditRates } from "@/lib/credit-course-examples";
+import { AccountPwaHint } from "@/components/account-pwa-hint";
+import { formatCreditRate } from "@/lib/credit-rates";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
@@ -45,24 +48,24 @@ const subscriptionPlans = [
     label: "Abonnement 01",
     price: "90€",
     credits: "20 crédits / mois",
-    description:
-      "Idéal si vous utilisez l'espace couture régulièrement.",
+    amountCents: 9000,
+    creditCount: 20,
   },
   {
     id: "formule-02",
     label: "Abonnement 02",
     price: "170€",
     credits: "40 crédits / mois",
-    description:
-      "Pour une pratique intermédiaire dans plusieurs espaces de l'atelier.",
+    amountCents: 17000,
+    creditCount: 40,
   },
   {
     id: "formule-03",
     label: "Abonnement 03",
     price: "240€",
     credits: "60 crédits / mois",
-    description:
-      "Pour une pratique intensive, notamment en menuiserie ou céramique.",
+    amountCents: 24000,
+    creditCount: 60,
   },
 ] as const;
 
@@ -166,7 +169,11 @@ async function AccountContent() {
     ownerEmail = ownerUser.user?.email ?? ownerEmail;
   }
 
-  const squareProducts = await loadSquareProducts(supabase);
+  const [squareProducts, courseExamples, practiceRates] = await Promise.all([
+    loadSquareProducts(supabase),
+    loadCreditCourseExamples(),
+    loadPracticeCreditRates(),
+  ]);
   const squareProductsById = new Map(
     squareProducts.map((product) => [product.id, product]),
   );
@@ -478,6 +485,8 @@ async function AccountContent() {
         </div>
       </div>
 
+      <AccountPwaHint />
+
         {!legalStatus.complete ? (
           <div className="mb-8 rounded-[16px] border border-[#f56800]/40 bg-white p-5 shadow-sm ring-1 ring-black/5">
             <p className="text-lg font-semibold text-black/80">
@@ -719,8 +728,8 @@ async function AccountContent() {
                         <p className="mt-1 text-lg font-semibold leading-tight text-black/80">
                           {plan.credits}
                         </p>
-                        <p className="mt-4 flex-1 text-sm leading-snug text-black/65">
-                          {plan.description}
+                        <p className="mt-1 text-sm text-black/50">
+                          {formatCreditRate(plan.amountCents, plan.creditCount)}
                         </p>
                         <SquareCheckoutButton
                           productId={plan.id}
@@ -752,19 +761,21 @@ async function AccountContent() {
                   <p className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#f56800]">
                     Packs de crédits
                   </p>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                    {creditPackProducts.map((pack) => (
-                      <CreditPackPurchaseCard
-                        key={pack.id}
-                        productId={pack.id}
-                        amountCents={pack.amountCents}
-                        credits={pack.credits}
-                        catalogObjectId={pack.catalogObjectId}
-                        className="min-h-[180px] p-4"
-                        buttonClassName="mt-4 inline-flex w-full justify-center rounded-[12px] bg-[#f56800] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d95700] disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-                    ))}
-                  </div>
+                  <CreditOfferPicker
+                    packs={creditPackProducts.map((pack) => ({
+                      id: pack.id,
+                      credits: pack.credits,
+                      amountCents: pack.amountCents,
+                      catalogObjectId: pack.catalogObjectId,
+                    }))}
+                    examples={courseExamples}
+                    practiceRates={practiceRates}
+                    showExamples
+                    examplesPlacement="after"
+                    mode="purchase"
+                    isLoggedIn
+                    returnPath="/account?tab=credits"
+                  />
                   <p className="mt-5 text-sm leading-normal text-black/60">
                     Les crédits sont valables un an à partir de leur date
                     d&apos;achat. Ils s&apos;ajoutent au solde déjà disponible sur votre

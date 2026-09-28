@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import { COOKIE_CONSENT, parseCookieConsent } from "@/lib/cookies/consent";
+
 import {
   DISTINCT_ID_COOKIE,
   EXPERIMENT_OVERRIDE_COOKIE,
@@ -98,6 +100,11 @@ export async function getExperimentVariant(
     if (fromCookie) return fromCookie;
   }
 
+  const cookieStore = await cookies();
+  if (parseCookieConsent(cookieStore.get(COOKIE_CONSENT)?.value) !== "accepted") {
+    return fallback;
+  }
+
   const client = getPostHogServerClient();
 
   if (!client) {
@@ -125,6 +132,10 @@ export async function getExperimentVariant(
   return fallback;
 }
 
-export async function getDistinctIdForClient(): Promise<string> {
-  return resolveDistinctId();
+export async function getDistinctIdForClient(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  if (parseCookieConsent(cookieStore.get(COOKIE_CONSENT)?.value) !== "accepted") {
+    return undefined;
+  }
+  return cookieStore.get(DISTINCT_ID_COOKIE)?.value?.trim() || undefined;
 }

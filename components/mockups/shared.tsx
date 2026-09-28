@@ -5,6 +5,15 @@ import {
   COURSE_DISCIPLINE_COLORS,
   type CourseDiscipline,
 } from "@/lib/course-disciplines";
+import {
+  GIFT_BANNER_PHOTO,
+  INSTAGRAM_SHOTS,
+  RIBBON_LIEU,
+  RIBBON_PORTRAITS,
+  RIBBON_SITE,
+} from "@/lib/site-photo-sets";
+
+export { RIBBON_LIEU, RIBBON_PORTRAITS, RIBBON_SITE };
 
 export const P = {
   // Workshop / space — prefer new Photos (resized)
@@ -198,46 +207,6 @@ export const FEATURED_COURSES: FeaturedCourse[] = [
 ];
 
 
-/** Curated ribbons from the new photo pack */
-export const RIBBON_LIEU = [
-  P.atelierPeople,
-  P.atelierFrame,
-  P.pl30,
-  P.pl31,
-  P.pl32,
-  P.pl33,
-  P.machines2,
-  P.machines8,
-  P.tabouret10,
-  P.bois14,
-] as const;
-
-export const RIBBON_PORTRAITS = [
-  P.portrait1,
-  P.portrait11,
-  P.portrait13,
-  P.portrait15,
-  P.portrait18,
-  P.portrait22,
-  P.portrait25,
-  P.picA,
-  P.picB,
-  P.picC,
-] as const;
-
-export const RIBBON_SITE = [
-  P.heroMenuiserie,
-  P.heroCoutureNew,
-  P.heroCeramique,
-  P.heroElecNew,
-  P.plRect11,
-  P.plRect12,
-  P.plRect16,
-  P.pratiqueLibre,
-  P.cours,
-  P.tarifSquare,
-] as const;
-
 export const INSTAGRAM_URL = "https://www.instagram.com/manufacto.marseille/";
 
 export const MOCKUP_LINKS = [
@@ -403,9 +372,9 @@ export function ImageTile({
 export function PhotoRibbon({ images, className = "" }: { images: string[]; className?: string }) {
   return (
     <div className={`flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}>
-      {images.map((src, i) => (
+      {[...new Set(images)].map((src) => (
         <div
-          key={`${src}-${i}`}
+          key={src}
           className="relative h-36 w-44 shrink-0 overflow-hidden rounded-[14px] bg-[#d9d9d9] sm:h-44 sm:w-56"
         >
           <Image src={src} alt="" fill className="object-cover" sizes="224px" />
@@ -451,7 +420,12 @@ export function CourseCarousel({
                 alt=""
                 width={course.wordW}
                 height={course.wordH}
-                className="h-6 w-auto max-h-6 object-contain object-left sm:h-7 sm:max-h-7"
+                className={
+                  course.discipline === "ceramique" ||
+                  course.discipline === "electronique"
+                    ? "h-[2.357rem] w-auto object-contain object-left sm:h-[2.722rem]"
+                    : "h-6 w-auto max-h-6 object-contain object-left sm:h-7 sm:max-h-7"
+                }
               />
               <h3 className="mt-4 text-lg font-bold leading-snug text-black/90 sm:text-xl">
                 {course.title}
@@ -530,7 +504,7 @@ export function GiftOfferBanner({
     <section className="border-y border-black/10 bg-white">
       <div className="mx-auto grid max-w-[1274px] gap-8 px-5 py-12 md:grid-cols-[1fr_1.1fr] md:items-center">
         <ImageTile
-          src={P.portrait15}
+          src={GIFT_BANNER_PHOTO}
           alt="Portrait atelier — idée cadeau"
           className="h-56 md:h-72"
         />
@@ -580,16 +554,7 @@ export function NewsletterBanner({ className = "" }: { className?: string } = {}
 }
 
 export function InstagramStrip() {
-  const shots = [
-    P.portrait13,
-    P.portrait18,
-    P.portrait22,
-    P.ig2,
-    P.ig3,
-    P.pl30,
-    P.pl24,
-    P.tarifSquare,
-  ];
+  const shots = INSTAGRAM_SHOTS;
   return (
     <section className="mx-auto max-w-[1274px] px-5 pb-20 text-center">
       <a

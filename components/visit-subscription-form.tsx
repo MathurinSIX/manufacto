@@ -5,12 +5,13 @@ import { useEffect, useState } from "react";
 import { createSessionSubscription } from "@/app/reserver/actions";
 import {
   ParticipantCountSelector,
-  companionNamesAreValid,
+  bookingParticipantsAreValid,
+  participantsToRegistrationFields,
 } from "@/components/participant-count-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { maxSelectableCount } from "@/lib/participant-count";
+import { maxSelectableCount, type BookingParticipant } from "@/lib/participant-count";
 
 type VisitSubscriptionFormProps = {
   sessionId: string;
@@ -21,26 +22,29 @@ export function VisitSubscriptionForm({
   sessionId,
   availableSpots,
 }: VisitSubscriptionFormProps) {
-  const [participantCount, setParticipantCount] = useState(1);
-  const [companionFirstNames, setCompanionFirstNames] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<BookingParticipant[]>([
+    { name: "", email: "" },
+  ]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const maxParticipants = maxSelectableCount(availableSpots);
+  const { participantCount, participantNames, participantEmails } =
+    participantsToRegistrationFields(participants);
 
   useEffect(() => {
-    if (participantCount > maxParticipants) {
-      setParticipantCount(Math.max(1, maxParticipants));
+    if (participants.length > maxParticipants) {
+      setParticipants((current) => current.slice(0, Math.max(1, maxParticipants)));
     }
-  }, [maxParticipants, participantCount]);
+  }, [maxParticipants, participants.length]);
 
   return (
     <form
       action={createSessionSubscription}
       className="mt-5 space-y-4"
       onSubmit={(event) => {
-        if (!companionNamesAreValid(participantCount, companionFirstNames)) {
+        if (!bookingParticipantsAreValid(participants)) {
           event.preventDefault();
           setErrorMessage(
-            "Indiquez le prénom de chaque personne supplémentaire.",
+            "Indiquez le nom de chaque personne. L'e-mail, s'il est rempli, doit être valide.",
           );
           return;
         }
@@ -49,25 +53,17 @@ export function VisitSubscriptionForm({
     >
       <input type="hidden" name="session_id" value={sessionId} />
       <input type="hidden" name="participant_count" value={participantCount} />
-      {companionFirstNames.map((name, index) => (
-        <input
-          key={index}
-          type="hidden"
-          name="companion_first_names"
-          value={name}
-        />
+      {participantNames.map((name, index) => (
+        <input key={`name-${index}`} type="hidden" name="participant_names" value={name} />
+      ))}
+      {participantEmails.map((email, index) => (
+        <input key={`email-${index}`} type="hidden" name="participant_emails" value={email} />
       ))}
       <ParticipantCountSelector
-        value={participantCount}
-        onChange={setParticipantCount}
-        companionFirstNames={companionFirstNames}
-        onCompanionFirstNamesChange={setCompanionFirstNames}
+        participants={participants}
+        onChange={setParticipants}
         max={maxParticipants}
       />
-      <div className="space-y-2">
-        <Label htmlFor="name">Nom *</Label>
-        <Input id="name" name="name" autoComplete="name" required />
-      </div>
       <div className="space-y-2">
         <Label htmlFor="phone">Téléphone</Label>
         <Input id="phone" name="phone" type="tel" autoComplete="tel" />
