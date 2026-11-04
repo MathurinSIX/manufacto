@@ -121,13 +121,22 @@ async function getCourses() {
     .eq("type", "cours")
     .is("deleted_at", null)
     .order("name");
-  const activitiesResult = isMissingDurationMinutesColumn(activitiesWithDuration.error)
+  const activitiesFallback = isMissingDurationMinutesColumn(activitiesWithDuration.error)
     ? await supabase
         .from("activity")
         .select(activityColumns)
         .eq("type", "cours")
         .is("deleted_at", null)
         .order("name")
+    : null;
+  const activitiesResult = activitiesFallback
+    ? {
+        ...activitiesFallback,
+        data: (activitiesFallback.data ?? []).map((activity) => ({
+          ...activity,
+          duration_minutes: null,
+        })),
+      }
     : activitiesWithDuration;
 
   const [{ data: futureSessions, error: sessionsError }, { data: sessionsForDuration, error: durationSessionsError }] =

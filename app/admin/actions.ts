@@ -2199,11 +2199,16 @@ export async function getAllActivities() {
     .order("type, name");
 
   if (error && (error.code === "42703" || /duration_minutes/.test(error.message))) {
-    ({ data: activities, error } = await supabase
+    const fallback = await supabase
       .from("activity")
       .select(activityColumns)
       .is("deleted_at", null)
-      .order("type, name"));
+      .order("type, name");
+    activities = (fallback.data ?? []).map((activity) => ({
+      ...activity,
+      duration_minutes: null,
+    }));
+    error = fallback.error;
   }
   
   if (error) {

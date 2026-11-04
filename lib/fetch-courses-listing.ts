@@ -125,12 +125,17 @@ export async function fetchCoursesForListing(): Promise<Course[]> {
     .order("name");
 
   if (isMissingDurationMinutesColumn(error)) {
-    ({ data: activities, error } = await supabase
+    const fallback = await supabase
       .from("activity")
       .select(`${COURSE_ACTIVITY_COLUMNS}, created_at`)
       .eq("type", "cours")
       .is("deleted_at", null)
-      .order("name"));
+      .order("name");
+    activities = (fallback.data ?? []).map((activity) => ({
+      ...activity,
+      duration_minutes: null,
+    }));
+    error = fallback.error;
   }
 
   if (error) {

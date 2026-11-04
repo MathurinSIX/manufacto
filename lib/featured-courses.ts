@@ -137,12 +137,19 @@ export async function getFeaturedCoursesWithImages(): Promise<
         if (!isMissingDurationMinutesColumn(withDuration.error)) {
           return withDuration;
         }
-        return supabase
+        const fallback = await supabase
           .from("activity")
           .select(columns)
           .eq("type", "cours")
           .is("deleted_at", null)
           .order("name");
+        return {
+          ...fallback,
+          data: (fallback.data ?? []).map((activity) => ({
+            ...activity,
+            duration_minutes: null,
+          })),
+        };
       })(),
       supabase
         .from("session")
