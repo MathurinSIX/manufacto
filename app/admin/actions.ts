@@ -2190,11 +2190,21 @@ export async function getAllActivities() {
   await checkAdmin();
   const supabase = await createClient();
   
-  const { data: activities, error } = await supabase
+  const activityColumns =
+    "id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline, disciplines";
+  let { data: activities, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline, disciplines, duration_minutes")
+    .select(`${activityColumns}, duration_minutes`)
     .is("deleted_at", null)
     .order("type, name");
+
+  if (error && (error.code === "42703" || /duration_minutes/.test(error.message))) {
+    ({ data: activities, error } = await supabase
+      .from("activity")
+      .select(activityColumns)
+      .is("deleted_at", null)
+      .order("type, name"));
+  }
   
   if (error) {
     console.error("Error fetching activities:", error);

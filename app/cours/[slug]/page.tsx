@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 import { unstable_noStore } from "next/cache";
 import { Suspense } from "react";
 
+import {
+  durationMinutesFromActivity,
+  isMissingDurationMinutesColumn,
+} from "@/lib/fetch-courses-listing";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAccountUserId } from "@/lib/account-share";
 import { ActivitySessionReserveTrigger } from "@/components/activity-session-reserve-trigger";
@@ -109,16 +113,25 @@ async function getCourses() {
   unstable_noStore();
   const supabase = await createClient();
 
-  const [{ data, error }, { data: futureSessions, error: sessionsError }, { data: sessionsForDuration, error: durationSessionsError }] =
-    await Promise.all([
-      supabase
+  const activityColumns =
+    "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines";
+  const activitiesWithDuration = await supabase
+    .from("activity")
+    .select(`${activityColumns}, duration_minutes`)
+    .eq("type", "cours")
+    .is("deleted_at", null)
+    .order("name");
+  const activitiesResult = isMissingDurationMinutesColumn(activitiesWithDuration.error)
+    ? await supabase
         .from("activity")
-        .select(
-          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines, duration_minutes",
-        )
+        .select(activityColumns)
         .eq("type", "cours")
         .is("deleted_at", null)
-        .order("name"),
+        .order("name")
+    : activitiesWithDuration;
+
+  const [{ data: futureSessions, error: sessionsError }, { data: sessionsForDuration, error: durationSessionsError }] =
+    await Promise.all([
       supabase
         .from("session")
         .select("activity_id, start_ts, end_ts")
@@ -129,6 +142,8 @@ async function getCourses() {
         .select("activity_id, start_ts, end_ts")
         .order("start_ts", { ascending: false }),
     ]);
+
+  const { data, error } = activitiesResult;
 
   if (error) {
     console.error("Error fetching activities", error);
@@ -146,11 +161,7 @@ async function getCourses() {
     getCoursesFromDb(
       data?.map((activity) => ({
         ...activity,
-        durationMinutes:
-          typeof activity.duration_minutes === "number" &&
-          activity.duration_minutes > 0
-            ? activity.duration_minutes
-            : null,
+        durationMinutes: durationMinutesFromActivity(activity),
       })),
     ),
     futureSessions ?? [],

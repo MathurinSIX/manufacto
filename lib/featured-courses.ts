@@ -16,6 +16,10 @@ import {
   isCourseDiscipline,
   type CourseDiscipline,
 } from "@/lib/course-disciplines";
+import {
+  durationMinutesFromActivity,
+  isMissingDurationMinutesColumn,
+} from "@/lib/fetch-courses-listing";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_FEATURED = 8;
@@ -121,14 +125,25 @@ export async function getFeaturedCoursesWithImages(): Promise<
 
   const [{ data: activities, error }, { data: futureSessions, error: sessionsError }] =
     await Promise.all([
-      supabase
-        .from("activity")
-        .select(
-          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines, duration_minutes",
-        )
-        .eq("type", "cours")
-        .is("deleted_at", null)
-        .order("name"),
+      (async () => {
+        const columns =
+          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines";
+        const withDuration = await supabase
+          .from("activity")
+          .select(`${columns}, duration_minutes`)
+          .eq("type", "cours")
+          .is("deleted_at", null)
+          .order("name");
+        if (!isMissingDurationMinutesColumn(withDuration.error)) {
+          return withDuration;
+        }
+        return supabase
+          .from("activity")
+          .select(columns)
+          .eq("type", "cours")
+          .is("deleted_at", null)
+          .order("name");
+      })(),
       supabase
         .from("session")
         .select("activity_id, start_ts, end_ts")
@@ -155,11 +170,7 @@ export async function getFeaturedCoursesWithImages(): Promise<
       getCoursesFromDb(
         activities?.map((activity) => ({
           ...activity,
-          durationMinutes:
-            typeof activity.duration_minutes === "number" &&
-            activity.duration_minutes > 0
-              ? activity.duration_minutes
-              : null,
+          durationMinutes: durationMinutesFromActivity(activity),
         })),
       ),
       courseFutureSessions,

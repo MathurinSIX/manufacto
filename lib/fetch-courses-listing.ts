@@ -8,6 +8,28 @@ import {
 
 const SESSIONS_PAGE_SIZE = 1000;
 
+const COURSE_ACTIVITY_COLUMNS =
+  "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines";
+
+type ActivityQueryError = { message?: string; code?: string } | null;
+
+/** Production may not have the migration that adds this column yet. */
+export function isMissingDurationMinutesColumn(error: ActivityQueryError) {
+  if (!error) return false;
+  return (
+    error.code === "42703" || /duration_minutes/.test(error.message ?? "")
+  );
+}
+
+export function durationMinutesFromActivity(activity: {
+  duration_minutes?: number | null;
+}) {
+  return typeof activity.duration_minutes === "number" &&
+    activity.duration_minutes > 0
+    ? activity.duration_minutes
+    : null;
+}
+
 async function fetchAllFutureCourseSessions(
   supabase: Awaited<ReturnType<typeof createClient>>,
   courseActivityIds: string[],
@@ -94,14 +116,22 @@ async function fetchAllCourseSessionsForDuration(
 export async function fetchCoursesForListing(): Promise<Course[]> {
   const supabase = await createClient();
 
-  const { data: activities, error } = await supabase
+  const activitySelect = `${COURSE_ACTIVITY_COLUMNS}, created_at, duration_minutes`;
+  let { data: activities, error } = await supabase
     .from("activity")
-    .select(
-      "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline, disciplines, duration_minutes",
-    )
+    .select(activitySelect)
     .eq("type", "cours")
     .is("deleted_at", null)
     .order("name");
+
+  if (isMissingDurationMinutesColumn(error)) {
+    ({ data: activities, error } = await supabase
+      .from("activity")
+      .select(`${COURSE_ACTIVITY_COLUMNS}, created_at`)
+      .eq("type", "cours")
+      .is("deleted_at", null)
+      .order("name"));
+  }
 
   if (error) {
     console.error("Error fetching activities", error);
@@ -118,11 +148,7 @@ export async function fetchCoursesForListing(): Promise<Course[]> {
       getCoursesFromDb(
         activities?.map((activity) => ({
           ...activity,
-          durationMinutes:
-            typeof activity.duration_minutes === "number" &&
-            activity.duration_minutes > 0
-              ? activity.duration_minutes
-              : null,
+          durationMinutes: durationMinutesFromActivity(activity),
         })),
       ),
       futureSessions,
