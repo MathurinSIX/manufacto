@@ -956,7 +956,9 @@ export async function registerForPracticeReservation(
         participant_emails: participantEmails,
         reserved_start_ts: block.start.toISOString(),
         reserved_end_ts: block.end.toISOString(),
-        reserved_machines: requestedMachines,
+        ...(requestedMachines.length
+          ? { reserved_machines: requestedMachines }
+          : {}),
       })),
     )
     .select("id");

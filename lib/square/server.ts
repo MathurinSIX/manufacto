@@ -1839,7 +1839,7 @@ async function registerUserForCourseSession({
       participant_emails: participantEmails,
       reserved_start_ts: reservationStart?.toISOString() ?? null,
       reserved_end_ts: reservationEnd?.toISOString() ?? null,
-      reserved_machines: machines,
+      ...(machines.length ? { reserved_machines: machines } : {}),
     })
     .select("id")
     .single();
