@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   applicationName: "Manufacto",
   formatDetection: {
     telephone: false,
+    address: false,
   },
   icons: {
     icon: [

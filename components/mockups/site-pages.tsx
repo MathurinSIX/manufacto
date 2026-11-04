@@ -756,11 +756,11 @@ export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {})
               </a>
             </p>
           </div>
-          <div className="overflow-hidden rounded-[19px] border border-black/10 bg-[#d9d9d9]">
+          <div className="relative isolate h-72 overflow-hidden rounded-[19px] border border-black/10 bg-[#d9d9d9] md:h-full md:min-h-[320px]">
             <iframe
               title="Manufacto — 8 rue de Locarno, Marseille"
               src="https://www.google.com/maps?q=8%20rue%20de%20Locarno%2C%2013005%20Marseille&output=embed"
-              className="h-72 w-full border-0 md:h-full md:min-h-[320px]"
+              className="absolute inset-0 h-full w-full border-0"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
               allowFullScreen

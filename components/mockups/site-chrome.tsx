@@ -141,7 +141,7 @@ function Topbar({
 
 function Footer({ scope }: { scope: SiteScope }) {
   return (
-    <footer className="mt-auto border-t border-black/10 bg-white">
+    <footer className="relative z-10 mt-auto border-t border-black/10 bg-white">
       <div className="mx-auto grid max-w-[1030px] gap-10 px-5 pb-10 pt-12 text-base md:grid-cols-[1fr_150px_150px_220px]">
         <div>
           <Link
