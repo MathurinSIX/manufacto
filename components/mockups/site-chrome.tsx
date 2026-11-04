@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { User } from "lucide-react";
 import { InstagramIcon } from "@/components/instagram-icon";
 import { MockupSwitcher } from "@/components/mockups/shared";
@@ -41,6 +42,17 @@ function Topbar({
   stickyClass?: string;
 }) {
   const home = scopeHref(scope);
+  const menuRef = useRef<HTMLDetailsElement>(null);
+
+  const closeMenu = () => {
+    if (menuRef.current) {
+      menuRef.current.open = false;
+    }
+  };
+
+  useEffect(() => {
+    closeMenu();
+  }, [activePath]);
 
   return (
     <header className={`${stickyClass} border-b border-black/10 bg-white`}>
@@ -93,11 +105,14 @@ function Topbar({
 
         <div className="flex items-center gap-3">
           <AccountButton className="hidden sm:inline-flex" />
-          <details className="relative md:hidden">
+          <details ref={menuRef} className="relative md:hidden">
             <summary className="cursor-pointer list-none rounded-md bg-[#f2f2f2] px-3 py-2 text-sm font-semibold">
               Menu
             </summary>
-            <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-black/10 bg-white p-3 shadow-lg">
+            <div
+              className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-black/10 bg-white p-3 shadow-lg"
+              onClick={closeMenu}
+            >
               <Link href={home} className="block px-2 py-2 hover:text-[#4a56dd]">
                 accueil
               </Link>
