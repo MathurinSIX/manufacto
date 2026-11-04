@@ -34,22 +34,8 @@ export const NAV_LINKS: NavLink[] = [
       { href: "/pratique-libre#ceramique", label: "céramique" },
     ],
   },
-  {
-    href: "/offrir",
-    label: "offrir",
-    subLinks: [
-      { href: "/offrir#credits", label: "cartes cadeaux" },
-      { href: "/contact#visite", label: "réserver une visite" },
-    ],
-  },
-  {
-    href: "/contact",
-    label: "contact",
-    subLinks: [
-      { href: "/contact#visite", label: "visite" },
-      { href: "/contact#adresse", label: "nous trouver" },
-    ],
-  },
+  { href: "/offrir", label: "offrir" },
+  { href: "/contact", label: "contact" },
 ];
 
 
