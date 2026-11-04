@@ -142,7 +142,7 @@ function Topbar({
 function Footer({ scope }: { scope: SiteScope }) {
   return (
     <footer className="mt-auto border-t border-black/10 bg-white">
-      <div className="mx-auto grid max-w-[1030px] gap-10 px-5 py-12 text-base md:grid-cols-[1fr_150px_150px_220px]">
+      <div className="mx-auto grid max-w-[1030px] gap-10 px-5 pb-10 pt-12 text-base md:grid-cols-[1fr_150px_150px_220px]">
         <div>
           <Link
             href={scopeHref(scope)}
@@ -200,6 +200,43 @@ function Footer({ scope }: { scope: SiteScope }) {
           <a href="tel:+33743461214" className="block hover:text-black">
             07 43 46 12 14
           </a>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[1030px] px-5 pb-12">
+        <div className="border-t border-black/10 pt-8">
+          <p className="text-sm font-medium uppercase tracking-[0.14em] text-black/45">
+            Partenaires
+          </p>
+          <ul className="mt-6 flex flex-col items-start gap-8 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-12 sm:gap-y-8">
+            <li>
+              <Image
+                src="/assets/partners/prefet-region-paca.png"
+                alt="Financé dans le cadre du CPER — Préfet de la région Provence-Alpes-Côte d'Azur"
+                width={314}
+                height={280}
+                className="h-32 w-auto"
+              />
+            </li>
+            <li>
+              <Image
+                src="/assets/partners/region-sud.png"
+                alt="Région Provence-Alpes-Côte d'Azur"
+                width={572}
+                height={280}
+                className="h-20 w-auto"
+              />
+            </li>
+            <li>
+              <Image
+                src="/assets/partners/ademe.png"
+                alt="ADEME, Agence de la transition écologique"
+                width={238}
+                height={280}
+                className="h-28 w-auto"
+              />
+            </li>
+          </ul>
         </div>
       </div>
     </footer>
