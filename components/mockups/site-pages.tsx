@@ -617,7 +617,8 @@ export function MockupPratiquePage({
                         offer.type === "autonomie_encadree") ? (
                         <p className="mt-3 text-sm font-medium" style={{ color: d.color }}>
                           Le tour de potier se réserve avec le créneau, pour une
-                          seule personne.
+                          seule personne, et seulement s&apos;il est utilisé pendant
+                          toute la durée.
                         </p>
                       ) : null}
                       {"expertCuisson" in offer && offer.expertCuisson ? (

@@ -1288,7 +1288,8 @@ export function PracticeReservationPicker({
           <p className="font-medium text-black">Réserver une machine</p>
           <p className="text-xs text-black/60">
             Facultatif. Une machine ne peut être utilisée que par une seule
-            personne sur le créneau.
+            personne sur le créneau. Merci de cocher la case uniquement si vous
+            allez utiliser la machine sur toute la durée du créneau.
           </p>
           {selectedHourChecks.length === 0 ? (
             <p className="text-sm text-black/70">
