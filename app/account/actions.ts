@@ -51,6 +51,7 @@ type ActivityRow = {
   nb_credits: number | string | null;
   price?: number | string | null;
   type: string | null;
+  discipline?: string | null;
 };
 
 type RegistrationRow = {
@@ -70,6 +71,11 @@ import {
   ACCOMPAGNEMENT_ACTIVITY_TYPE,
   getMinPracticeReservationHours,
 } from "@/lib/practice-reservation";
+import { inferPracticeDiscipline } from "@/lib/course-disciplines";
+import {
+  isWorkshopMachineId,
+  machinesForDiscipline,
+} from "@/lib/workshop-machines";
 
 const PRACTICE_ACTIVITY_TYPES = new Set([
   "autonomie",
@@ -603,6 +609,7 @@ export async function registerForPracticeReservation(
   giftCardCode?: string,
   participantEmailsInput: string[] = [],
   participantNamesInput: string[] = [],
+  machinesInput: string[] = [],
 ) {
   const parsedBooking = bookingFromInputs(
     participantCountInput,
@@ -685,7 +692,7 @@ export async function registerForPracticeReservation(
   const { data: sessionRows, error: sessionsError } = await supabase
     .from("session")
     .select(
-      "id, start_ts, end_ts, max_registrations, activity_id, activity:activity_id(id, name, nb_credits, type)",
+      "id, start_ts, end_ts, max_registrations, activity_id, activity:activity_id(id, name, nb_credits, type, discipline)",
     )
     .in("id", sessionIds);
 
@@ -845,6 +852,37 @@ export async function registerForPracticeReservation(
   const requiredCredits =
     toNumber(firstActivity.nb_credits) * totalDurationHours * participantCount;
 
+  const requestedMachines = Array.from(
+    new Set(machinesInput.map((machine) => machine.trim()).filter(Boolean)),
+  );
+  const practiceDiscipline = inferPracticeDiscipline(
+    firstActivity.name ?? "",
+    firstActivity.discipline,
+  );
+  const allowedMachines = new Set(
+    machinesForDiscipline(practiceDiscipline).map((machine) => machine.id),
+  );
+  if (
+    requestedMachines.length > 0 &&
+    firstActivity.type !== "autonomie" &&
+    firstActivity.type !== "autonomie_encadree"
+  ) {
+    return {
+      error: "Les machines se réservent en autonomie ou en autonomie encadrée.",
+      registrationIds: [],
+    };
+  }
+  if (
+    requestedMachines.some(
+      (machine) => !isWorkshopMachineId(machine) || !allowedMachines.has(machine),
+    )
+  ) {
+    return {
+      error: "Une des machines choisies n'est pas disponible pour cet atelier.",
+      registrationIds: [],
+    };
+  }
+
   let validatedGiftCard: Awaited<
     ReturnType<
       typeof import("@/lib/gift-cards/redeem").validateGiftCardForBooking
@@ -918,14 +956,18 @@ export async function registerForPracticeReservation(
         participant_emails: participantEmails,
         reserved_start_ts: block.start.toISOString(),
         reserved_end_ts: block.end.toISOString(),
+        reserved_machines: requestedMachines,
       })),
     )
     .select("id");
 
   if (insertError || !inserted) {
     console.error("Error creating practice reservation:", insertError);
+    const message = insertError?.message ?? "";
     return {
-      error: "Votre inscription n'a pas pu être enregistrée.",
+      error: message.includes("déjà réservée")
+        ? "Cette machine est déjà réservée sur ce créneau."
+        : "Votre inscription n'a pas pu être enregistrée.",
       registrationIds: [],
     };
   }

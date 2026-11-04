@@ -49,6 +49,10 @@ import {
   legalDocsUserMessage,
   redirectToLegalDocsIfRequired,
 } from "@/lib/legal/client";
+import {
+  isWorkshopMachineId,
+  machinesForDiscipline,
+} from "@/lib/workshop-machines";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -142,6 +146,7 @@ interface PracticeReservationPickerProps {
   activityId: string;
   activityTitle: string;
   activityType?: string | null;
+  activityDiscipline?: string | null;
   credits?: number | null;
   squareProductId?: string | null;
   fixedHourCount?: number;
@@ -258,6 +263,7 @@ export function PracticeReservationPicker({
   activityId,
   activityTitle,
   activityType,
+  activityDiscipline = null,
   credits,
   squareProductId,
   fixedHourCount,
@@ -271,6 +277,8 @@ export function PracticeReservationPicker({
   const [myRegistrations, setMyRegistrations] = useState<MyPracticeRegistration[]>([]);
   const [selectedDay, setSelectedDay] = useState<string>("");
   const [selectedHourKeys, setSelectedHourKeys] = useState<string[]>([]);
+  const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
+  const [takenMachines, setTakenMachines] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -627,6 +635,64 @@ export function PracticeReservationPicker({
     [selectedHourKeys, hourSlotOptions],
   );
 
+  const availableMachines = useMemo(
+    () =>
+      activityType === "autonomie" || activityType === "autonomie_encadree"
+        ? machinesForDiscipline(activityDiscipline)
+        : [],
+    [activityDiscipline, activityType],
+  );
+
+  const selectionRange = useMemo(() => {
+    if (!orderedSelectedSlots.length) return null;
+    const start = orderedSelectedSlots[0].iso;
+    const last = orderedSelectedSlots[orderedSelectedSlots.length - 1];
+    return {
+      start,
+      end: new Date(new Date(last.iso).getTime() + HOUR_MS).toISOString(),
+    };
+  }, [orderedSelectedSlots]);
+
+  useEffect(() => {
+    if (!availableMachines.length || !selectionRange || !activityDiscipline) {
+      setTakenMachines([]);
+      return;
+    }
+
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase
+      .rpc("workshop_machines_taken", {
+        p_start: selectionRange.start,
+        p_end: selectionRange.end,
+        p_discipline: activityDiscipline,
+      })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Error fetching reserved machines:", error);
+          setTakenMachines([]);
+          return;
+        }
+        const taken = Array.isArray(data)
+          ? data.filter((machine): machine is string => typeof machine === "string")
+          : [];
+        setTakenMachines(taken);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activityDiscipline, availableMachines.length, selectionRange]);
+
+  useEffect(() => {
+    const allowed = new Set<string>(availableMachines.map((machine) => machine.id));
+    const taken = new Set(takenMachines);
+    setSelectedMachines((current) =>
+      current.filter((machine) => allowed.has(machine) && !taken.has(machine)),
+    );
+  }, [availableMachines, takenMachines]);
+
   const hasConsecutiveSelection = areHourSlotsConsecutive(orderedSelectedSlots);
 
   const selectedHourChecks = useMemo(
@@ -890,6 +956,7 @@ export function PracticeReservationPicker({
         giftCardCode,
         participantEmails,
         participantNames,
+        selectedMachines.filter(isWorkshopMachineId),
       );
 
       if (result.error) {
@@ -907,6 +974,7 @@ export function PracticeReservationPicker({
       : orderedSelectedSlots.length;
     setIsRegistering(false);
     setSelectedHourKeys([]);
+    setSelectedMachines([]);
     setParticipants((current) => current.slice(0, 1));
     setSuccessMessage(
       bookedCount > 1
@@ -1212,6 +1280,54 @@ export function PracticeReservationPicker({
               {reservationRuleMessage}
             </p>
           ) : null}
+          {availableMachines.length ? (
+            <div className="mt-4 space-y-2">
+              <p className="font-medium text-black">Machines</p>
+              <p className="text-xs text-black/60">
+                Facultatif. Une machine ne peut être utilisée que par une seule
+                personne sur le créneau.
+              </p>
+              <div className="grid gap-2">
+                {availableMachines.map((machine) => {
+                  const taken = takenMachines.includes(machine.id);
+                  const checked = selectedMachines.includes(machine.id);
+                  return (
+                    <label
+                      key={machine.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-md border px-3 py-2",
+                        taken
+                          ? "cursor-not-allowed border-black/10 bg-black/5 text-black/45"
+                          : "cursor-pointer border-black/15 bg-white",
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-[#4a56dd]"
+                          checked={checked}
+                          disabled={taken}
+                          onChange={() => {
+                            setSelectedMachines((current) =>
+                              current.includes(machine.id)
+                                ? current.filter((id) => id !== machine.id)
+                                : [...current, machine.id],
+                            );
+                          }}
+                        />
+                        {machine.label}
+                      </span>
+                      {taken ? (
+                        <span className="text-xs font-semibold uppercase tracking-wide">
+                          Déjà utilisée
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1268,6 +1384,7 @@ export function PracticeReservationPicker({
             participantCount={participantCount}
             participantNames={participantNames}
             participantEmails={participantEmails}
+            machines={selectedMachines.filter(isWorkshopMachineId)}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
             disabled={
               isRegistering ||

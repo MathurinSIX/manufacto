@@ -153,7 +153,8 @@ function AtelierTarifsBody({ showCheckout }: { showCheckout: boolean }) {
         </h3>
         <p className="mt-2 text-base leading-normal text-black/65">
           Les abonnements vous permettent d&apos;avoir un volume de crédit
-          mensuel à utiliser à l&apos;atelier, à tarif préférentiel.
+          mensuel à utiliser à l&apos;atelier, à tarif préférentiel. Ils se
+          réservent uniquement sur place.
         </p>
         <div className="mt-6">
           <Suspense
@@ -175,9 +176,9 @@ function AtelierTarifsBody({ showCheckout }: { showCheckout: boolean }) {
           Les abonnements ont une durée d&apos;engagement de 3 mois, puis
           peuvent être résiliés chaque mois. Les crédits non utilisés dans le
           mois restent disponibles et se cumulent. Vous devez dans tous les
-          cas réserver vos créneaux avant de venir à l&apos;atelier. Après
-          résiliation, vous disposez de 3 mois pour utiliser votre solde de
-          crédits.
+          cas réserver vos créneaux avant de venir à l&apos;atelier. Les
+          abonnements se réservent uniquement sur place. Après résiliation,
+          vous disposez de 3 mois pour utiliser votre solde de crédits.
         </p>
       </div>
 

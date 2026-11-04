@@ -31,6 +31,7 @@ export function DisciplinePhotoCarousel({
         compact={compact}
         priority={priority}
         sizes="(max-width: 768px) 100vw, 640px"
+        objectPosition={discipline === "ceramique" ? "center 38%" : undefined}
       />
     </div>
   );

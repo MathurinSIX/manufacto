@@ -24,6 +24,8 @@ import {
 import {
   getAllActivities,
   getActivityInterestCounts,
+  listCourseDisciplines,
+  createCourseDiscipline,
   createActivity,
   updateActivity,
   deleteActivity,
@@ -39,7 +41,6 @@ import { DEFAULT_COURSE_IMAGE, resolveActivityImages } from "@/app/cours/course-
 import {
   COURSE_DISCIPLINE_OPTIONS,
   formatCourseDiscipline,
-  isCourseDiscipline,
   normalizeActivityDisciplines,
 } from "@/lib/course-disciplines";
 import { SquareVariationPicker } from "@/components/square-variation-picker";
@@ -111,6 +112,7 @@ type Activity = {
   audience: string | null;
   discipline: string | null;
   disciplines?: string[] | null;
+  duration_minutes?: number | null;
 };
 
 function ActivityImageCarousel({ activity }: { activity: Activity }) {
@@ -160,6 +162,18 @@ export function AdminActivitiesManagementTab({
   const [squareVariations, setSquareVariations] = useState<SquareCatalogVariationOption[]>([]);
   const [activityLevel, setActivityLevel] = useState("");
   const [activityAudience, setActivityAudience] = useState("");
+  const [activityDurationHours, setActivityDurationHours] = useState("");
+  const [disciplineOptions, setDisciplineOptions] = useState<
+    { value: string; label: string }[]
+  >(
+    COURSE_DISCIPLINE_OPTIONS.map((option) => ({
+      value: option.value,
+      label: option.label,
+    })),
+  );
+  const [disciplineDialogOpen, setDisciplineDialogOpen] = useState(false);
+  const [newDisciplineLabel, setNewDisciplineLabel] = useState("");
+  const [savingDiscipline, setSavingDiscipline] = useState(false);
   const [draftSlots, setDraftSlots] = useState<DraftSessionSlot[]>([]);
   const [seriesTarget, setSeriesTarget] = useState("independent");
   const [existingSessions, setExistingSessions] = useState<ExistingSession[]>([]);
@@ -252,6 +266,21 @@ export function AdminActivitiesManagementTab({
     loadActivities();
   }, [loadActivities]);
 
+  const loadDisciplines = useCallback(async () => {
+    const result = await listCourseDisciplines();
+    if (result.error || !result.disciplines.length) return;
+    setDisciplineOptions(
+      result.disciplines.map((discipline) => ({
+        value: discipline.slug,
+        label: discipline.label,
+      })),
+    );
+  }, []);
+
+  useEffect(() => {
+    void loadDisciplines();
+  }, [loadDisciplines]);
+
   const handleOpenDialog = async (activity?: Activity) => {
     setDraftSlots([createEmptySlot()]);
     setExistingSessions([]);
@@ -276,6 +305,11 @@ export function AdminActivitiesManagementTab({
       setActivitySquareProductId(activity.square_product_id || "");
       setActivityLevel(activity.level || "");
       setActivityAudience(activity.audience || "");
+      setActivityDurationHours(
+        activity.duration_minutes && activity.duration_minutes > 0
+          ? String(activity.duration_minutes / 60)
+          : "",
+      );
       setDialogOpen(true);
       setError(null);
       setLoadingSessions(true);
@@ -301,6 +335,7 @@ export function AdminActivitiesManagementTab({
       setActivitySquareProductId("");
       setActivityLevel("");
       setActivityAudience("");
+      setActivityDurationHours("");
       setDialogOpen(true);
       setError(null);
     }
@@ -317,6 +352,7 @@ export function AdminActivitiesManagementTab({
     setActivitySquareProductId("");
     setActivityLevel("");
     setActivityAudience("");
+    setActivityDurationHours("");
     setDraftSlots([createEmptySlot()]);
     setSeriesTarget("independent");
     setExistingSessions([]);
@@ -434,7 +470,17 @@ export function AdminActivitiesManagementTab({
       }
 
       const type = activityTypes?.[0] ?? "cours";
-      const disciplines = activityDisciplines.filter(isCourseDiscipline);
+      const knownDisciplines = new Set(disciplineOptions.map((option) => option.value));
+      const disciplines = activityDisciplines.filter((value) => knownDisciplines.has(value));
+      const durationHours = activityDurationHours.trim();
+      const durationMinutes = durationHours
+        ? Math.round(Number.parseFloat(durationHours.replace(",", ".")) * 60)
+        : null;
+      if (durationHours && (!durationMinutes || durationMinutes <= 0)) {
+        setError("La durée doit être un nombre d'heures positif");
+        setSaving(false);
+        return;
+      }
 
       if (disciplines.length === 0) {
         setError("Au moins une discipline est requise");
@@ -466,6 +512,7 @@ export function AdminActivitiesManagementTab({
           audience,
           discipline,
           disciplines,
+          durationMinutes,
         );
       } else {
         result = await createActivity(
@@ -480,6 +527,7 @@ export function AdminActivitiesManagementTab({
           audience,
           discipline,
           disciplines,
+          durationMinutes,
         );
       }
 
@@ -585,8 +633,61 @@ export function AdminActivitiesManagementTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">liste des cours</h3>
+        <div className="flex items-center gap-2">
+          <Dialog open={disciplineDialogOpen} onOpenChange={setDisciplineDialogOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                ajouter une discipline
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nouvelle discipline</DialogTitle>
+                <DialogDescription>
+                  Ce libellé pourra être choisi quand vous créez un cours.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                <Label htmlFor="new-discipline">Nom</Label>
+                <Input
+                  id="new-discipline"
+                  value={newDisciplineLabel}
+                  onChange={(event) => setNewDisciplineLabel(event.target.value)}
+                  placeholder="Ex: Bijouterie"
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  disabled={savingDiscipline || newDisciplineLabel.trim().length < 2}
+                  onClick={() => {
+                    setSavingDiscipline(true);
+                    void createCourseDiscipline(newDisciplineLabel)
+                      .then(async (result) => {
+                        if (result.error || !result.discipline) {
+                          setError(result.error ?? "Impossible d'ajouter la discipline");
+                          return;
+                        }
+                        setNewDisciplineLabel("");
+                        setDisciplineDialogOpen(false);
+                        await loadDisciplines();
+                        setActivityDisciplines((current) =>
+                          current.includes(result.discipline!.slug)
+                            ? current
+                            : [...current, result.discipline!.slug],
+                        );
+                      })
+                      .finally(() => setSavingDiscipline(false));
+                  }}
+                >
+                  {savingDiscipline ? "Ajout..." : "Ajouter"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         <Dialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -616,6 +717,21 @@ export function AdminActivitiesManagementTab({
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="duration-hours">Durée du cours (heures)</Label>
+                    <Input
+                      id="duration-hours"
+                      inputMode="decimal"
+                      value={activityDurationHours}
+                      onChange={(e) => setActivityDurationHours(e.target.value)}
+                      placeholder="Ex: 6"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Durée affichée sur le site. Laissez vide pour la calculer à partir des sessions.
+                    </p>
+                  </div>
+                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="name">Nom de l&apos;activité *</Label>
                   <Input
@@ -629,7 +745,7 @@ export function AdminActivitiesManagementTab({
                 <div className="grid gap-2">
                   <Label>Disciplines / univers *</Label>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {COURSE_DISCIPLINE_OPTIONS.map((option) => {
+                    {disciplineOptions.map((option) => {
                       const checked = activityDisciplines.includes(option.value);
                       return (
                         <label
@@ -646,7 +762,7 @@ export function AdminActivitiesManagementTab({
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Sélectionnez un ou plusieurs univers pour ce cours.
+                    Sélectionnez un ou plusieurs univers pour ce cours. Les nouveaux libellés s&apos;ajoutent avec « ajouter une discipline ».
                   </p>
                 </div>
                 <SquareVariationPicker
@@ -1117,6 +1233,7 @@ export function AdminActivitiesManagementTab({
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {error && !dialogOpen && (

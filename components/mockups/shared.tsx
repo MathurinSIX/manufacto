@@ -342,12 +342,14 @@ export function ImageTile({
   className = "",
   children,
   priority = false,
+  objectPosition = "center",
 }: {
   src: string;
   alt: string;
   className?: string;
   children?: React.ReactNode;
   priority?: boolean;
+  objectPosition?: string;
 }) {
   return (
     <div className={`relative overflow-hidden rounded-[19px] bg-[#d9d9d9] ${className}`}>
@@ -356,6 +358,7 @@ export function ImageTile({
         alt={alt}
         fill
         className="object-cover"
+        style={{ objectPosition }}
         sizes="(max-width: 768px) 100vw, 640px"
         priority={priority}
       />

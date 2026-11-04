@@ -28,6 +28,7 @@ import {
   PARIS_TIMEZONE,
   parseParisDateTime,
 } from "@/lib/paris-time";
+import { formatInterestCount } from "@/lib/course-disciplines";
 import { cn } from "@/lib/utils";
 
 function parseDateParam(value: string | null): string {
@@ -322,6 +323,11 @@ export function AdminTodayTab() {
               {selectedSession?.max_registrations != null
                 ? ` / ${selectedSession.max_registrations} max`
                 : ""}
+              {selectedSession?.activity_type === "cours" ? (
+                <span className="mt-2 block font-medium text-foreground">
+                  {formatInterestCount(selectedSession.interestCount ?? 0)}
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 

@@ -36,25 +36,17 @@ function CourseCarouselFallback() {
   );
 }
 
-function HomeHeroHeadline({ variant }: { variant: ExperimentVariant }) {
-  if (variant === "test") {
-    return (
-      <h1 className="max-w-4xl text-[34px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[48px]">
-        <span className="text-[#f56800]">Faire soi-même</span>,{" "}
-        <span className="text-[#4a56dd]">réparer</span>,{" "}
-        <span className="text-[#d73459]">réemployer</span>,{" "}
-        <span className="text-[#20b75a]">créer</span>.
-      </h1>
-    );
-  }
-
+function HomeHeroHeadline({ variant: _variant }: { variant: ExperimentVariant }) {
+  void _variant;
   return (
-    <h1 className="max-w-3xl text-[34px] font-bold leading-[1.15] tracking-[-0.02em] md:text-[48px]">
-      Un atelier pour{" "}
-      <span className="text-[#f56800]">faire</span>,{" "}
-      <span className="text-[#4a56dd]">apprendre</span>
-      {" "}ou{" "}
-      <span className="text-[#d73459]">offrir</span>
+    <h1 className="max-w-5xl text-balance text-[32px] font-bold leading-[1.2] tracking-[-0.02em] sm:text-[34px] md:text-[48px]">
+      Manufacto&nbsp;:{" "}
+      <span className="text-[#f56800]">faire soi-même</span>,{" "}
+      <span className="text-[#4a56dd]">réparer</span>,{" "}
+      <span className="whitespace-nowrap">
+        <span className="text-[#d73459]">réemployer</span>,{" "}
+        <span className="text-[#20b75a]">créer</span>
+      </span>
     </h1>
   );
 }
@@ -136,6 +128,7 @@ export function HomePage({
                 src={HOME_HERO_PHOTOS[1]}
                 alt="Cours ponctuels"
                 className="h-[260px] md:h-[340px]"
+                objectPosition="center 58%"
                 priority
               >
                 <span className="flex flex-col items-center gap-2">
@@ -257,6 +250,7 @@ export function HomePage({
               src={HOME_CRAFT_PHOTOS.ceramique}
               alt="Céramique"
               className="h-40 md:h-48"
+              objectPosition="center 82%"
             />
             <ImageTile
               src={HOME_CRAFT_PHOTOS.electronique}

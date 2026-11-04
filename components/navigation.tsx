@@ -60,12 +60,12 @@ export async function Navigation() {
 
         <div className="hidden items-center gap-8 text-center text-base md:flex">
           {NAV_LINKS.map((item) => (
-            <div key={item.label} className="group relative flex min-w-[90px] flex-col items-center py-8">
-              <Link href={item.href} className="leading-normal hover:text-[#4a56dd]">
+            <div key={item.label} className="group relative flex min-w-[90px] flex-col items-center">
+              <Link href={item.href} className="px-1 py-8 leading-normal hover:text-[#4a56dd]">
                 {item.label}
               </Link>
               {item.subLinks?.length ? (
-                <div className="invisible absolute left-1/2 top-full z-20 flex min-w-[150px] -translate-x-1/2 flex-col gap-1 rounded-xl bg-white px-4 py-3 text-sm leading-tight text-black/55 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                <div className="invisible absolute left-1/2 top-[calc(100%-1.75rem)] z-20 flex min-w-[168px] -translate-x-1/2 flex-col gap-1 rounded-xl bg-white px-4 pb-3 pt-2 text-sm leading-tight text-black/55 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                   {item.subLinks.map((subLink) => (
                     <HashLink key={subLink.href} href={subLink.href} className="hover:text-[#4a56dd]">
                       {subLink.label}

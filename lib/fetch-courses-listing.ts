@@ -97,7 +97,7 @@ export async function fetchCoursesForListing(): Promise<Course[]> {
   const { data: activities, error } = await supabase
     .from("activity")
     .select(
-      "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline, disciplines",
+      "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, created_at, level, audience, discipline, disciplines, duration_minutes",
     )
     .eq("type", "cours")
     .is("deleted_at", null)
@@ -118,7 +118,11 @@ export async function fetchCoursesForListing(): Promise<Course[]> {
       getCoursesFromDb(
         activities?.map((activity) => ({
           ...activity,
-          durationMinutes: null,
+          durationMinutes:
+            typeof activity.duration_minutes === "number" &&
+            activity.duration_minutes > 0
+              ? activity.duration_minutes
+              : null,
         })),
       ),
       futureSessions,

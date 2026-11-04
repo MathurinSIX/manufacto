@@ -11,6 +11,7 @@ type CourseImageCarouselProps = {
   alt: string;
   className?: string;
   imageClassName?: string;
+  objectPosition?: string;
   sizes?: string;
   priority?: boolean;
   compact?: boolean;
@@ -21,6 +22,7 @@ export function CourseImageCarousel({
   alt,
   className,
   imageClassName,
+  objectPosition,
   sizes = "100vw",
   priority = false,
   compact = false,
@@ -49,6 +51,7 @@ export function CourseImageCarousel({
         alt={hasMultipleImages ? `${alt} — photo ${activeIndex + 1}` : alt}
         fill
         className={cn("object-cover", imageClassName)}
+        style={objectPosition ? { objectPosition } : undefined}
         sizes={sizes}
         priority={priority && activeIndex === 0}
       />

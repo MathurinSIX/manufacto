@@ -734,7 +734,9 @@ async function AccountContent() {
                   <p className="mt-5 text-sm leading-normal text-black/60">
                     Les abonnements ont une durée d&apos;engagement de 3 mois, puis
                     peuvent être résiliés chaque mois. Les crédits non utilisés
-                    restent disponibles et se cumulent.
+                    restent disponibles et se cumulent. Les abonnements se
+                    réservent uniquement sur place. Après résiliation, vous
+                    disposez de 3 mois pour utiliser votre solde de crédits.
                   </p>
                 </CardContent>
               </Card>

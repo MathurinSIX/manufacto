@@ -1544,6 +1544,7 @@ type SquarePurchaseRow = {
   activity_id?: string | null;
   reserved_start_ts?: string | null;
   reserved_end_ts?: string | null;
+  reserved_machines?: string[] | null;
   participant_count?: number | null;
   participant_names?: string[] | null;
   participant_emails?: string[] | null;
@@ -1616,6 +1617,7 @@ async function registerUserForCourseSession({
   participantCount: participantCountInput = 1,
   participantNames = [],
   participantEmails = [],
+  machines = [],
 }: {
   userId: string;
   sessionId: string;
@@ -1624,6 +1626,7 @@ async function registerUserForCourseSession({
   participantCount?: number;
   participantNames?: string[];
   participantEmails?: string[];
+  machines?: string[];
 }) {
   const participantCount = clampParticipantCount(participantCountInput);
   const supabase = getAdminClient();
@@ -1836,6 +1839,7 @@ async function registerUserForCourseSession({
       participant_emails: participantEmails,
       reserved_start_ts: reservationStart?.toISOString() ?? null,
       reserved_end_ts: reservationEnd?.toISOString() ?? null,
+      reserved_machines: machines,
     })
     .select("id")
     .single();
@@ -1938,6 +1942,7 @@ async function fulfillCourseSquarePurchase({
               end: claimedPurchase.reserved_end_ts,
             }
           : null,
+      machines: claimedPurchase.reserved_machines ?? [],
     });
   } catch (error) {
     console.error("Error registering course after Square payment:", error);

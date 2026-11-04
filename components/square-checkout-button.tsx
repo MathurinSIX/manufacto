@@ -16,6 +16,7 @@ type SquareCheckoutButtonProps = {
   participantCount?: number;
   participantNames?: string[];
   participantEmails?: string[];
+  machines?: string[];
   /** Quantity for unit credit packs (1–5). Ignored for other products. */
   quantity?: number;
   children: React.ReactNode;
@@ -36,6 +37,7 @@ export function SquareCheckoutButton({
   participantCount = 1,
   participantNames = [],
   participantEmails = [],
+  machines = [],
   quantity = 1,
   children,
   className,
@@ -80,6 +82,7 @@ export function SquareCheckoutButton({
           participantCount,
           participantNames,
           participantEmails,
+          machines,
           quantity,
         }),
       });

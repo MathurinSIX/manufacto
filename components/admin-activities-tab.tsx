@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { formatInterestCount } from "@/lib/course-disciplines";
 import {
   Dialog,
   DialogContent,
@@ -126,6 +127,7 @@ type SessionWithUsers = {
   activity_id: string;
   activity_name: string;
   activity_type: string | null;
+  interestCount?: number | null;
 };
 
 function getSessionParticipantTotal(session: SessionWithUsers) {
@@ -1788,6 +1790,11 @@ export function AdminActivitiesTab({
               {isPracticeView
                 ? "gérer les utilisateurs inscrits sur ce créneau d'ouverture"
                 : "gérer les utilisateurs inscrits à cette session"}
+              {selectedSession?.activity_type === "cours" ? (
+                <span className="mt-2 block font-medium text-foreground">
+                  {formatInterestCount(selectedSession.interestCount ?? 0)}
+                </span>
+              ) : null}
               {selectedSession && isSessionFinished(selectedSession) && isSameParisDay(selectedSession.start_ts) ? (
                 <span className="mt-2 block text-amber-700 dark:text-amber-400">
                   Session terminée — vous pouvez encore ajouter un participant oublié aujourd&apos;hui et déduire ses crédits.

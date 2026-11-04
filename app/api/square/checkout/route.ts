@@ -21,6 +21,11 @@ import {
   clampCreditUnitQuantity,
   isUnitCreditPack,
 } from "@/lib/square/products";
+import { inferPracticeDiscipline } from "@/lib/course-disciplines";
+import {
+  isWorkshopMachineId,
+  machinesForDiscipline,
+} from "@/lib/workshop-machines";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,6 +39,7 @@ type CheckoutBody = {
   participantCount?: number;
   participantNames?: string[];
   participantEmails?: string[];
+  machines?: string[];
   quantity?: number;
   customAmountEuros?: number;
 };
@@ -48,12 +54,14 @@ function buildPurchaseContextColumns({
   reservationStartDate,
   reservationEndDate,
   hasValidReservationWindow,
+  machines,
 }: {
   activityId: string | null;
   sessionId: string;
   reservationStartDate: Date | null;
   reservationEndDate: Date | null;
   hasValidReservationWindow: boolean | Date | null;
+  machines: string[];
 }) {
   return {
     ...(activityId ? { activity_id: activityId } : {}),
@@ -64,6 +72,7 @@ function buildPurchaseContextColumns({
           reserved_end_ts: reservationEndDate.toISOString(),
         }
       : {}),
+    ...(machines.length ? { reserved_machines: machines } : {}),
   };
 }
 
@@ -78,6 +87,7 @@ export async function POST(request: Request) {
       participantCount: participantCountInput,
       participantNames: participantNamesInput,
       participantEmails: participantEmailsInput,
+      machines: machinesInput,
       quantity: quantityInput,
       customAmountEuros,
     } = (await request.json()) as CheckoutBody;
@@ -289,12 +299,86 @@ export async function POST(request: Request) {
         !Number.isNaN(reservationStartDate.getTime()) &&
         !Number.isNaN(reservationEndDate.getTime()) &&
         reservationEndDate.getTime() > reservationStartDate.getTime();
+      const requestedMachines = Array.isArray(machinesInput)
+        ? Array.from(new Set(machinesInput.map((machine) => machine.trim()).filter(Boolean)))
+        : [];
+      if (requestedMachines.some((machine) => !isWorkshopMachineId(machine))) {
+        return NextResponse.json(
+          { error: "Une des machines choisies n'est pas disponible." },
+          { status: 400 },
+        );
+      }
+
+      if (requestedMachines.length > 0) {
+        if (!hasValidReservationWindow || !reservationStartDate || !reservationEndDate) {
+          return NextResponse.json(
+            { error: "Choisissez un créneau avant de réserver une machine." },
+            { status: 400 },
+          );
+        }
+
+        const { data: activity, error: activityError } = await supabase
+          .from("activity")
+          .select("id, name, type, discipline")
+          .eq("id", activityIdForPurchase ?? "")
+          .maybeSingle();
+
+        if (activityError || !activity) {
+          return NextResponse.json(
+            { error: "Activité introuvable pour cette machine." },
+            { status: 400 },
+          );
+        }
+
+        const discipline = inferPracticeDiscipline(activity.name ?? "", activity.discipline);
+        const allowed = new Set<string>(
+          machinesForDiscipline(discipline).map((machine) => machine.id),
+        );
+        if (
+          (activity.type !== "autonomie" && activity.type !== "autonomie_encadree") ||
+          requestedMachines.some((machine) => !allowed.has(machine))
+        ) {
+          return NextResponse.json(
+            { error: "Cette machine n'est pas disponible pour cet atelier." },
+            { status: 400 },
+          );
+        }
+
+        const { data: taken, error: takenError } = await supabase.rpc(
+          "workshop_machines_taken",
+          {
+            p_start: reservationStartDate.toISOString(),
+            p_end: reservationEndDate.toISOString(),
+            p_discipline: discipline,
+          },
+        );
+
+        if (takenError) {
+          console.error("Error checking workshop machines:", takenError);
+          return NextResponse.json(
+            { error: "Impossible de vérifier les machines." },
+            { status: 500 },
+          );
+        }
+
+        const takenIds = new Set(
+          Array.isArray(taken) ? taken.filter((machine) => typeof machine === "string") : [],
+        );
+        if (requestedMachines.some((machine) => takenIds.has(machine))) {
+          return NextResponse.json(
+            { error: "Cette machine est déjà réservée sur ce créneau." },
+            { status: 409 },
+          );
+        }
+      }
+
       const purchaseContextColumns = buildPurchaseContextColumns({
         activityId: activityIdForPurchase,
         sessionId: normalizedSessionId,
         reservationStartDate,
         reservationEndDate,
         hasValidReservationWindow,
+        machines: requestedMachines.filter(isWorkshopMachineId),
       });
 
       if (catalogProduct.kind === "discovery") {
@@ -466,6 +550,7 @@ export async function POST(request: Request) {
       reservationStartDate: null,
       reservationEndDate: null,
       hasValidReservationWindow: false,
+      machines: [],
     });
 
     const adminClient = getAdminClient();

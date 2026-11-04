@@ -48,36 +48,57 @@ export function isCourseDiscipline(value: string): value is CourseDiscipline {
   return COURSE_DISCIPLINE_VALUES.includes(value as CourseDiscipline);
 }
 
+const DISCIPLINE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function normalizeDisciplineSlug(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return DISCIPLINE_SLUG_RE.test(normalized) ? normalized : null;
+}
+
+export function formatInterestCount(count: number) {
+  if (count <= 0) return "Aucune personne intéressée";
+  if (count === 1) return "1 personne intéressée";
+  return `${count} personnes intéressées`;
+}
+
 export function formatCourseDiscipline(value: string | null | undefined) {
   if (!value) {
     return null;
   }
 
-  const normalized = value
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const normalized = normalizeDisciplineSlug(value);
+  if (!normalized) {
+    return value.trim() || null;
+  }
 
-  return COURSE_DISCIPLINE_LABELS.get(normalized) ?? null;
+  return (
+    COURSE_DISCIPLINE_LABELS.get(normalized) ??
+    normalized
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  );
 }
 
 /** Normalize DB `discipline` + optional `disciplines[]` into a unique ordered list of keys. */
 export function normalizeActivityDisciplines(
   discipline?: string | null,
   disciplines?: string[] | null,
-): CourseDiscipline[] {
-  const keys: CourseDiscipline[] = [];
+): string[] {
+  const keys: string[] = [];
   const seen = new Set<string>();
 
   const push = (raw: string | null | undefined) => {
-    if (!raw) return;
-    const normalized = raw
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    if (!isCourseDiscipline(normalized) || seen.has(normalized)) return;
+    const normalized = normalizeDisciplineSlug(raw);
+    if (!normalized || seen.has(normalized)) return;
     seen.add(normalized);
     keys.push(normalized);
   };
@@ -93,7 +114,7 @@ export function normalizeActivityDisciplines(
 export function primaryActivityDiscipline(
   discipline?: string | null,
   disciplines?: string[] | null,
-): CourseDiscipline | null {
+): string | null {
   return normalizeActivityDisciplines(discipline, disciplines)[0] ?? null;
 }
 

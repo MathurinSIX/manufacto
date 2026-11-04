@@ -42,7 +42,8 @@ function toDisciplineKey(label: string): CourseDiscipline {
   if (normalized.includes("couture")) return "couture";
   if (normalized.includes("ceramique")) return "ceramique";
   if (normalized.includes("electronique")) return "electronique";
-  return "menuiserie";
+  if (normalized.includes("menuiserie")) return "menuiserie";
+  return "autre";
 }
 
 export function CourseCard({ course }: CourseCardProps) {
@@ -71,13 +72,22 @@ export function CourseCard({ course }: CourseCardProps) {
           />
         </div>
         <div className="flex flex-1 flex-col p-5">
-          <Image
-            src={wordMeta.word}
-            alt={course.discipline}
-            width={wordMeta.wordW}
-            height={wordMeta.wordH}
-            className="h-7 w-auto object-contain object-left"
-          />
+          {discipline === "autre" ? (
+            <p
+              className="text-sm font-bold uppercase tracking-[0.12em]"
+              style={{ color: colors.fg }}
+            >
+              {course.discipline}
+            </p>
+          ) : (
+            <Image
+              src={wordMeta.word}
+              alt={course.discipline}
+              width={wordMeta.wordW}
+              height={wordMeta.wordH}
+              className="h-7 w-auto object-contain object-left"
+            />
+          )}
           <h3 className="mt-4 text-lg font-bold leading-snug text-black/90 sm:text-xl">
             {course.title}
           </h3>

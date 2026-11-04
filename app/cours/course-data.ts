@@ -286,7 +286,8 @@ export function enrichCoursesForListing(
     buildCourseDurationMinutesByActivityId(sessionsForDuration);
 
   return courses.map((course) => {
-    const durationMinutes = durationByActivityId.get(course.id) ?? course.durationMinutes;
+    const durationMinutes =
+      course.durationMinutes ?? durationByActivityId.get(course.id);
 
     return {
       ...course,

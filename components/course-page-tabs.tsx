@@ -28,10 +28,16 @@ export function CoursePageTabs({
   const [activeTab, setActiveTab] = useState(TAB_CALENDRIER);
 
   useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
-    if (hash === TAB_OFFRES || hash === TAB_CALENDRIER) {
-      setActiveTab(hash);
-    }
+    const applyHash = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === TAB_OFFRES || hash === TAB_CALENDRIER) {
+        setActiveTab(hash);
+      }
+    };
+
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
   const handleTabChange = (value: string) => {

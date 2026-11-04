@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { User } from "lucide-react";
 import { InstagramIcon } from "@/components/instagram-icon";
 import { MockupSwitcher } from "@/components/mockups/shared";
+import { HashLink } from "@/components/hash-link";
+import { NAV_LINKS } from "@/lib/nav-links";
 import {
   mockupHref,
   scopeHref,
@@ -16,14 +18,6 @@ import {
 
 export type { ProposalId, SiteScope };
 export { mockupHref, scopeHref, PROPOSAL_BASE };
-
-const NAV_ITEMS: { path: string; label: string }[] = [
-  { path: "/atelier", label: "l'atelier" },
-  { path: "/cours", label: "cours" },
-  { path: "/pratique-libre", label: "pratique libre" },
-  { path: "/offrir", label: "offrir" },
-  { path: "/contact", label: "contact" },
-];
 
 function AccountButton({ className = "" }: { className?: string }) {
   return (
@@ -63,20 +57,36 @@ function Topbar({
         </Link>
 
         <nav className="hidden items-center gap-7 text-base md:flex">
-          {NAV_ITEMS.map((item) => {
-            const href = scopeHref(scope, item.path);
+          {NAV_LINKS.map((item) => {
+            const href = scopeHref(scope, item.href);
             const isActive =
-              activePath === item.path || activePath.startsWith(`${item.path}/`);
+              activePath === item.href || activePath.startsWith(`${item.href}/`);
             return (
-              <Link
-                key={item.path}
-                href={href}
-                className={`leading-normal transition hover:text-[#4a56dd] ${
-                  isActive ? "font-semibold text-[#4a56dd]" : "text-black"
-                }`}
-              >
-                {item.label}
-              </Link>
+              <div key={item.href} className="group relative">
+                <Link
+                  href={href}
+                  className={`inline-flex py-6 leading-normal transition hover:text-[#4a56dd] ${
+                    isActive ? "font-semibold text-[#4a56dd]" : "text-black"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+                {item.subLinks?.length ? (
+                  <div className="pointer-events-none absolute left-1/2 top-full z-50 hidden w-max -translate-x-1/2 group-hover:block group-focus-within:block">
+                    <div className="pointer-events-auto flex min-w-[168px] flex-col gap-1 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm leading-tight text-black/60 shadow-lg">
+                      {item.subLinks.map((subLink) => (
+                        <HashLink
+                          key={subLink.href}
+                          href={scopeHref(scope, subLink.href)}
+                          className="whitespace-nowrap py-1 hover:text-[#4a56dd]"
+                        >
+                          {subLink.label}
+                        </HashLink>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </nav>
@@ -91,14 +101,28 @@ function Topbar({
               <Link href={home} className="block px-2 py-2 hover:text-[#4a56dd]">
                 accueil
               </Link>
-              {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.path}
-                  href={scopeHref(scope, item.path)}
-                  className="block px-2 py-2 hover:text-[#4a56dd]"
-                >
-                  {item.label}
-                </Link>
+              {NAV_LINKS.map((item) => (
+                <div key={item.href} className="py-1">
+                  <Link
+                    href={scopeHref(scope, item.href)}
+                    className="block px-2 py-2 font-medium hover:text-[#4a56dd]"
+                  >
+                    {item.label}
+                  </Link>
+                  {item.subLinks?.length ? (
+                    <div className="pb-1 pl-4">
+                      {item.subLinks.map((subLink) => (
+                        <HashLink
+                          key={subLink.href}
+                          href={scopeHref(scope, subLink.href)}
+                          className="block px-2 py-1.5 text-sm text-black/60 hover:text-[#4a56dd]"
+                        >
+                          {subLink.label}
+                        </HashLink>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ))}
               <Link
                 href="/account"

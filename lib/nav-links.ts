@@ -17,7 +17,14 @@ export const NAV_LINKS: NavLink[] = [
       { href: "/atelier#tarifs", label: "tarifs" },
     ],
   },
-  { href: "/cours", label: "cours" },
+  {
+    href: "/cours",
+    label: "cours",
+    subLinks: [
+      { href: "/cours#calendrier", label: "calendrier" },
+      { href: "/cours#offres", label: "tous les cours" },
+    ],
+  },
   {
     href: "/pratique-libre",
     label: "pratique libre",
@@ -27,8 +34,22 @@ export const NAV_LINKS: NavLink[] = [
       { href: "/pratique-libre#ceramique", label: "céramique" },
     ],
   },
-  { href: "/offrir", label: "offrir" },
-  { href: "/contact", label: "contact" },
+  {
+    href: "/offrir",
+    label: "offrir",
+    subLinks: [
+      { href: "/offrir#credits", label: "cartes cadeaux" },
+      { href: "/contact#visite", label: "réserver une visite" },
+    ],
+  },
+  {
+    href: "/contact",
+    label: "contact",
+    subLinks: [
+      { href: "/contact#visite", label: "visite" },
+      { href: "/contact#adresse", label: "nous trouver" },
+    ],
+  },
 ];
 
 

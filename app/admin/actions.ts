@@ -441,11 +441,35 @@ export async function uploadActivityImage(formData: FormData) {
 
   try {
     const adminClient = getAdminClient();
+    const original = Buffer.from(await file.arrayBuffer());
+    let body: Buffer = original;
+    let contentType = file.type;
+    let uploadPath = storagePath;
+    try {
+      const sharp = (await import("sharp")).default;
+      const resized = await sharp(original, { failOn: "none" })
+        .rotate()
+        .resize({
+          width: 1600,
+          height: 1600,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 78 })
+        .toBuffer();
+      body = Buffer.from(resized);
+      contentType = "image/webp";
+      uploadPath = storagePath.replace(/\.[a-z0-9]+$/i, ".webp");
+    } catch (resizeError) {
+      console.error("Activity image resize failed, uploading original:", resizeError);
+    }
+
     const { error: uploadError } = await adminClient.storage
       .from(ACTIVITY_IMAGES_BUCKET)
-      .upload(storagePath, Buffer.from(await file.arrayBuffer()), {
-        contentType: file.type,
+      .upload(uploadPath, body, {
+        contentType,
         upsert: false,
+        cacheControl: "3600",
       });
 
     if (uploadError) {
@@ -454,7 +478,7 @@ export async function uploadActivityImage(formData: FormData) {
 
     const {
       data: { publicUrl },
-    } = adminClient.storage.from(ACTIVITY_IMAGES_BUCKET).getPublicUrl(storagePath);
+    } = adminClient.storage.from(ACTIVITY_IMAGES_BUCKET).getPublicUrl(uploadPath);
 
     return {
       error: null,
@@ -1064,6 +1088,28 @@ export async function getAllActivitiesWithSessions() {
   const adminClient = getAdminClient();
   const { users: allUsers } = await listAllAuthUsers(adminClient);
   const usersMap = new Map(allUsers.map(u => [u.id, u] as [string, typeof u]));
+
+  const courseActivityIds = (activities ?? [])
+    .filter((activity) => activity.type === "cours")
+    .map((activity) => activity.id);
+  const interestCountByActivity = new Map<string, number>();
+  if (courseActivityIds.length > 0) {
+    const { data: interests, error: interestError } = await supabase
+      .from("activity_interest")
+      .select("activity_id")
+      .in("activity_id", courseActivityIds);
+
+    if (interestError) {
+      console.error("Error fetching course interest counts:", interestError);
+    } else {
+      for (const row of interests ?? []) {
+        interestCountByActivity.set(
+          row.activity_id,
+          (interestCountByActivity.get(row.activity_id) ?? 0) + 1,
+        );
+      }
+    }
+  }
   
   // Group sessions by activity and date
   const activitiesWithSessions = activities?.map(activity => {
@@ -1123,6 +1169,10 @@ export async function getAllActivitiesWithSessions() {
           max_registrations: session.max_registrations ?? null,
           activity_name: activity.name,
           activity_type: activity.type,
+          interestCount:
+            activity.type === "cours"
+              ? interestCountByActivity.get(activity.id) ?? 0
+              : null,
         };
       });
       
@@ -1166,6 +1216,7 @@ export type TodayCourseSession = {
     phone: string;
     isSameDayBooking: boolean;
   }>;
+  interestCount: number | null;
 };
 
 export type TodayVisitor = {
@@ -1320,6 +1371,28 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
   const { users: allUsers } = await listAllAuthUsers(adminClient);
   const usersMap = new Map(allUsers.map((user) => [user.id, user] as const));
 
+  const courseActivityIds = (activities ?? [])
+    .filter((activity) => activity.type === "cours")
+    .map((activity) => activity.id);
+  const interestCountByActivity = new Map<string, number>();
+  if (courseActivityIds.length > 0) {
+    const { data: interests, error: interestError } = await supabase
+      .from("activity_interest")
+      .select("activity_id")
+      .in("activity_id", courseActivityIds);
+
+    if (interestError) {
+      console.error("Error fetching course interest counts:", interestError);
+    } else {
+      for (const row of interests ?? []) {
+        interestCountByActivity.set(
+          row.activity_id,
+          (interestCountByActivity.get(row.activity_id) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
   const todaySessions: TodayCourseSession[] = [];
   const visitors: TodayVisitor[] = [];
 
@@ -1408,6 +1481,10 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
       registrationCount,
       registeredUsers,
       publicRegisteredUsers,
+      interestCount:
+        activity.type === "cours"
+          ? interestCountByActivity.get(session.activity_id) ?? 0
+          : null,
     });
   }
 
@@ -2115,7 +2192,7 @@ export async function getAllActivities() {
   
   const { data: activities, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline, disciplines")
+    .select("id, name, nb_credits, type, price, description, image_url, image_urls, square_product_id, level, audience, discipline, disciplines, duration_minutes")
     .is("deleted_at", null)
     .order("type, name");
   
@@ -2147,6 +2224,61 @@ export async function getActivityInterestCounts() {
   }
 
   return { error: null, counts };
+}
+
+export async function createCourseDiscipline(label: string) {
+  await checkAdmin();
+  const supabase = await createClient();
+  const trimmed = label.trim();
+  if (trimmed.length < 2) {
+    return { error: "Le nom de la discipline est trop court", discipline: null };
+  }
+
+  const slug = trimmed
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return { error: "Nom de discipline invalide", discipline: null };
+  }
+
+  const { data, error } = await supabase
+    .from("course_discipline")
+    .insert({ slug, label: trimmed, sort_order: 50 })
+    .select("slug, label, sort_order")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "Cette discipline existe déjà", discipline: null };
+    }
+    console.error("Error creating course discipline:", error);
+    return { error: error.message, discipline: null };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/cours");
+  return { error: null, discipline: data };
+}
+
+export async function listCourseDisciplines() {
+  await checkAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("course_discipline")
+    .select("slug, label, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+
+  if (error) {
+    console.error("Error listing course disciplines:", error);
+    return { error: error.message, disciplines: [] as { slug: string; label: string }[] };
+  }
+
+  return { error: null, disciplines: data ?? [] };
 }
 
 export async function updateActivityCredits(id: string, nb_credits: number | null) {
@@ -2187,6 +2319,7 @@ export async function createActivity(
   audience: string | null = null,
   discipline: string | null = null,
   disciplines: string[] | null = null,
+  durationMinutes: number | null = null,
 ) {
   await checkAdmin();
   const supabase = await createClient();
@@ -2201,6 +2334,13 @@ export async function createActivity(
 
   if (normalizedImageUrls.length === 0 && type !== "visite" && type !== "cours") {
     return { error: "Une image est requise", activity: null };
+  }
+
+  if (
+    durationMinutes !== null &&
+    (!Number.isFinite(durationMinutes) || durationMinutes <= 0)
+  ) {
+    return { error: "La durée du cours doit être positive", activity: null };
   }
 
   const normalizedDisciplines = (disciplines ?? [])
@@ -2230,6 +2370,7 @@ export async function createActivity(
       audience: audience || null,
       discipline: primaryDiscipline,
       disciplines: disciplinesToStore,
+      duration_minutes: durationMinutes,
     })
     .select()
     .maybeSingle();
@@ -2244,9 +2385,10 @@ export async function createActivity(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   revalidatePath("/atelier");
   revalidatePath("/pratique-libre");
-  revalidatePath("/cours");
+  revalidatePath("/cours", "layout");
   return { activity: data, error: null };
 }
 
@@ -2264,12 +2406,20 @@ export async function updateActivity(
   audience: string | null = null,
   discipline: string | null = null,
   disciplines: string[] | null = null,
+  durationMinutes: number | null = null,
 ) {
   await checkAdmin();
   const supabase = await createClient();
   
   if (!type) {
     return { error: "Le type est requis", activity: null };
+  }
+
+  if (
+    durationMinutes !== null &&
+    (!Number.isFinite(durationMinutes) || durationMinutes <= 0)
+  ) {
+    return { error: "La durée du cours doit être positive", activity: null };
   }
 
   const normalizedImageUrls = (imageUrls ?? [])
@@ -2303,6 +2453,7 @@ export async function updateActivity(
       audience: audience || null,
       discipline: primaryDiscipline,
       disciplines: disciplinesToStore,
+      duration_minutes: durationMinutes,
     })
     .eq("id", id)
     .select();
@@ -2317,9 +2468,10 @@ export async function updateActivity(
   }
   
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   revalidatePath("/atelier");
   revalidatePath("/pratique-libre");
-  revalidatePath("/cours");
+  revalidatePath("/cours", "layout");
   return { activity: data[0], error: null };
 }
 

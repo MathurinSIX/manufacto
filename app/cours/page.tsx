@@ -18,6 +18,7 @@ async function CoursContent() {
         title="Nos cours"
         lead="Des ateliers ponctuels de montée en compétences, à choisir selon vos envies et besoins. Adultes ou enfants, apprenez à utiliser une machine, fabriquer un objet, initiez vous ou perfectionnez-vous."
         image={COURS_HERO_PHOTO}
+        imagePosition="center 58%"
       >
         <PrimaryCta href="/offrir">Offrir un cours</PrimaryCta>
       </PageHero>

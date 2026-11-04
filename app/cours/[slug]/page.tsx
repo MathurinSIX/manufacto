@@ -114,7 +114,7 @@ async function getCourses() {
       supabase
         .from("activity")
         .select(
-          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines",
+          "id, name, description, image_url, image_urls, nb_credits, price, square_product_id, level, audience, discipline, disciplines, duration_minutes",
         )
         .eq("type", "cours")
         .is("deleted_at", null)
@@ -146,7 +146,11 @@ async function getCourses() {
     getCoursesFromDb(
       data?.map((activity) => ({
         ...activity,
-        durationMinutes: null,
+        durationMinutes:
+          typeof activity.duration_minutes === "number" &&
+          activity.duration_minutes > 0
+            ? activity.duration_minutes
+            : null,
       })),
     ),
     futureSessions ?? [],

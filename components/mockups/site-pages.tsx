@@ -29,15 +29,19 @@ function PageHero({
   title,
   lead,
   image,
+  imagePosition = "center",
+  id,
   children,
 }: {
   title: string;
   lead: React.ReactNode;
   image: string;
+  imagePosition?: string;
+  id?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <header className="bg-[#fff8f0]">
+    <header id={id} className="scroll-mt-28 bg-[#fff8f0]">
       <div className="mx-auto grid max-w-[1274px] gap-8 px-5 py-12 md:grid-cols-2 md:items-center md:py-16">
         <div>
           <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] md:text-[46px]">
@@ -48,7 +52,13 @@ function PageHero({
           </div>
           {children ? <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">{children}</div> : null}
         </div>
-        <ImageTile src={image} alt="" className="h-64 md:h-[380px]" priority />
+        <ImageTile
+          src={image}
+          alt=""
+          className="h-64 md:h-[380px]"
+          objectPosition={imagePosition}
+          priority
+        />
       </div>
     </header>
   );
@@ -130,7 +140,12 @@ export function MockupAtelierPage({
         <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.menuiserie![0]} alt="Menuiserie" className="h-56" />
           <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.couture![0]} alt="Couture" className="h-56" />
-          <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.ceramique![0]} alt="Céramique" className="h-56" />
+          <ImageTile
+            src={DISCIPLINE_CAROUSEL_PHOTOS.ceramique![0]}
+            alt="Céramique"
+            className="h-56"
+            objectPosition="center 42%"
+          />
           <ImageTile src={DISCIPLINE_CAROUSEL_PHOTOS.electronique![0]} alt="Électronique" className="h-56" />
         </div>
       </section>
@@ -716,6 +731,7 @@ export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {})
   return (
     <main>
       <PageHero
+        id="visite"
         title="Contact & visite"
         lead="Tous les mardis de 18h30 à 19h, Martin, Nafissa, Cyprien et Delphine vous présentent le lieu. C’est gratuit, sur inscription."
         image={CONTACT_PHOTO}
@@ -723,7 +739,7 @@ export function MockupContactPage({ scope: _scope }: { scope?: SiteScope } = {})
         <PrimaryCta href="/reserver">Réserver une visite</PrimaryCta>
       </PageHero>
 
-      <section className="mx-auto max-w-[1274px] px-5 py-14">
+      <section id="adresse" className="scroll-mt-28 mx-auto max-w-[1274px] px-5 py-14">
         <div className="grid gap-10 md:grid-cols-2">
           <div>
             <h2 className="text-[30px] font-semibold text-black/80">Nous trouver</h2>

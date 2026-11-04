@@ -29,7 +29,7 @@ async function OffrirCreditsSection() {
     .sort((left, right) => left.amountCents - right.amountCents);
 
   return (
-    <section className="mx-auto max-w-[1274px] px-5 py-8">
+    <section id="credits" className="scroll-mt-28 mx-auto max-w-[1274px] px-5 py-8">
       <CreditOfferPicker
         packs={packs}
         examples={examples}
@@ -68,7 +68,7 @@ function OffrirPageBody() {
         <OffrirCreditsSection />
       </Suspense>
 
-      <section className="bg-[#fff8f0]">
+      <section id="visite" className="scroll-mt-28 bg-[#fff8f0]">
         <div className="mx-auto flex max-w-[1274px] flex-col gap-6 px-5 py-12 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-[28px] font-bold text-black/90">

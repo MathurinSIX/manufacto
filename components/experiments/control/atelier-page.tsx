@@ -130,8 +130,10 @@ export default function AtelierPageControl({
 
             <div className="rounded-[14px] border border-black/8 px-4 py-3">
               <h3 className="text-sm font-bold text-[#f56800]">Abonnements</h3>
-              <p className="mt-0.5 text-xs text-black/50">
-                Engagement 3 mois, puis résiliation mensuelle
+              <p className="mt-0.5 text-xs leading-snug text-black/50">
+                Engagement 3 mois, puis résiliation mensuelle. Réservables
+                uniquement sur place. Après résiliation, les crédits restants
+                sont utilisables pendant 3 mois.
               </p>
               <ul className="mt-2 space-y-1 text-sm text-black/75">
                 {SUBSCRIPTIONS.map((plan) => (

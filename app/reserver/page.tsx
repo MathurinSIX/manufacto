@@ -13,6 +13,7 @@ import {
   MarketingPageHeader,
 } from "@/components/marketing";
 import { createClient } from "@/lib/supabase/server";
+import { inferPracticeDiscipline } from "@/lib/course-disciplines";
 import { sumParticipantCount } from "@/lib/participant-count";
 
 const UUID_RE =
@@ -259,7 +260,7 @@ export async function ReserverPanel({
   const supabase = await createClient();
   const { data: activity, error } = await supabase
     .from("activity")
-    .select("id, name, nb_credits, price, square_product_id, type")
+    .select("id, name, nb_credits, price, square_product_id, type, discipline")
     .eq("id", activityId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -318,6 +319,10 @@ export async function ReserverPanel({
             activityId={activity.id}
             activityTitle={activityTitle}
             activityType={activity.type}
+            activityDiscipline={inferPracticeDiscipline(
+              activity.name ?? "",
+              activity.discipline,
+            )}
             credits={activity.nb_credits}
             isLoggedIn={!!user}
             inModal
@@ -361,6 +366,10 @@ export async function ReserverPanel({
               activityId={activity.id}
               activityTitle={activityTitle}
               activityType={activity.type}
+              activityDiscipline={inferPracticeDiscipline(
+                activity.name ?? "",
+                activity.discipline,
+              )}
               credits={activity.nb_credits}
               isLoggedIn={!!user}
             />
