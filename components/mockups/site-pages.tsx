@@ -612,6 +612,14 @@ export function MockupPratiquePage({
                       <p className="mt-3 text-base leading-snug text-black/70">
                         {offer.summary}
                       </p>
+                      {d.id === "ceramique" &&
+                      (offer.type === "autonomie" ||
+                        offer.type === "autonomie_encadree") ? (
+                        <p className="mt-3 text-sm font-medium" style={{ color: d.color }}>
+                          Le tour de potier se réserve avec le créneau, pour une
+                          seule personne.
+                        </p>
+                      ) : null}
                       {"expertCuisson" in offer && offer.expertCuisson ? (
                         <ExpertEquipmentDetails kind="cuisson" accent={d.color} />
                       ) : offer.detail ? (

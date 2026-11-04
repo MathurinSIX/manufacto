@@ -1280,54 +1280,62 @@ export function PracticeReservationPicker({
               {reservationRuleMessage}
             </p>
           ) : null}
-          {availableMachines.length ? (
-            <div className="mt-4 space-y-2">
-              <p className="font-medium text-black">Machines</p>
-              <p className="text-xs text-black/60">
-                Facultatif. Une machine ne peut être utilisée que par une seule
-                personne sur le créneau.
-              </p>
-              <div className="grid gap-2">
-                {availableMachines.map((machine) => {
-                  const taken = takenMachines.includes(machine.id);
-                  const checked = selectedMachines.includes(machine.id);
-                  return (
-                    <label
-                      key={machine.id}
-                      className={cn(
-                        "flex items-center justify-between gap-3 rounded-md border px-3 py-2",
-                        taken
-                          ? "cursor-not-allowed border-black/10 bg-black/5 text-black/45"
-                          : "cursor-pointer border-black/15 bg-white",
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-[#4a56dd]"
-                          checked={checked}
-                          disabled={taken}
-                          onChange={() => {
-                            setSelectedMachines((current) =>
-                              current.includes(machine.id)
-                                ? current.filter((id) => id !== machine.id)
-                                : [...current, machine.id],
-                            );
-                          }}
-                        />
-                        {machine.label}
+        </div>
+      ) : null}
+
+      {availableMachines.length ? (
+        <div className="space-y-2 rounded-lg border border-black/10 bg-white p-4 text-sm">
+          <p className="font-medium text-black">Réserver une machine</p>
+          <p className="text-xs text-black/60">
+            Facultatif. Une machine ne peut être utilisée que par une seule
+            personne sur le créneau.
+          </p>
+          {selectedHourChecks.length === 0 ? (
+            <p className="text-sm text-black/70">
+              Choisissez un créneau pour réserver{" "}
+              {availableMachines.map((machine) => machine.label).join(", ")}.
+            </p>
+          ) : (
+            <div className="grid gap-2">
+              {availableMachines.map((machine) => {
+                const taken = takenMachines.includes(machine.id);
+                const checked = selectedMachines.includes(machine.id);
+                return (
+                  <label
+                    key={machine.id}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-md border px-3 py-2",
+                      taken
+                        ? "cursor-not-allowed border-black/10 bg-black/5 text-black/45"
+                        : "cursor-pointer border-black/15 bg-white",
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[#4a56dd]"
+                        checked={checked}
+                        disabled={taken}
+                        onChange={() => {
+                          setSelectedMachines((current) =>
+                            current.includes(machine.id)
+                              ? current.filter((id) => id !== machine.id)
+                              : [...current, machine.id],
+                          );
+                        }}
+                      />
+                      {machine.label}
+                    </span>
+                    {taken ? (
+                      <span className="text-xs font-semibold uppercase tracking-wide">
+                        Déjà utilisée
                       </span>
-                      {taken ? (
-                        <span className="text-xs font-semibold uppercase tracking-wide">
-                          Déjà utilisée
-                        </span>
-                      ) : null}
-                    </label>
-                  );
-                })}
-              </div>
+                    ) : null}
+                  </label>
+                );
+              })}
             </div>
-          ) : null}
+          )}
         </div>
       ) : null}
 

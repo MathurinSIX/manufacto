@@ -17,6 +17,7 @@ import {
   type CourseDiscipline,
 } from "@/lib/course-disciplines";
 import { getCalendarMonthKey } from "@/lib/paris-calendar";
+import { machinesForDiscipline } from "@/lib/workshop-machines";
 import { cn } from "@/lib/utils";
 import {
   CalendarDays,
@@ -460,6 +461,20 @@ function PracticeAvailabilityCalendar({
                     <p className="mt-1.5 text-sm text-black/60">
                       {formatTimeRange(session.start_ts, session.end_ts)}
                     </p>
+                    {(() => {
+                      if (
+                        session.activityType !== "autonomie" &&
+                        session.activityType !== "autonomie_encadree"
+                      ) {
+                        return null;
+                      }
+                      const labels = machinesForDiscipline(session.discipline)
+                        .map((machine) => machine.label)
+                        .join(", ");
+                      return labels ? (
+                        <p className="mt-1 text-sm text-black/70">{labels}</p>
+                      ) : null;
+                    })()}
                   </div>
                   <Link
                     href={`/reserver?activity=${encodeURIComponent(session.activityId)}`}
