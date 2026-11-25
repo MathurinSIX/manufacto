@@ -111,8 +111,10 @@ async function UserAccountContent({
   }
 
   const now = new Date().toISOString();
+  const share = await loadAccountShare(adminClient, userId);
+  const accountUserId = share.accountUserId;
 
-  // Fetch registrations with session and activity details for the target user
+  // Fetch registrations with session and activity details for the household account
   const { data: registrations, error: registrationsError } = await adminClient
     .from("registration")
     .select(`
@@ -132,7 +134,7 @@ async function UserAccountContent({
         )
       )
     `)
-    .eq("user_id", userId);
+    .eq("user_id", accountUserId);
 
   // Fetch latest registration_status for each registration
   const registrationIds = registrations?.map((reg) => reg.id) || [];
@@ -261,11 +263,11 @@ async function UserAccountContent({
       return latestStatus && latestStatus.status === "CANCELLED";
     }) || [];
 
-  // Fetch credit history
+  // Fetch credit history on the household account (owner id for linked partners)
   const { data: creditHistory, error: creditError } = await adminClient
     .from("credit")
     .select("id, amount, payment_type, created_at")
-    .eq("user_id", userId)
+    .eq("user_id", accountUserId)
     .order("created_at", { ascending: false });
 
   const { data: squarePurchases, error: squarePurchasesError } = await adminClient
@@ -273,7 +275,7 @@ async function UserAccountContent({
     .select(
       "id, product_id, product_kind, credits, amount_cents, status, square_payment_id, created_at, fulfilled_at",
     )
-    .eq("user_id", userId)
+    .eq("user_id", accountUserId)
     .neq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(50);
@@ -371,16 +373,15 @@ async function UserAccountContent({
     ? `${targetUser.user_metadata.first_name} ${targetUser.user_metadata.last_name}`
     : targetUser.user_metadata?.first_name || targetUser.user_metadata?.last_name || targetUser.email;
 
-  const share = await loadAccountShare(adminClient, userId);
   const legalStatus = await getUserLegalCompliance(adminClient, userId, {
-    alsoUserIds: [share.accountUserId, share.partner?.userId ?? ""].filter(
+    alsoUserIds: [accountUserId, share.partner?.userId ?? ""].filter(
       (id) => id && id !== userId,
     ),
   });
   let ownerEmail = targetUser.email ?? "";
   if (!share.isOwner) {
     const { data: ownerUser } = await adminClient.auth.admin.getUserById(
-      share.accountUserId,
+      accountUserId,
     );
     ownerEmail = ownerUser.user?.email ?? ownerEmail;
   }
@@ -388,7 +389,7 @@ async function UserAccountContent({
   const { data: habilitations } = await squareAdmin
     .from("user_habilitation")
     .select("id, user_id, machine_key, label, notes, granted_at, granted_by")
-    .eq("user_id", userId)
+    .eq("user_id", accountUserId)
     .order("label");
 
   return (
@@ -409,7 +410,7 @@ async function UserAccountContent({
               </p>
             </div>
             <AdminUserCreditsHeader
-              userId={userId}
+              userId={accountUserId}
               userEmail={targetUser.email ?? ""}
               totalCredits={totalCredits}
             />
@@ -424,7 +425,7 @@ async function UserAccountContent({
             </CardHeader>
             <CardContent>
               <AdminUserLegalSection
-                userId={share.accountUserId}
+                userId={accountUserId}
                 firstName={
                   typeof targetUser.user_metadata?.first_name === "string"
                     ? targetUser.user_metadata.first_name
