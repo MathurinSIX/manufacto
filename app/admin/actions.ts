@@ -41,6 +41,7 @@ import {
   type EmailTemplateKey,
 } from "@/lib/email/types";
 import { loadEmailTemplate } from "@/lib/email/load-email-template";
+import { resolveAccountUserId } from "@/lib/account-share";
 const ASSET_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const ACTIVITY_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -135,6 +136,105 @@ function chunkValues<T>(items: T[], size: number): T[][] {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
+}
+
+function toCreditAmount(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const parsed = parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+type CreditLedgerRow = {
+  user_id: string;
+  amount: number | string | null;
+};
+
+/** Sum every credit ledger row. Paginated: PostgREST max_rows truncates a single query at 1000. */
+async function loadCreditBalancesByUserId(
+  adminClient: ReturnType<typeof getAdminClient>,
+): Promise<{ balances: Record<string, number>; error: string | null }> {
+  const { data: creditsData, error } = await fetchAllSupabaseRows<CreditLedgerRow>(
+    async ({ from, to }) => {
+      const { data, error: pageError } = await adminClient
+        .from("credit")
+        .select("user_id, amount")
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data, error: pageError };
+    },
+  );
+
+  if (error) {
+    return { balances: {}, error };
+  }
+
+  const balances: Record<string, number> = {};
+  for (const credit of creditsData) {
+    const userId = credit.user_id;
+    if (!userId) continue;
+    balances[userId] = (balances[userId] ?? 0) + toCreditAmount(credit.amount);
+  }
+
+  return { balances, error: null };
+}
+
+async function sumCreditsForUser(
+  adminClient: ReturnType<typeof getAdminClient>,
+  userId: string,
+): Promise<{ total: number; error: string | null }> {
+  const { data, error } = await fetchAllSupabaseRows<{ amount: number | string | null }>(
+    async ({ from, to }) => {
+      const { data: page, error: pageError } = await adminClient
+        .from("credit")
+        .select("amount")
+        .eq("user_id", userId)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data: page, error: pageError };
+    },
+  );
+
+  if (error) {
+    return { total: 0, error };
+  }
+
+  const total = data.reduce(
+    (sum, credit) => sum + toCreditAmount(credit.amount),
+    0,
+  );
+  return { total, error: null };
+}
+
+/** Map partner logins to the owner's household credit balance used for booking. */
+async function applySharedAccountCreditBalances(
+  adminClient: ReturnType<typeof getAdminClient>,
+  balances: Record<string, number>,
+) {
+  const { data: partners, error } = await fetchAllSupabaseRows<{
+    owner_user_id: string;
+    partner_user_id: string | null;
+  }>(async ({ from, to }) => {
+    const { data, error: pageError } = await adminClient
+      .from("account_partner")
+      .select("owner_user_id, partner_user_id")
+      .eq("status", "active")
+      .not("partner_user_id", "is", null)
+      .order("owner_user_id", { ascending: true })
+      .range(from, to);
+    return { data, error: pageError };
+  });
+
+  if (error) {
+    console.error("Error fetching account partners for credit balances:", error);
+    return;
+  }
+
+  for (const partner of partners) {
+    if (!partner.partner_user_id) continue;
+    balances[partner.partner_user_id] = balances[partner.owner_user_id] ?? 0;
+  }
 }
 
 function formatRegisteredUserName(user?: {
@@ -525,31 +625,15 @@ export async function getAllUsers() {
     return { error, users: [] };
   }
   
-  // Get credits for all users (service role bypasses RLS for reliable admin reads)
-  const userIds = allUsers.map(u => u.id);
-  const creditsMap: Record<string, number> = {};
-  
-  if (userIds.length > 0) {
-    const { data: creditsData, error: creditsError } = await adminClient
-      .from("credit")
-      .select("user_id, amount")
-      .in("user_id", userIds);
-    
-    if (creditsError) {
-      console.error("Error fetching user credits:", creditsError);
-    } else if (creditsData) {
-      creditsData.forEach((credit) => {
-        const userId = credit.user_id;
-        const amount = typeof credit.amount === "number" 
-          ? credit.amount 
-          : parseFloat(String(credit.amount)) || 0;
-        
-        if (!creditsMap[userId]) {
-          creditsMap[userId] = 0;
-        }
-        creditsMap[userId] += amount;
-      });
-    }
+  // Paginate the full credit ledger — a single query is truncated at max_rows (1000),
+  // which made most users appear with 0 credits in admin once the ledger grew.
+  const { balances: creditsMap, error: creditsError } =
+    await loadCreditBalancesByUserId(adminClient);
+
+  if (creditsError) {
+    console.error("Error fetching user credits:", creditsError);
+  } else {
+    await applySharedAccountCreditBalances(adminClient, creditsMap);
   }
   
   // Add credits to each user
@@ -743,7 +827,9 @@ export async function adjustUserCredits(
   paymentType = "admin",
 ) {
   await checkAdmin();
-  const supabase = await createClient();
+  const adminClient = getAdminClient();
+  // Credits live on the household owner id for linked partner logins.
+  const accountUserId = await resolveAccountUserId(adminClient, userId);
 
   if (amount === 0 || Number.isNaN(amount)) {
     return { error: "Le montant doit être différent de 0", credit: null };
@@ -754,10 +840,8 @@ export async function adjustUserCredits(
   }
 
   if (amount < 0) {
-    const { data: credits, error: creditsError } = await supabase
-      .from("credit")
-      .select("amount")
-      .eq("user_id", userId);
+    const { total: availableCredits, error: creditsError } =
+      await sumCreditsForUser(adminClient, accountUserId);
 
     if (creditsError) {
       return {
@@ -765,9 +849,6 @@ export async function adjustUserCredits(
         credit: null,
       };
     }
-
-    const availableCredits =
-      credits?.reduce((total, credit) => total + toCreditAmount(credit.amount), 0) ?? 0;
 
     if (availableCredits + amount < 0) {
       return {
@@ -777,10 +858,10 @@ export async function adjustUserCredits(
     }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from("credit")
     .insert({
-      user_id: userId,
+      user_id: accountUserId,
       amount,
       payment_type: paymentType,
     })
@@ -798,6 +879,7 @@ export async function adjustUserCredits(
 
   revalidatePath("/admin");
   revalidatePath(`/admin/users/${userId}`);
+  revalidatePath(`/admin/users/${accountUserId}`);
   return { credit: data, error: null };
 }
 
@@ -1493,14 +1575,6 @@ export async function getTodayCoursesWithSubscriptions(dateKey?: string) {
   return { error: null, sessions: todaySessions, visitors, date };
 }
 
-function toCreditAmount(value: unknown): number {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-  const parsed = parseFloat(String(value));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function getAdminEnrollmentRequiredCredits(
   nbCredits: number,
   startTs: string,
@@ -1550,7 +1624,9 @@ export async function addUserToSession(
   },
 ) {
   await checkAdmin();
-  const supabase = await createClient();
+  const adminClient = getAdminClient();
+  // Bookings and credits use the household owner id for linked partner logins.
+  const accountUserId = await resolveAccountUserId(adminClient, userId);
 
   const companionName = options?.companionName?.trim() ?? "";
   const participantCount = companionName
@@ -1564,7 +1640,7 @@ export async function addUserToSession(
     };
   }
 
-  const { data: session, error: sessionError } = await supabase
+  const { data: session, error: sessionError } = await adminClient
     .from("session")
     .select("id, start_ts, end_ts, activity:activity_id(type, nb_credits)")
     .eq("id", sessionId)
@@ -1600,17 +1676,12 @@ export async function addUserToSession(
   const paymentType = deductCredits && requiredCredits > 0 ? "credits" : "admin";
 
   if (deductCredits && requiredCredits > 0) {
-    const { data: credits, error: creditsError } = await supabase
-      .from("credit")
-      .select("amount")
-      .eq("user_id", userId);
+    const { total: availableCredits, error: creditsError } =
+      await sumCreditsForUser(adminClient, accountUserId);
 
     if (creditsError) {
       return { error: "Impossible de vérifier les crédits de l'utilisateur", registration: null };
     }
-
-    const availableCredits =
-      credits?.reduce((total, credit) => total + toCreditAmount(credit.amount), 0) ?? 0;
 
     if (availableCredits < requiredCredits) {
       return {
@@ -1621,22 +1692,22 @@ export async function addUserToSession(
   }
   
   // Check if registration already exists
-  const { data: existing } = await supabase
+  const { data: existing } = await adminClient
     .from("registration")
     .select("id")
     .eq("session_id", sessionId)
-    .eq("user_id", userId)
+    .eq("user_id", accountUserId)
     .maybeSingle();
   
   if (existing) {
     return { error: "Cet utilisateur est déjà inscrit à cette session", registration: null };
   }
   
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from("registration")
     .insert({
       session_id: sessionId,
-      user_id: userId,
+      user_id: accountUserId,
       payment_type: paymentType,
       participant_count: participantCount,
       companion_first_names: companionName ? [companionName] : [],
@@ -1663,6 +1734,7 @@ export async function addUserToSession(
   if (paymentType === "credits") {
     revalidatePath("/account");
     revalidatePath(`/admin/users/${userId}`);
+    revalidatePath(`/admin/users/${accountUserId}`);
   }
   return { registration: data, error: null };
 }
